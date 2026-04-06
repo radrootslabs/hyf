@@ -1,0 +1,24 @@
+/.pixi/
+/.magic/
+/.modular/
+/.pytest_cache/
+
+# Local environment files
+.env
+.env.*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+
+# Local development files
+.vscode/
+.idea/
+
+# Local build outputs
+__pycache__/
+
+# Local secrets
+*.pem
+*.crt
+*.key

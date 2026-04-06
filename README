@@ -1,0 +1,14 @@
+# hypha
+
+This is the README for `hyf` which provides contextual intelligence services
+for the Rad Roots network and applications through the `hyfd` stdio daemon.
+
+## Copyright
+
+Except as otherwise noted, all files in the `hyf` distribution are
+
+    Copyright (c) 2026 Tyson Lupul
+
+## License
+
+This repository is licensed under AGPL-3.0-or-later. See LICENSE.

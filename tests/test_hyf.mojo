@@ -6,6 +6,7 @@ from hyf_core.backends.selector import (
     execute_capability as execute_core_capability,
     resolve_backend,
 )
+from hyf_core.metadata import current_build_identity, current_package_surface
 from hyf_core.request_context import default_request_context
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.envelope import WireErrorResponse, WireSuccessResponse
@@ -129,6 +130,18 @@ def test_handle_request_line_returns_invalid_request_for_bad_line() raises:
     assert_equal(_has_key(result, "trace_id"), False)
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
+
+
+def test_current_build_identity_matches_manifest_package_surface() raises:
+    var package_surface = current_package_surface()
+    var build_identity = current_build_identity()
+
+    assert_equal(package_surface.package_name, "hyf")
+    assert_equal(package_surface.package_version, "0.1.0")
+    assert_equal(build_identity.package_name, package_surface.package_name)
+    assert_equal(
+        build_identity.package_version, package_surface.package_version
+    )
 
 
 def test_status_reports_registered_deterministic_ready() raises:

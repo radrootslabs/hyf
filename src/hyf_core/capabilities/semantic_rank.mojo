@@ -32,7 +32,7 @@ def _build_scored_candidates(
     for evaluation in ranked:
         var candidate = loads("{}")
         candidate.set("id", Value(String(evaluation.candidate.id)))
-        candidate.set("score", Value(evaluation.score))
+        candidate.set("heuristic_score", Value(evaluation.score))
         candidate.set("matched_terms", string_array_value(evaluation.matched_terms))
         candidate.set("reasons", string_array_value(evaluation.reasons))
         candidate.set(

@@ -104,6 +104,7 @@ def test_encode_success_and_error_shapes() raises:
         success["meta"]["execution_mode"].string_value(),
         "deterministic",
     )
+    assert_true(not _has_key(success["meta"], "latency_ms"))
 
     var failure = loads(
         encode_error(
@@ -363,6 +364,7 @@ def test_query_rewrite_returns_deterministic_output() raises:
         "pickup",
     )
     assert_equal(result["meta"]["backend"].string_value(), "heuristic")
+    assert_true(not _has_key(result["meta"], "latency_ms"))
 
 
 def test_query_rewrite_accepts_query_alias_with_same_behavior() raises:
@@ -431,9 +433,13 @@ def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
         "pickup match",
     )
     assert_equal(
-        result["output"]["scored_candidates"][0]["score"].int_value(),
+        result["output"]["scored_candidates"][0]["heuristic_score"].int_value(),
         102,
     )
+    assert_true(
+        not _has_key(result["output"]["scored_candidates"][0], "score")
+    )
+    assert_true(not _has_key(result["meta"], "latency_ms"))
 
 
 def test_semantic_rank_scope_listing_ids_remains_effective() raises:
@@ -450,6 +456,9 @@ def test_semantic_rank_scope_listing_ids_remains_effective() raises:
     assert_equal(
         result["output"]["scored_candidates"][0]["scope_match"].bool_value(),
         True,
+    )
+    assert_true(
+        _has_key(result["output"]["scored_candidates"][0], "heuristic_score")
     )
 
 
@@ -507,6 +516,7 @@ def test_explain_result_returns_deterministic_summary_and_provenance() raises:
         result["meta"]["provenance"]["source_refs"][1]["source_kind"].string_value(),
         "candidate",
     )
+    assert_true(not _has_key(result["meta"], "latency_ms"))
 
 
 def test_explain_result_accepts_result_alias() raises:

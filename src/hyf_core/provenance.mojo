@@ -26,7 +26,6 @@ struct ExecutionProvenance(Copyable, Movable):
 struct CoreResponseMeta(Copyable, Movable):
     var execution_mode: String
     var backend: String
-    var latency_ms: Int
     var provenance: Optional[ExecutionProvenance]
 
 
@@ -34,6 +33,5 @@ def deterministic_response_meta() -> CoreResponseMeta:
     return CoreResponseMeta(
         execution_mode="deterministic",
         backend="heuristic",
-        latency_ms=0,
         provenance=None,
     )

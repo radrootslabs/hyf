@@ -357,7 +357,6 @@ def build_deterministic_meta(
         return CoreResponseMeta(
             execution_mode="deterministic",
             backend="heuristic",
-            latency_ms=0,
             provenance=ExecutionProvenance(
                 kind="deterministic",
                 signal_tags=copy_string_list(signal_tags),
@@ -370,6 +369,5 @@ def build_deterministic_meta(
     return CoreResponseMeta(
         execution_mode="deterministic",
         backend="heuristic",
-        latency_ms=0,
         provenance=None,
     )

@@ -16,6 +16,13 @@ def _run_hyf(request_json: String) raises -> Value:
     return loads(output)
 
 
+def _has_key(value: Value, key: String) -> Bool:
+    for candidate in value.object_keys():
+        if candidate == key:
+            return True
+    return False
+
+
 def test_status_success() raises:
     var response = _run_hyf(
         '{"version":1,"request_id":"status-proc-1","trace_id":"trace-status-proc-1","capability":"sys.status","input":{}}'
@@ -64,6 +71,20 @@ def test_assisted_request_fails_explicitly() raises:
 
     assert_true(not response["ok"].bool_value())
     assert_equal(response["error"]["code"].string_value(), "backend_unavailable")
+
+
+def test_semantic_rank_exports_heuristic_score_without_latency() raises:
+    var response = _run_hyf(
+        '{"version":1,"request_id":"rank-proc-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+    )
+
+    assert_true(response["ok"].bool_value())
+    assert_equal(
+        response["output"]["scored_candidates"][0]["heuristic_score"].int_value(),
+        102,
+    )
+    assert_true(not _has_key(response["output"]["scored_candidates"][0], "score"))
+    assert_true(not _has_key(response["meta"], "latency_ms"))
 
 
 def test_strict_query_rewrite_failure() raises:

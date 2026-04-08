@@ -17,3 +17,4 @@ mojson = { path = "../../../../vendor/mojo/mojson" }
 
 [tasks]
 run = "mojo run src/main.mojo"
+test = "mojo -I src tests/test_hyf.mojo"

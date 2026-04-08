@@ -11,7 +11,7 @@ from hyf_core.capabilities.registry import (
 )
 from hyf_core.capabilities.query_rewrite import execute_query_rewrite
 from hyf_core.capabilities.semantic_rank import execute_semantic_rank
-from hyf_core.errors import CapabilityFailure, CapabilitySuccess
+from hyf_core.errors import CapabilityFailure, CapabilityResult, CapabilitySuccess
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.control.capabilities import build_capabilities_output
 from hyf_stdio.control.status import build_status_output
@@ -90,40 +90,89 @@ def _wire_success_from_core_success(
     )
 
 
-def _write_query_rewrite(request: WireRequest, request_id: String) raises:
+def _dispatch_capability_result(
+    request_id: String, result: CapabilityResult
+) raises -> String:
+    if result.failure:
+        return encode_error(
+            _wire_error_from_core_failure(request_id, result.failure.value())
+        )
+    return encode_success(
+        _wire_success_from_core_success(request_id, result.success.value())
+    )
+
+
+def _dispatch_query_rewrite(request: WireRequest, request_id: String) raises -> String:
     var result = execute_query_rewrite(
         request.input.clone(), request.context.copy()
     )
-    if result.failure:
-        _write_error(_wire_error_from_core_failure(request_id, result.failure.value()))
-        return
-    _write_success(
-        _wire_success_from_core_success(request_id, result.success.value())
-    )
+    return _dispatch_capability_result(request_id, result)
 
 
-def _write_semantic_rank(request: WireRequest, request_id: String) raises:
+def _dispatch_semantic_rank(request: WireRequest, request_id: String) raises -> String:
     var result = execute_semantic_rank(
         request.input.clone(), request.context.copy()
     )
-    if result.failure:
-        _write_error(_wire_error_from_core_failure(request_id, result.failure.value()))
-        return
-    _write_success(
-        _wire_success_from_core_success(request_id, result.success.value())
-    )
+    return _dispatch_capability_result(request_id, result)
 
 
-def _write_explain_result(request: WireRequest, request_id: String) raises:
+def _dispatch_explain_result(request: WireRequest, request_id: String) raises -> String:
     var result = execute_explain_result(
         request.input.clone(), request.context.copy()
     )
-    if result.failure:
-        _write_error(_wire_error_from_core_failure(request_id, result.failure.value()))
-        return
-    _write_success(
-        _wire_success_from_core_success(request_id, result.success.value())
-    )
+    return _dispatch_capability_result(request_id, result)
+
+
+def handle_request(request: WireRequest) raises -> String:
+    var request_id = String(request.request_id)
+    try:
+        if request.capability == "sys.status":
+            return encode_success(
+                WireSuccessResponse(
+                    request_id=request_id,
+                    output=build_status_output(),
+                    meta=None,
+                )
+            )
+        elif request.capability == "sys.capabilities":
+            return encode_success(
+                WireSuccessResponse(
+                    request_id=request_id,
+                    output=build_capabilities_output(),
+                    meta=None,
+                )
+            )
+        elif request.capability == "query_rewrite":
+            return _dispatch_query_rewrite(request.copy(), request_id)
+        elif request.capability == "semantic_rank":
+            return _dispatch_semantic_rank(request.copy(), request_id)
+        elif request.capability == "explain_result":
+            return _dispatch_explain_result(request.copy(), request_id)
+        elif is_deferred_capability(request.capability):
+            return encode_error(_disabled_response(request))
+        elif is_known_business_capability(request.capability):
+            return encode_error(_unavailable_response(request))
+        return encode_error(_unsupported_response(request))
+    except e:
+        return encode_error(
+            WireErrorResponse(
+                request_id=request_id,
+                error=internal_error(String(e)),
+            )
+        )
+
+
+def handle_request_line(line: String) raises -> String:
+    try:
+        var request = decode_request(line)
+        return handle_request(request^)
+    except e:
+        return encode_error(
+            WireErrorResponse(
+                request_id="",
+                error=invalid_request_error(String(e)),
+            )
+        )
 
 
 def run_stdio_server() raises:
@@ -133,53 +182,7 @@ def run_stdio_server() raises:
     try:
         var line = _read_request_line()
 
-        try:
-            var request = decode_request(line)
-            var request_id = String(request.request_id)
-
-            try:
-                if request.capability == "sys.status":
-                    _write_success(
-                        WireSuccessResponse(
-                            request_id=request_id,
-                            output=build_status_output(),
-                            meta=None,
-                        )
-                    )
-                elif request.capability == "sys.capabilities":
-                    _write_success(
-                        WireSuccessResponse(
-                            request_id=request_id,
-                            output=build_capabilities_output(),
-                            meta=None,
-                        )
-                    )
-                elif request.capability == "query_rewrite":
-                    _write_query_rewrite(request^, request_id)
-                elif request.capability == "semantic_rank":
-                    _write_semantic_rank(request^, request_id)
-                elif request.capability == "explain_result":
-                    _write_explain_result(request^, request_id)
-                elif is_deferred_capability(request.capability):
-                    _write_error(_disabled_response(request))
-                elif is_known_business_capability(request.capability):
-                    _write_error(_unavailable_response(request))
-                else:
-                    _write_error(_unsupported_response(request))
-            except e:
-                _write_error(
-                    WireErrorResponse(
-                        request_id=request_id,
-                        error=internal_error(String(e)),
-                    )
-                )
-        except e:
-            _write_error(
-                WireErrorResponse(
-                    request_id="",
-                    error=invalid_request_error(String(e)),
-                )
-            )
+        print(handle_request_line(line))
     except e:
         if String(e) == "EOF":
             return

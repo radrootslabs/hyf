@@ -7,6 +7,7 @@ from hyf_core.capabilities.registry import (
     bootstrap_enabled_capabilities,
     deferred_capabilities,
 )
+from hyf_core.request_context import request_context_feature_names
 
 
 def _string_array(values: List[String]) raises -> Value:
@@ -52,7 +53,10 @@ def build_status_output() raises -> Value:
 
     var limits = loads("{}")
     limits.set("max_requests_per_process", Value(1))
-    limits.set("request_context_features", loads("[]"))
+    limits.set(
+        "request_context_features",
+        _string_array(request_context_feature_names()),
+    )
     output.set("limits", limits)
 
     return output^

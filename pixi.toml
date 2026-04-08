@@ -3,11 +3,17 @@ name = "hyf"
 version = "0.1.0"
 description = "Contextual intelligence for the Radroots network"
 authors = ["Radroots Authors"]
-channels = ["https://conda.modular.com/max-nightly/", "conda-forge"]
+channels = [
+  "https://conda.modular.com/max-nightly/",
+  "conda-forge",
+  "https://prefix.dev/modular-community",
+]
 platforms = ["osx-arm64", "linux-64"]
+preview = ["pixi-build"]
 
 [dependencies]
-mojo = "<1.0.0"
+mojo = "=0.26.3.0.dev2026040805"
+mojson = { path = "../../../../vendor/mojo/mojson" }
 
 [tasks]
 run = "mojo run src/main.mojo"

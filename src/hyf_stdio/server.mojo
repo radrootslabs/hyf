@@ -1,7 +1,5 @@
 from std.collections import Optional
 from std.io.io import _fdopen
-from std.os import getenv
-from std.pathlib import Path
 from std.sys import stdin
 
 from mojson import Value
@@ -21,6 +19,7 @@ from hyf_stdio.codec import (
 )
 from hyf_stdio.control.capabilities import build_capabilities_output
 from hyf_stdio.control.status import build_status_output
+from hyf_stdio.diagnostics import append_internal_diagnostic
 from hyf_stdio.envelope import (
     WireErrorResponse,
     WireRequest,
@@ -80,11 +79,6 @@ def _write_success(response: WireSuccessResponse) raises:
 def _diagnostic_value(value: String) -> String:
     return value.replace("\n", "\\n").replace("\r", "\\r")
 
-
-def _internal_diagnostic_path() -> Path:
-    return Path(getenv("TMPDIR", "/tmp")) / "hyf-internal-error.log"
-
-
 def _diagnostic_trace_id(trace_id: Optional[String]) -> String:
     if trace_id:
         return _diagnostic_value(String(trace_id.value()))
@@ -97,20 +91,17 @@ def _emit_internal_diagnostic(
     capability: String,
     detail: String,
 ):
-    try:
-        _internal_diagnostic_path().write_text(
-            "hyf_internal_error request_id=\""
-            + _diagnostic_value(request_id)
-            + "\" trace_id=\""
-            + _diagnostic_trace_id(trace_id)
-            + "\" capability=\""
-            + _diagnostic_value(capability)
-            + "\" detail=\""
-            + _diagnostic_value(detail)
-            + "\"\n"
-        )
-    except:
-        pass
+    append_internal_diagnostic(
+        "hyf_internal_error request_id=\""
+        + _diagnostic_value(request_id)
+        + "\" trace_id=\""
+        + _diagnostic_trace_id(trace_id)
+        + "\" capability=\""
+        + _diagnostic_value(capability)
+        + "\" detail=\""
+        + _diagnostic_value(detail)
+        + "\"\n"
+    )
 
 
 def _wire_error_from_core_failure(

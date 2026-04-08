@@ -1,7 +1,11 @@
+import std.os
 from std.os import Pipe, Process
+from std.os.path import exists
+from std.pathlib import Path
 from std.testing import assert_equal, assert_true, TestSuite
 from std.ffi import CStringSlice, c_int, external_call
 from std.sys._libc import close, exit, vfork
+from std.tempfile import TemporaryDirectory
 
 from mojson import Value, loads
 
@@ -9,6 +13,29 @@ from mojson import Value, loads
 comptime _EXPECTED_INTERNAL_ERROR_MESSAGE = (
     "internal hyf daemon error; inspect local diagnostics"
 )
+comptime _HYF_DIAGNOSTICS_DIR_ENV = "HYF_DIAGNOSTICS_DIR"
+
+
+struct ScopedEnvVar:
+    var name: String
+    var value: String
+    var previous: String
+    var had_previous: Bool
+
+    def __init__(out self, name: String, value: String):
+        self.name = String(name)
+        self.value = String(value)
+        self.previous = std.os.getenv(name)
+        self.had_previous = self.previous != ""
+
+    def __enter__(mut self) raises:
+        _ = std.os.setenv(self.name, self.value, overwrite=True)
+
+    def __exit__(mut self):
+        if self.had_previous:
+            _ = std.os.setenv(self.name, self.previous, overwrite=True)
+        else:
+            _ = std.os.unsetenv(self.name)
 
 
 def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
@@ -220,6 +247,49 @@ def test_internal_error_is_bounded_on_wire() raises:
         response["error"]["message"].string_value().find("simulated test-only")
         < 0
     )
+
+
+def test_internal_error_records_detail_in_explicit_diagnostics_dir() raises:
+    with TemporaryDirectory() as temp_dir:
+        var diagnostics_dir = Path(temp_dir) / "hyf-internal-diagnostics"
+        with ScopedEnvVar(
+            _HYF_DIAGNOSTICS_DIR_ENV, diagnostics_dir.__fspath__()
+        ):
+            var response = _run_entrypoint(
+                "tests/internal_error_stdio_main.mojo",
+                '{"version":1,"request_id":"status-internal-proc-diag-1","trace_id":"trace-status-internal-proc-diag-1","capability":"sys.status","input":{}}',
+            )
+
+            assert_true(not response["ok"].bool_value())
+            assert_equal(
+                response["error"]["code"].string_value(),
+                "internal_error",
+            )
+            assert_true(exists(diagnostics_dir))
+
+            var entries = std.os.listdir(diagnostics_dir)
+            assert_equal(len(entries), 1)
+            assert_true(entries[0].startswith("hyf-internal-error-pid-"))
+
+            var content = (diagnostics_dir / entries[0]).read_text()
+            assert_true(
+                content.find(
+                    'request_id="status-internal-proc-diag-1"'
+                )
+                >= 0
+            )
+            assert_true(
+                content.find(
+                    'trace_id="trace-status-internal-proc-diag-1"'
+                )
+                >= 0
+            )
+            assert_true(
+                content.find(
+                    'detail="simulated test-only status builder failure"'
+                )
+                >= 0
+            )
 
 
 def main() raises:

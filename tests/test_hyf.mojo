@@ -1,3 +1,5 @@
+import std.os
+from std.os.path import exists
 from std.pathlib import Path, _dir_of_current_file
 from std.testing import (
     TestSuite,
@@ -5,6 +7,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from std.tempfile import TemporaryDirectory
 
 from mojson import Value, loads
 
@@ -27,6 +30,29 @@ from hyf_stdio.server import (
 comptime _EXPECTED_INTERNAL_ERROR_MESSAGE = (
     "internal hyf daemon error; inspect local diagnostics"
 )
+comptime _HYF_DIAGNOSTICS_DIR_ENV = "HYF_DIAGNOSTICS_DIR"
+
+
+struct ScopedEnvVar:
+    var name: String
+    var value: String
+    var previous: String
+    var had_previous: Bool
+
+    def __init__(out self, name: String, value: String):
+        self.name = String(name)
+        self.value = String(value)
+        self.previous = std.os.getenv(name)
+        self.had_previous = self.previous != ""
+
+    def __enter__(mut self) raises:
+        _ = std.os.setenv(self.name, self.value, overwrite=True)
+
+    def __exit__(mut self):
+        if self.had_previous:
+            _ = std.os.setenv(self.name, self.previous, overwrite=True)
+        else:
+            _ = std.os.unsetenv(self.name)
 
 
 def _dispatch(line: String) raises -> Value:
@@ -714,6 +740,50 @@ def test_internal_error_is_bounded_on_wire() raises:
         result["error"]["message"].string_value().find("simulated test-only")
         < 0
     )
+
+
+def test_internal_error_diagnostics_append_per_process() raises:
+    with TemporaryDirectory() as temp_dir:
+        var diagnostics_dir = Path(temp_dir) / "hyf-internal-diagnostics"
+
+        with ScopedEnvVar(
+            _HYF_DIAGNOSTICS_DIR_ENV, diagnostics_dir.__fspath__()
+        ):
+            _ = loads(
+                handle_request_line_with_control_builders[
+                    _failing_status_output, build_capabilities_output
+                ](
+                    '{"version":1,"request_id":"status-internal-diag-1","trace_id":"trace-status-internal-diag-1","capability":"sys.status","input":{}}'
+                )
+            )
+            _ = loads(
+                handle_request_line_with_control_builders[
+                    _failing_status_output, build_capabilities_output
+                ](
+                    '{"version":1,"request_id":"status-internal-diag-2","trace_id":"trace-status-internal-diag-2","capability":"sys.status","input":{}}'
+                )
+            )
+
+            assert_true(exists(diagnostics_dir))
+            var entries = std.os.listdir(diagnostics_dir)
+            assert_equal(len(entries), 1)
+            assert_true(entries[0].startswith("hyf-internal-error-pid-"))
+
+            var content = (diagnostics_dir / entries[0]).read_text()
+            var lines = content.splitlines()
+            assert_equal(len(lines), 2)
+            assert_true(
+                content.find('request_id="status-internal-diag-1"') >= 0
+            )
+            assert_true(
+                content.find('request_id="status-internal-diag-2"') >= 0
+            )
+            assert_true(
+                content.find(
+                    'detail="simulated test-only status builder failure"'
+                )
+                >= 0
+            )
 
 
 def main() raises:

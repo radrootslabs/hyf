@@ -17,16 +17,12 @@ from hyf_core.capabilities.ranking_support import (
 )
 from hyf_core.errors import (
     CapabilityResult,
-    backend_unavailable_error,
     failed_capability,
     invalid_input_error,
     successful_capability,
 )
 from hyf_core.provenance import ProvenanceSourceRef
-from hyf_core.request_context import (
-    RequestContext,
-    assisted_execution_requested,
-)
+from hyf_core.request_context import RequestContext
 
 
 def _build_scored_candidates(
@@ -77,11 +73,6 @@ def _build_output(
 def execute_semantic_rank(
     input: Value, context: RequestContext
 ) raises -> CapabilityResult:
-    if assisted_execution_requested(context):
-        return failed_capability(
-            backend_unavailable_error("assisted_execution")
-        )
-
     try:
         var request: SemanticRankRequest = parse_semantic_rank_request(input)
         var analysis = analyze_query_text(request.query_text, context)

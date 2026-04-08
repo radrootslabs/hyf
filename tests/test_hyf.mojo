@@ -2,6 +2,11 @@ from std.testing import assert_equal, assert_true, assert_raises, TestSuite
 
 from mojson import Value, loads
 
+from hyf_core.backends.selector import (
+    execute_capability as execute_core_capability,
+    resolve_backend,
+)
+from hyf_core.request_context import default_request_context
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.envelope import WireErrorResponse, WireSuccessResponse
 from hyf_stdio.errors import WireError
@@ -209,6 +214,48 @@ def test_disabled_capability_returns_capability_disabled() raises:
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["request_id"].string_value(), "disabled-1")
     assert_equal(result["error"]["code"].string_value(), "capability_disabled")
+
+
+def test_backend_selector_routes_deterministic_wave() raises:
+    var context = default_request_context()
+    var selection = resolve_backend(context)
+
+    assert_equal(selection.backend_name, "heuristic")
+    assert_equal(selection.available, True)
+
+    var result = execute_core_capability(
+        "query_rewrite",
+        loads('{"text":"eggs near me with weekend pickup"}'),
+        context,
+    )
+
+    assert_true(result.success)
+    assert_equal(
+        result.success.value().meta.value().backend,
+        "heuristic",
+    )
+    assert_equal(
+        result.success.value().meta.value().execution_mode,
+        "deterministic",
+    )
+
+
+def test_backend_selector_reports_assisted_unavailable() raises:
+    var context = default_request_context()
+    context.execution_mode_preference = "assisted"
+
+    var selection = resolve_backend(context)
+    assert_equal(selection.backend_name, "assisted_execution")
+    assert_equal(selection.available, False)
+
+    var result = execute_core_capability(
+        "query_rewrite",
+        loads('{"text":"eggs near me"}'),
+        context,
+    )
+
+    assert_true(result.failure)
+    assert_equal(result.failure.value().error.code, "backend_unavailable")
 
 
 def test_query_rewrite_returns_deterministic_output() raises:

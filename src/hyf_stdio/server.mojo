@@ -4,13 +4,11 @@ from std.sys import stdin
 
 from mojson import Value
 
-from hyf_core.capabilities.explain_result import execute_explain_result
+from hyf_core.backends.selector import execute_capability as execute_backend_capability
 from hyf_core.capabilities.registry import (
     is_deferred_capability,
     is_known_business_capability,
 )
-from hyf_core.capabilities.query_rewrite import execute_query_rewrite
-from hyf_core.capabilities.semantic_rank import execute_semantic_rank
 from hyf_core.errors import CapabilityFailure, CapabilityResult, CapabilitySuccess
 from hyf_core.metadata import hyf_protocol_version
 from hyf_stdio.codec import (
@@ -128,23 +126,11 @@ def _dispatch_capability_result(
     )
 
 
-def _dispatch_query_rewrite(request: WireRequest, request_id: String) raises -> String:
-    var result = execute_query_rewrite(
-        request.input.clone(), request.context.copy()
-    )
-    return _dispatch_capability_result(request_id, request.trace_id, result)
-
-
-def _dispatch_semantic_rank(request: WireRequest, request_id: String) raises -> String:
-    var result = execute_semantic_rank(
-        request.input.clone(), request.context.copy()
-    )
-    return _dispatch_capability_result(request_id, request.trace_id, result)
-
-
-def _dispatch_explain_result(request: WireRequest, request_id: String) raises -> String:
-    var result = execute_explain_result(
-        request.input.clone(), request.context.copy()
+def _dispatch_business_capability(
+    request: WireRequest, request_id: String
+) raises -> String:
+    var result = execute_backend_capability(
+        request.capability, request.input.clone(), request.context.copy()
     )
     return _dispatch_capability_result(request_id, request.trace_id, result)
 
@@ -173,12 +159,12 @@ def handle_request(request: WireRequest) raises -> String:
                     meta=None,
                 )
             )
-        elif request.capability == "query_rewrite":
-            return _dispatch_query_rewrite(request.copy(), request_id)
-        elif request.capability == "semantic_rank":
-            return _dispatch_semantic_rank(request.copy(), request_id)
-        elif request.capability == "explain_result":
-            return _dispatch_explain_result(request.copy(), request_id)
+        elif (
+            request.capability == "query_rewrite"
+            or request.capability == "semantic_rank"
+            or request.capability == "explain_result"
+        ):
+            return _dispatch_business_capability(request.copy(), request_id)
         elif is_deferred_capability(request.capability):
             return encode_error(_disabled_response(request))
         elif is_known_business_capability(request.capability):

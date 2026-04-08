@@ -9,6 +9,7 @@ from hyf_core.capabilities.registry import (
     deferred_capabilities,
     implemented_deterministic_capability_count,
 )
+from hyf_core.metadata import current_build_identity
 from hyf_core.request_context import request_context_feature_names
 
 
@@ -19,10 +20,36 @@ def _string_array(values: List[String]) raises -> Value:
     return array^
 
 
+def _build_identity_value() raises -> Value:
+    var build_identity = current_build_identity()
+    var value = loads("{}")
+    value.set("service_name", Value(String(build_identity.service_name)))
+    value.set("package_name", Value(String(build_identity.package_name)))
+    value.set("package_version", Value(String(build_identity.package_version)))
+    value.set("daemon_name", Value(String(build_identity.daemon_name)))
+    value.set("transport", Value(String(build_identity.transport)))
+    value.set("protocol_version", Value(build_identity.protocol_version))
+    value.set(
+        "default_execution_mode",
+        Value(String(build_identity.default_execution_mode)),
+    )
+    value.set(
+        "deterministic_execution_available",
+        Value(build_identity.deterministic_execution_available),
+    )
+    value.set(
+        "assisted_execution_available",
+        Value(build_identity.assisted_execution_available),
+    )
+    return value^
+
+
 def build_status_output() raises -> Value:
     var output = loads("{}")
-    output.set("daemon", Value("hyfd"))
-    output.set("transport", Value("stdio"))
+    var build_identity = _build_identity_value()
+    output.set("build_identity", build_identity.copy())
+    output.set("daemon", build_identity["daemon_name"].clone())
+    output.set("transport", build_identity["transport"].clone())
     output.set("request_framing", Value("newline_delimited_json"))
     output.set(
         "implementation_status",

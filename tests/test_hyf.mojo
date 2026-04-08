@@ -93,6 +93,34 @@ def test_status_reports_registered_deterministic_ready() raises:
 
     assert_equal(result["ok"].bool_value(), True)
     assert_equal(
+        result["output"]["build_identity"]["service_name"].string_value(),
+        "hyf",
+    )
+    assert_equal(
+        result["output"]["build_identity"]["package_name"].string_value(),
+        "hyf",
+    )
+    assert_equal(
+        result["output"]["build_identity"]["package_version"].string_value(),
+        "0.1.0",
+    )
+    assert_equal(
+        result["output"]["build_identity"]["protocol_version"].int_value(),
+        1,
+    )
+    assert_equal(
+        result["output"]["build_identity"]["default_execution_mode"].string_value(),
+        "deterministic",
+    )
+    assert_equal(
+        result["output"]["build_identity"]["deterministic_execution_available"].bool_value(),
+        True,
+    )
+    assert_equal(
+        result["output"]["build_identity"]["assisted_execution_available"].bool_value(),
+        False,
+    )
+    assert_equal(
         result["output"]["implementation_status"].string_value(),
         "bootstrap_registered_deterministic_ready",
     )

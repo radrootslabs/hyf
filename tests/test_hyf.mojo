@@ -150,6 +150,14 @@ def test_status_reports_registered_deterministic_ready() raises:
         "available",
     )
     assert_equal(
+        result["output"]["execution_mode_request_behavior"]["deterministic"].string_value(),
+        "execute",
+    )
+    assert_equal(
+        result["output"]["execution_mode_request_behavior"]["assisted"].string_value(),
+        "backend_unavailable",
+    )
+    assert_equal(
         Int(
             result["output"]["counts"]["deterministic_registered_business_capabilities"].int_value()
         ),
@@ -283,6 +291,26 @@ def test_semantic_rank_invalid_input_returns_invalid_request() raises:
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
         result["error"]["message"].string_value().find("must not be empty") >= 0
+    )
+
+
+def test_assisted_request_returns_backend_unavailable() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rewrite-assisted-1","trace_id":"trace-rewrite-assisted-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted"},"input":{"text":"eggs near me"}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["request_id"].string_value(), "rewrite-assisted-1")
+    assert_equal(
+        result["trace_id"].string_value(), "trace-rewrite-assisted-1"
+    )
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(
+        result["error"]["code"].string_value(), "backend_unavailable"
+    )
+    assert_true(
+        result["error"]["message"].string_value().find("assisted_execution")
+        >= 0
     )
 
 

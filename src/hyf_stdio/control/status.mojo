@@ -63,6 +63,16 @@ def build_status_output() raises -> Value:
     execution_modes.set("assisted", Value(False))
     output.set("enabled_execution_modes", execution_modes)
 
+    var execution_mode_request_behavior = loads("{}")
+    execution_mode_request_behavior.set("deterministic", Value("execute"))
+    execution_mode_request_behavior.set(
+        "assisted", Value("backend_unavailable")
+    )
+    output.set(
+        "execution_mode_request_behavior",
+        execution_mode_request_behavior,
+    )
+
     var backends = loads("{}")
     backends.set(
         "deterministic_backend",

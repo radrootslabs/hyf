@@ -105,6 +105,10 @@ def default_request_context() -> RequestContext:
     )
 
 
+def assisted_execution_requested(context: RequestContext) -> Bool:
+    return context.execution_mode_preference == "assisted"
+
+
 def _parse_scope(json: Value) raises -> RequestScope:
     _require_object(json, "request context scope")
 

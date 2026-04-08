@@ -298,7 +298,7 @@ def build_deterministic_meta(
 
     if context.return_provenance:
         return CoreResponseMeta(
-            mode="a",
+            execution_mode="deterministic",
             backend="heuristic",
             latency_ms=0,
             provenance=ExecutionProvenance(
@@ -311,7 +311,7 @@ def build_deterministic_meta(
         )
 
     return CoreResponseMeta(
-        mode="a",
+        execution_mode="deterministic",
         backend="heuristic",
         latency_ms=0,
         provenance=None,

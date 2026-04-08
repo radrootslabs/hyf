@@ -48,7 +48,7 @@ def _serialize_provenance(provenance: ExecutionProvenance) raises -> Value:
 
 def serialize_core_response_meta(meta: CoreResponseMeta) raises -> Value:
     var value = loads("{}")
-    value.set("mode", Value(String(meta.mode)))
+    value.set("execution_mode", Value(String(meta.execution_mode)))
     value.set("backend", Value(String(meta.backend)))
     value.set("latency_ms", Value(meta.latency_ms))
     if meta.provenance:

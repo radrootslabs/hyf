@@ -21,13 +21,15 @@ def _business_capability(result: Value, capability_id: String) raises -> Value:
 
 def test_decode_request_parses_context_and_input() raises:
     var request = decode_request(
-        '{"request_id":"req-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","return_provenance":true},"input":{"query":"eggs near me"}}'
+        '{"request_id":"req-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs near me"}}'
     )
 
     assert_equal(request.request_id, "req-1")
     assert_equal(request.capability, "query_rewrite")
     assert_equal(request.context.consumer, "radroots-cli")
-    assert_equal(request.context.mode_preference, "a")
+    assert_equal(
+        request.context.execution_mode_preference, "deterministic"
+    )
     assert_equal(request.context.return_provenance, True)
     assert_equal(request.input["query"].string_value(), "eggs near me")
 
@@ -44,7 +46,7 @@ def test_encode_success_and_error_shapes() raises:
     output.set("kind", Value("ok"))
 
     var meta = loads("{}")
-    meta.set("mode", Value("a"))
+    meta.set("execution_mode", Value("deterministic"))
 
     var success = loads(
         encode_success(
@@ -58,7 +60,10 @@ def test_encode_success_and_error_shapes() raises:
     assert_equal(success["request_id"].string_value(), "req-success")
     assert_equal(success["ok"].bool_value(), True)
     assert_equal(success["output"]["kind"].string_value(), "ok")
-    assert_equal(success["meta"]["mode"].string_value(), "a")
+    assert_equal(
+        success["meta"]["execution_mode"].string_value(),
+        "deterministic",
+    )
 
     var failure = loads(
         encode_error(
@@ -81,7 +86,7 @@ def test_handle_request_line_returns_invalid_request_for_bad_line() raises:
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
 
 
-def test_status_reports_registered_mode_a_ready() raises:
+def test_status_reports_registered_deterministic_ready() raises:
     var result = _dispatch(
         '{"request_id":"status-1","capability":"sys.status","input":{}}'
     )
@@ -89,21 +94,21 @@ def test_status_reports_registered_mode_a_ready() raises:
     assert_equal(result["ok"].bool_value(), True)
     assert_equal(
         result["output"]["implementation_status"].string_value(),
-        "bootstrap_registered_mode_a_ready",
+        "bootstrap_registered_deterministic_ready",
     )
     assert_equal(
-        result["output"]["backend_reachability"]["mode_a_deterministic"].string_value(),
+        result["output"]["backend_reachability"]["deterministic_backend"].string_value(),
         "available",
     )
     assert_equal(
         Int(
-            result["output"]["counts"]["mode_a_registered_business_capabilities"].int_value()
+            result["output"]["counts"]["deterministic_registered_business_capabilities"].int_value()
         ),
         3,
     )
     assert_equal(
         Int(
-            result["output"]["counts"]["mode_a_implemented_business_capabilities"].int_value()
+            result["output"]["counts"]["deterministic_implemented_business_capabilities"].int_value()
         ),
         3,
     )
@@ -127,7 +132,10 @@ def test_capabilities_report_implemented_and_disabled_states() raises:
     assert_equal(
         explain_result["implementation_status"].string_value(), "implemented"
     )
-    assert_equal(filter_extraction["mode_a"].string_value(), "disabled")
+    assert_equal(
+        filter_extraction["deterministic_execution"].string_value(),
+        "disabled",
+    )
     assert_equal(
         filter_extraction["disabled_reason"].string_value(),
         "deferred_bootstrap_capability",

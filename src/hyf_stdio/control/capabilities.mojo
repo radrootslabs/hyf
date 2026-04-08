@@ -28,8 +28,10 @@ def build_capabilities_output() raises -> Value:
         value.set("id", Value(String(capability.id)))
         value.set("kind", Value("business"))
         value.set(
-            "mode_a",
-            Value("enabled") if capability.mode_a_enabled else Value("disabled"),
+            "deterministic_execution",
+            Value("enabled")
+            if capability.deterministic_enabled
+            else Value("disabled"),
         )
         value.set(
             "implementation_status",
@@ -37,14 +39,16 @@ def build_capabilities_output() raises -> Value:
             if capability.implemented
             else (
                 Value("not_implemented")
-                if capability.mode_a_enabled
+                if capability.deterministic_enabled
                 else Value("disabled")
             ),
         )
         value.set("callable", Value(capability.callable))
         value.set("implemented", Value(capability.implemented))
-        value.set("mode_b", Value("unavailable"))
-        value.set("backend_assisted", Value(capability.mode_b_available))
+        value.set("assisted_execution", Value("unavailable"))
+        value.set(
+            "assisted_backend_available", Value(capability.assisted_available)
+        )
         if capability.disabled_reason != "":
             value.set(
                 "disabled_reason", Value(String(capability.disabled_reason))
@@ -52,7 +56,7 @@ def build_capabilities_output() raises -> Value:
         capabilities.append(value)
 
     output.set("business_capabilities", capabilities)
-    output.set("backend_assisted_capabilities", loads("[]"))
+    output.set("assisted_backend_capabilities", loads("[]"))
     output.set(
         "request_context_features",
         _string_array(request_context_feature_names()),

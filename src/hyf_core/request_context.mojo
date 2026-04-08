@@ -67,7 +67,7 @@ struct TimeRange(Copyable, Movable):
 @fieldwise_init
 struct RequestContext(Copyable, Movable):
     var consumer: String
-    var mode_preference: String
+    var execution_mode_preference: String
     var deadline_ms: Int
     var scope: Optional[RequestScope]
     var time_range: Optional[TimeRange]
@@ -80,7 +80,7 @@ struct RequestContext(Copyable, Movable):
 def request_context_feature_names() -> List[String]:
     var features = List[String]()
     features.append("consumer")
-    features.append("mode_preference")
+    features.append("execution_mode_preference")
     features.append("deadline_ms")
     features.append("scope")
     features.append("time_range")
@@ -94,7 +94,7 @@ def request_context_feature_names() -> List[String]:
 def default_request_context() -> RequestContext:
     return RequestContext(
         consumer="unknown",
-        mode_preference="a",
+        execution_mode_preference="deterministic",
         deadline_ms=2500,
         scope=None,
         time_range=None,
@@ -187,11 +187,16 @@ def parse_request_context(json: Value) raises -> RequestContext:
         context.consumer = get_string(json, "consumer")
         _require_non_empty(context.consumer, "request context consumer")
 
-    if _has_key(json, "mode_preference"):
-        context.mode_preference = get_string(json, "mode_preference")
-        if context.mode_preference != "a" and context.mode_preference != "b":
+    if _has_key(json, "execution_mode_preference"):
+        context.execution_mode_preference = get_string(
+            json, "execution_mode_preference"
+        )
+        if (
+            context.execution_mode_preference != "deterministic"
+            and context.execution_mode_preference != "assisted"
+        ):
             raise Error(
-                "request context mode_preference must be 'a' or 'b'"
+                "request context execution_mode_preference must be 'deterministic' or 'assisted'"
             )
 
     if _has_key(json, "deadline_ms"):

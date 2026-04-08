@@ -3,7 +3,9 @@ from std.collections import List
 from mojson import Value, loads
 
 from hyf_core.capabilities.registry import canonical_business_capabilities
-from hyf_core.request_context import request_context_feature_names
+from hyf_stdio.control.request_context_contract import (
+    build_request_context_contract_value,
+)
 
 
 def _string_array(values: List[String]) raises -> Value:
@@ -58,7 +60,7 @@ def build_capabilities_output() raises -> Value:
     output.set("business_capabilities", capabilities)
     output.set("assisted_backend_capabilities", loads("[]"))
     output.set(
-        "request_context_features",
-        _string_array(request_context_feature_names()),
+        "request_context_contract",
+        build_request_context_contract_value(),
     )
     return output^

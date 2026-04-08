@@ -78,10 +78,31 @@ struct RequestContext(Copyable, Movable):
 
 
 def request_context_feature_names() -> List[String]:
+    return request_context_allowed_keys()
+
+
+def request_context_allowed_keys() -> List[String]:
     var features = List[String]()
     features.append("consumer")
     features.append("execution_mode_preference")
     features.append("scope")
+    features.append("return_provenance")
+    return features^
+
+
+def accepted_request_context_feature_names() -> List[String]:
+    var features = List[String]()
+    features.append("consumer")
+    features.append("execution_mode_preference")
+    features.append("scope.listing_ids")
+    features.append("return_provenance")
+    return features^
+
+
+def effective_request_context_feature_names() -> List[String]:
+    var features = List[String]()
+    features.append("execution_mode_preference")
+    features.append("scope.listing_ids")
     features.append("return_provenance")
     return features^
 
@@ -149,7 +170,7 @@ def parse_request_context(json: Value) raises -> RequestContext:
 
     _require_object(json, "request context")
 
-    var allowed_keys = request_context_feature_names()
+    var allowed_keys = request_context_allowed_keys()
     _require_allowed_keys(json, allowed_keys, "request context")
 
     var context = default_request_context()

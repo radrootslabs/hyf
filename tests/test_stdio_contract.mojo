@@ -33,6 +33,14 @@ def test_status_success() raises:
         response["output"]["execution_mode_request_behavior"]["assisted"].string_value(),
         "backend_unavailable",
     )
+    assert_equal(
+        response["output"]["request_context_contract"]["accepted_features"][2].string_value(),
+        "scope.listing_ids",
+    )
+    assert_equal(
+        response["output"]["request_context_contract"]["effective_features"][0].string_value(),
+        "execution_mode_preference",
+    )
 
 
 def test_invalid_envelope_preserves_correlation() raises:

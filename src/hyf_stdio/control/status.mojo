@@ -10,7 +10,9 @@ from hyf_core.capabilities.registry import (
     implemented_deterministic_capability_count,
 )
 from hyf_core.metadata import current_build_identity
-from hyf_core.request_context import request_context_feature_names
+from hyf_stdio.control.request_context_contract import (
+    build_request_context_contract_value,
+)
 
 
 def _string_array(values: List[String]) raises -> Value:
@@ -107,10 +109,10 @@ def build_status_output() raises -> Value:
 
     var limits = loads("{}")
     limits.set("max_requests_per_process", Value(1))
-    limits.set(
-        "request_context_features",
-        _string_array(request_context_feature_names()),
-    )
     output.set("limits", limits)
+    output.set(
+        "request_context_contract",
+        build_request_context_contract_value(),
+    )
 
     return output^

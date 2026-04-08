@@ -31,6 +31,13 @@ def _business_capability(result: Value, capability_id: String) raises -> Value:
     raise Error("missing capability '" + capability_id + "' in response")
 
 
+def _array_string_values(value: Value) raises -> List[String]:
+    var items = List[String]()
+    for item in value.array_items():
+        items.append(item.string_value())
+    return items^
+
+
 def test_decode_request_parses_context_and_input() raises:
     var request = decode_request(
         '{"version":1,"request_id":"req-1","trace_id":"trace-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs near me"}}'
@@ -188,6 +195,31 @@ def test_status_reports_registered_deterministic_ready() raises:
         ),
         3,
     )
+    assert_true(
+        not _has_key(result["output"]["limits"], "request_context_features")
+    )
+    var status_request_context_contract = result["output"][
+        "request_context_contract"
+    ]
+    var status_accepted = _array_string_values(
+        status_request_context_contract["accepted_features"]
+    )
+    assert_equal(len(status_accepted), 4)
+    assert_equal(status_accepted[0], "consumer")
+    assert_equal(status_accepted[1], "execution_mode_preference")
+    assert_equal(status_accepted[2], "scope.listing_ids")
+    assert_equal(status_accepted[3], "return_provenance")
+    var status_effective = _array_string_values(
+        status_request_context_contract["effective_features"]
+    )
+    assert_equal(len(status_effective), 3)
+    assert_equal(status_effective[0], "execution_mode_preference")
+    assert_equal(status_effective[1], "scope.listing_ids")
+    assert_equal(status_effective[2], "return_provenance")
+    assert_equal(
+        status_request_context_contract["unsupported_field_behavior"].string_value(),
+        "reject",
+    )
 
 
 def test_capabilities_report_implemented_and_disabled_states() raises:
@@ -216,6 +248,35 @@ def test_capabilities_report_implemented_and_disabled_states() raises:
     assert_equal(
         filter_extraction["disabled_reason"].string_value(),
         "deferred_bootstrap_capability",
+    )
+    assert_true(
+        not _has_key(result["output"], "request_context_features")
+    )
+    var capabilities_request_context_contract = result["output"][
+        "request_context_contract"
+    ]
+    var capabilities_accepted = _array_string_values(
+        capabilities_request_context_contract["accepted_features"]
+    )
+    assert_equal(len(capabilities_accepted), 4)
+    assert_equal(capabilities_accepted[0], "consumer")
+    assert_equal(
+        capabilities_accepted[1], "execution_mode_preference"
+    )
+    assert_equal(capabilities_accepted[2], "scope.listing_ids")
+    assert_equal(capabilities_accepted[3], "return_provenance")
+    var capabilities_effective = _array_string_values(
+        capabilities_request_context_contract["effective_features"]
+    )
+    assert_equal(len(capabilities_effective), 3)
+    assert_equal(
+        capabilities_effective[0], "execution_mode_preference"
+    )
+    assert_equal(capabilities_effective[1], "scope.listing_ids")
+    assert_equal(capabilities_effective[2], "return_provenance")
+    assert_equal(
+        capabilities_request_context_contract["unsupported_field_behavior"].string_value(),
+        "reject",
     )
 
 

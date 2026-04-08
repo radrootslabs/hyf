@@ -1,7 +1,7 @@
 from std.collections import List, Optional
 
 from mojson import Value
-from mojson.deserialize import get_bool, get_int, get_string
+from mojson.deserialize import get_bool, get_string
 
 
 def _has_key(value: Value, key: String) -> Bool:
@@ -81,13 +81,8 @@ def request_context_feature_names() -> List[String]:
     var features = List[String]()
     features.append("consumer")
     features.append("execution_mode_preference")
-    features.append("deadline_ms")
     features.append("scope")
-    features.append("time_range")
-    features.append("evidence_limit")
-    features.append("consistency")
     features.append("return_provenance")
-    features.append("explain_plan")
     return features^
 
 
@@ -114,48 +109,20 @@ def _parse_scope(json: Value) raises -> RequestScope:
 
     var allowed_keys = List[String]()
     allowed_keys.append("listing_ids")
-    allowed_keys.append("farm_ids")
-    allowed_keys.append("account_ids")
-    allowed_keys.append("platform_ids")
-    allowed_keys.append("object_filters")
     _require_allowed_keys(json, allowed_keys, "request context scope")
-
-    var object_filters: Optional[Value] = None
-    if _has_key(json, "object_filters"):
-        var raw_filters = json["object_filters"].clone()
-        if not raw_filters.is_null():
-            object_filters = raw_filters^
 
     var listing_ids_json = Value(None)
     if _has_key(json, "listing_ids"):
         listing_ids_json = json["listing_ids"].clone()
 
-    var farm_ids_json = Value(None)
-    if _has_key(json, "farm_ids"):
-        farm_ids_json = json["farm_ids"].clone()
-
-    var account_ids_json = Value(None)
-    if _has_key(json, "account_ids"):
-        account_ids_json = json["account_ids"].clone()
-
-    var platform_ids_json = Value(None)
-    if _has_key(json, "platform_ids"):
-        platform_ids_json = json["platform_ids"].clone()
-
     return RequestScope(
         listing_ids=_parse_string_list(
             listing_ids_json, "request context scope listing_ids"
         ),
-        farm_ids=_parse_string_list(
-            farm_ids_json, "request context scope farm_ids"
-        ),
-        account_ids=_parse_string_list(
-            account_ids_json, "request context scope account_ids"
-        ),
-        platform_ids=_parse_string_list(
-            platform_ids_json, "request context scope platform_ids"
-        ),
-        object_filters=object_filters^,
+        farm_ids=List[String](),
+        account_ids=List[String](),
+        platform_ids=List[String](),
+        object_filters=None,
     )
 
 
@@ -203,42 +170,12 @@ def parse_request_context(json: Value) raises -> RequestContext:
                 "request context execution_mode_preference must be 'deterministic' or 'assisted'"
             )
 
-    if _has_key(json, "deadline_ms"):
-        context.deadline_ms = get_int(json, "deadline_ms")
-        if context.deadline_ms <= 0:
-            raise Error("request context deadline_ms must be greater than zero")
-
     if _has_key(json, "scope"):
         var scope_json = json["scope"].clone()
         if not scope_json.is_null():
             context.scope = _parse_scope(scope_json)
 
-    if _has_key(json, "time_range"):
-        var time_range_json = json["time_range"].clone()
-        if not time_range_json.is_null():
-            context.time_range = _parse_time_range(time_range_json)
-
-    if _has_key(json, "evidence_limit"):
-        context.evidence_limit = get_int(json, "evidence_limit")
-        if context.evidence_limit <= 0:
-            raise Error(
-                "request context evidence_limit must be greater than zero"
-            )
-
-    if _has_key(json, "consistency"):
-        context.consistency = get_string(json, "consistency")
-        if (
-            context.consistency != "default"
-            and context.consistency != "strong"
-        ):
-            raise Error(
-                "request context consistency must be 'default' or 'strong'"
-            )
-
     if _has_key(json, "return_provenance"):
         context.return_provenance = get_bool(json, "return_provenance")
-
-    if _has_key(json, "explain_plan"):
-        context.explain_plan = get_bool(json, "explain_plan")
 
     return context^

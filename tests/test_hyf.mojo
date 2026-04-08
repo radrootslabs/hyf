@@ -55,6 +55,20 @@ def test_decode_request_rejects_unexpected_field() raises:
         )
 
 
+def test_decode_request_rejects_unsupported_context_field() raises:
+    with assert_raises():
+        _ = decode_request(
+            '{"version":1,"request_id":"req-ctx-1","capability":"query_rewrite","context":{"deadline_ms":2500},"input":{"query":"eggs"}}'
+        )
+
+
+def test_decode_request_rejects_unsupported_scope_field() raises:
+    with assert_raises():
+        _ = decode_request(
+            '{"version":1,"request_id":"req-scope-1","capability":"semantic_rank","context":{"scope":{"farm_ids":["farm-1"]}},"input":{"query":"eggs","candidates":[{"id":"lst_1","title":"Eggs","farm":"One Farm","delivery":"pickup","distance_km":1.0,"freshness_minutes":5}]}}'
+        )
+
+
 def test_encode_success_and_error_shapes() raises:
     var output = loads("{}")
     output.set("kind", Value("ok"))
@@ -345,6 +359,23 @@ def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
     assert_equal(
         result["output"]["scored_candidates"][0]["score"].int_value(),
         102,
+    )
+
+
+def test_semantic_rank_scope_listing_ids_remains_effective() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rank-scope-1","capability":"semantic_rank","context":{"scope":{"listing_ids":["lst_8k1p"]}},"input":{"query":"eggs","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), True)
+    assert_equal(
+        result["output"]["ranked_ids"][0].string_value(),
+        "lst_8k1p",
+    )
+    assert_equal(
+        result["output"]["scored_candidates"][0]["scope_match"].bool_value(),
+        True,
     )
 
 

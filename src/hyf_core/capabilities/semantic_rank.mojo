@@ -3,7 +3,7 @@ from std.collections import List
 from mojson import Value, loads
 
 from hyf_core.capabilities.query_analysis import (
-    analyze_query,
+    analyze_query_text,
     build_deterministic_meta,
     query_signal_tags,
     serialize_extracted_filters,
@@ -11,7 +11,8 @@ from hyf_core.capabilities.query_analysis import (
 )
 from hyf_core.capabilities.ranking_support import (
     CandidateEvaluation,
-    parse_candidate_array,
+    SemanticRankRequest,
+    parse_semantic_rank_request,
     rank_candidates,
 )
 from hyf_core.errors import (
@@ -82,9 +83,9 @@ def execute_semantic_rank(
         )
 
     try:
-        var analysis = analyze_query(input, context, "semantic_rank")
-        var candidates = parse_candidate_array(input, "semantic_rank")
-        var ranked = rank_candidates(candidates, analysis, context)
+        var request: SemanticRankRequest = parse_semantic_rank_request(input)
+        var analysis = analyze_query_text(request.query_text, context)
+        var ranked = rank_candidates(request.candidates, analysis, context)
 
         var signal_tags = query_signal_tags(analysis)
         signal_tags.append("candidate_set_evaluated")

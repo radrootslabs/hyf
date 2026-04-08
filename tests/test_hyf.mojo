@@ -301,6 +301,38 @@ def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
     )
 
 
+def test_semantic_rank_rejects_unknown_top_level_field() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rank-bad-top-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}],"tone":"brief"}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(result["request_id"].string_value(), "rank-bad-top-1")
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("unexpected field")
+        >= 0
+    )
+
+
+def test_semantic_rank_rejects_unknown_candidate_field() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rank-bad-candidate-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2,"rating":5}]}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(
+        result["request_id"].string_value(), "rank-bad-candidate-1"
+    )
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("unexpected field")
+        >= 0
+    )
+
+
 def test_explain_result_returns_deterministic_summary_and_provenance() raises:
     var result = _dispatch(
         '{"version":1,"request_id":"explain-1","capability":"explain_result","context":{"consumer":"radroots-cli","return_provenance":true},"input":{"query":"eggs near me with weekend pickup","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
@@ -322,6 +354,57 @@ def test_explain_result_returns_deterministic_summary_and_provenance() raises:
     assert_equal(
         result["meta"]["provenance"]["source_refs"][1]["source_kind"].string_value(),
         "candidate",
+    )
+
+
+def test_explain_result_accepts_result_alias() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"explain-result-1","capability":"explain_result","input":{"query":"eggs near me with weekend pickup","result":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), True)
+    assert_equal(
+        result["output"]["result_id"].string_value(),
+        "lst_7ak2",
+    )
+    assert_equal(
+        result["output"]["explanation_kind"].string_value(),
+        "deterministic",
+    )
+
+
+def test_explain_result_rejects_unknown_top_level_field() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"explain-bad-top-1","capability":"explain_result","input":{"query":"eggs near me","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},"tone":"brief"}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(
+        result["request_id"].string_value(), "explain-bad-top-1"
+    )
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("unexpected field")
+        >= 0
+    )
+
+
+def test_explain_result_rejects_unknown_candidate_field() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"explain-bad-candidate-1","capability":"explain_result","input":{"query":"eggs near me","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2,"rating":5}}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(
+        result["request_id"].string_value(), "explain-bad-candidate-1"
+    )
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("unexpected field")
+        >= 0
     )
 
 

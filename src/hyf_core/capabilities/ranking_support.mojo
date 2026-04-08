@@ -34,9 +34,34 @@ struct CandidateEvaluation(Copyable, Movable):
     var scope_match: Bool
 
 
+@fieldwise_init
+struct SemanticRankRequest(Copyable, Movable):
+    var query_text: String
+    var candidates: List[SemanticCandidate]
+
+
+@fieldwise_init
+struct ExplainResultRequest(Copyable, Movable):
+    var query_text: String
+    var candidate: SemanticCandidate
+
+
 def _require_object(value: Value, context: String) raises:
     if not value.is_object():
         raise Error(context + " must be a JSON object")
+
+
+def _require_allowed_keys(
+    value: Value, allowed_keys: List[String], context: String
+) raises:
+    for key in value.object_keys():
+        var allowed = False
+        for allowed_key in allowed_keys:
+            if key == allowed_key:
+                allowed = True
+                break
+        if not allowed:
+            raise Error(context + " contains unexpected field '" + key + "'")
 
 
 def _copy_candidate(candidate: SemanticCandidate) -> SemanticCandidate:
@@ -73,6 +98,15 @@ def _copy_evaluation(evaluation: CandidateEvaluation) -> CandidateEvaluation:
 def _parse_candidate(json: Value, context: String) raises -> SemanticCandidate:
     _require_object(json, context)
 
+    var allowed_keys = List[String]()
+    allowed_keys.append("id")
+    allowed_keys.append("title")
+    allowed_keys.append("farm")
+    allowed_keys.append("delivery")
+    allowed_keys.append("distance_km")
+    allowed_keys.append("freshness_minutes")
+    _require_allowed_keys(json, allowed_keys, context)
+
     var id = get_string(json, "id")
     if collapse_whitespace(id) == "":
         raise Error(context + " field 'id' must not be empty")
@@ -106,6 +140,67 @@ def _parse_candidate(json: Value, context: String) raises -> SemanticCandidate:
         delivery=collapse_whitespace(delivery).lower(),
         distance_km=distance_km,
         freshness_minutes=freshness_minutes,
+    )
+
+
+def _parse_query_text(input: Value, capability_name: String) raises -> String:
+    var field_count = 0
+    if has_key(input, "text"):
+        field_count += 1
+    if has_key(input, "query"):
+        field_count += 1
+
+    if field_count == 0:
+        raise Error(
+            capability_name + " input requires exactly one of 'text' or 'query'"
+        )
+    if field_count > 1:
+        raise Error(
+            capability_name
+            + " input must provide exactly one of 'text' or 'query'"
+        )
+
+    var field_name = "text" if has_key(input, "text") else "query"
+    var text_value = input[field_name]
+    if not text_value.is_string():
+        raise Error(
+            capability_name + " input field '" + field_name + "' must be a string"
+        )
+
+    var collapsed = collapse_whitespace(text_value.string_value())
+    if collapsed == "":
+        raise Error(capability_name + " input text must not be empty")
+    return collapsed^
+
+
+def parse_semantic_rank_request(input: Value) raises -> SemanticRankRequest:
+    _require_object(input, "semantic_rank input")
+
+    var allowed_keys = List[String]()
+    allowed_keys.append("text")
+    allowed_keys.append("query")
+    allowed_keys.append("candidates")
+    _require_allowed_keys(input, allowed_keys, "semantic_rank input")
+
+    return SemanticRankRequest(
+        query_text=_parse_query_text(input, "semantic_rank"),
+        candidates=parse_candidate_array(input, "semantic_rank"),
+    )
+
+
+def parse_explain_result_request(input: Value) raises -> ExplainResultRequest:
+    _require_object(input, "explain_result input")
+
+    var allowed_keys = List[String]()
+    allowed_keys.append("text")
+    allowed_keys.append("query")
+    allowed_keys.append("candidate")
+    allowed_keys.append("result")
+    _require_allowed_keys(input, allowed_keys, "explain_result input")
+
+    return ExplainResultRequest(
+        query_text=_parse_query_text(input, "explain_result"),
+        candidate=parse_single_candidate(input, "explain_result"),
     )
 
 

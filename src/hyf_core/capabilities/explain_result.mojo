@@ -3,15 +3,16 @@ from std.collections import List
 from mojson import Value, loads
 
 from hyf_core.capabilities.query_analysis import (
-    analyze_query,
+    analyze_query_text,
     build_deterministic_meta,
     query_signal_tags,
     serialize_extracted_filters,
     string_array_value,
 )
 from hyf_core.capabilities.ranking_support import (
+    ExplainResultRequest,
     evaluate_candidate,
-    parse_single_candidate,
+    parse_explain_result_request,
 )
 from hyf_core.errors import (
     CapabilityResult,
@@ -97,9 +98,11 @@ def execute_explain_result(
         )
 
     try:
-        var analysis = analyze_query(input, context, "explain_result")
-        var candidate = parse_single_candidate(input, "explain_result")
-        var evaluation = evaluate_candidate(candidate, analysis, context)
+        var request: ExplainResultRequest = parse_explain_result_request(input)
+        var analysis = analyze_query_text(request.query_text, context)
+        var evaluation = evaluate_candidate(
+            request.candidate, analysis, context
+        )
 
         var signal_tags = query_signal_tags(analysis)
         for reason in evaluation.reasons:

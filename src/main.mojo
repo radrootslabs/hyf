@@ -1,2 +1,5 @@
+from hyf_stdio.server import run_stdio_server
+
+
 def main() raises:
-    pass
+    run_stdio_server()

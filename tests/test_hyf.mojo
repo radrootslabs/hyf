@@ -1,4 +1,5 @@
 from std.os import getenv, setenv, unsetenv
+from std.pathlib import Path, _dir_of_current_file
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -31,6 +32,51 @@ comptime _PACKAGE_SURFACE_FAULT_ENV = (
 
 def _dispatch(line: String) raises -> Value:
     return loads(handle_request_line(line))
+
+
+def _test_manifest_path() raises -> Path:
+    return _dir_of_current_file() / ".." / "pixi.toml"
+
+
+def _parse_manifest_quoted_value(value: String) raises -> String:
+    var trimmed = value.strip()
+    if (
+        trimmed.byte_length() < 2
+        or not trimmed.startswith("\"")
+        or not trimmed.endswith("\"")
+    ):
+        raise Error("manifest assignment value must be quoted")
+    return String(trimmed[byte=1 : trimmed.byte_length() - 1])
+
+
+def _manifest_workspace_value(target_key: String) raises -> String:
+    var in_workspace = False
+
+    for raw_line in _test_manifest_path().read_text().splitlines():
+        var line = String(raw_line).strip()
+        if line == "" or line.startswith("#"):
+            continue
+
+        if line.startswith("["):
+            in_workspace = line == "[workspace]"
+            continue
+
+        if not in_workspace:
+            continue
+
+        var equals_index = line.find("=")
+        if equals_index < 0:
+            continue
+
+        var key = String(line[byte=0:equals_index]).strip()
+        if key != target_key:
+            continue
+
+        return _parse_manifest_quoted_value(
+            String(line[byte=equals_index + 1 :])
+        )
+
+    raise Error("missing workspace manifest key '" + target_key + "'")
 
 
 def _has_key(value: Value, key: String) -> Bool:
@@ -151,12 +197,14 @@ def test_handle_request_line_returns_invalid_request_for_bad_line() raises:
 def test_current_build_identity_matches_manifest_package_surface() raises:
     var package_surface = current_package_surface()
     var build_identity = current_build_identity()
+    var manifest_package_name = _manifest_workspace_value("name")
+    var manifest_package_version = _manifest_workspace_value("version")
 
-    assert_equal(package_surface.package_name, "hyf")
-    assert_equal(package_surface.package_version, "0.1.0")
-    assert_equal(build_identity.package_name, package_surface.package_name)
+    assert_equal(package_surface.package_name, manifest_package_name)
+    assert_equal(package_surface.package_version, manifest_package_version)
+    assert_equal(build_identity.package_name, manifest_package_name)
     assert_equal(
-        build_identity.package_version, package_surface.package_version
+        build_identity.package_version, manifest_package_version
     )
 
 

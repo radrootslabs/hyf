@@ -1,5 +1,6 @@
 from std.os import getenv
-from std.pathlib import Path, _dir_of_current_file
+
+from hyf_core.package_surface import hyf_package_name, hyf_package_version
 
 
 def hyf_protocol_version() -> Int:
@@ -24,72 +25,17 @@ struct HyfBuildIdentity(Copyable, Movable):
     var deterministic_execution_available: Bool
     var assisted_execution_available: Bool
 
-
-def _package_surface_manifest_path() raises -> Path:
-    return _dir_of_current_file() / ".." / ".." / "pixi.toml"
-
-
-def _package_surface_manifest_text() raises -> String:
+def current_package_surface() raises -> HyfPackageSurface:
     if (
         getenv("HYF_TEST_FAULT_CURRENT_PACKAGE_SURFACE", "")
         == "invalid_unquoted_version"
     ):
-        return '[workspace]\nname = "hyf"\nversion = 0.1.0\n'
-    return _package_surface_manifest_path().read_text()
+        raise Error("simulated invalid package surface")
 
-
-def _parse_quoted_assignment_value(value: String) raises -> String:
-    var trimmed_value = value.strip()
-    if (
-        trimmed_value.byte_length() < 2
-        or not trimmed_value.startswith("\"")
-        or not trimmed_value.endswith("\"")
-    ):
-        raise Error("manifest assignment value must be a quoted string")
-
-    return String(
-        trimmed_value[byte=1 : trimmed_value.byte_length() - 1]
+    return HyfPackageSurface(
+        package_name=hyf_package_name(),
+        package_version=hyf_package_version(),
     )
-
-
-def current_package_surface() raises -> HyfPackageSurface:
-    var in_workspace = False
-    var package_name = String("")
-    var package_version = String("")
-
-    for raw_line in _package_surface_manifest_text().splitlines():
-        var line = String(raw_line).strip()
-        if line == "" or line.startswith("#"):
-            continue
-
-        if line.startswith("["):
-            in_workspace = line == "[workspace]"
-            continue
-
-        if not in_workspace:
-            continue
-
-        var equals_index = line.find("=")
-        if equals_index < 0:
-            continue
-
-        var key = String(line[byte=0:equals_index]).strip()
-        var value = _parse_quoted_assignment_value(
-            String(line[byte=equals_index + 1 :])
-        )
-
-        if key == "name":
-            package_name = value^
-        elif key == "version":
-            package_version = value^
-
-        if package_name != "" and package_version != "":
-            return HyfPackageSurface(
-                package_name=package_name^,
-                package_version=package_version^,
-            )
-
-    raise Error("unable to derive hyf package surface from pixi.toml")
 
 
 def current_build_identity() raises -> HyfBuildIdentity:

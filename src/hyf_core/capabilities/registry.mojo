@@ -37,8 +37,8 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
         BusinessCapabilityDescriptor(
             id="semantic_rank",
             mode_a_enabled=True,
-            implemented=False,
-            callable=False,
+            implemented=True,
+            callable=True,
             mode_b_available=False,
             disabled_reason="",
         )
@@ -77,8 +77,8 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
         BusinessCapabilityDescriptor(
             id="explain_result",
             mode_a_enabled=True,
-            implemented=False,
-            callable=False,
+            implemented=True,
+            callable=True,
             mode_b_available=False,
             disabled_reason="",
         )
@@ -100,12 +100,26 @@ def bootstrap_capability_count() -> Int:
     return len(canonical_business_capabilities())
 
 
+def implemented_enabled_capability_count() -> Int:
+    var implemented = 0
+    for capability in canonical_business_capabilities():
+        if capability.mode_a_enabled and capability.implemented:
+            implemented += 1
+    return implemented
+
+
 def bootstrap_enabled_capabilities() -> List[String]:
     var enabled = List[String]()
     for capability in canonical_business_capabilities():
         if capability.mode_a_enabled:
             enabled.append(String(capability.id))
     return enabled^
+
+
+def all_enabled_capabilities_implemented() -> Bool:
+    return implemented_enabled_capability_count() == len(
+        bootstrap_enabled_capabilities()
+    )
 
 
 def deferred_capabilities() -> List[String]:

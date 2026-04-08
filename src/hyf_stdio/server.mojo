@@ -4,11 +4,13 @@ from std.sys import stdin
 
 from mojson import Value
 
+from hyf_core.capabilities.explain_result import execute_explain_result
 from hyf_core.capabilities.registry import (
     is_deferred_capability,
     is_known_business_capability,
 )
 from hyf_core.capabilities.query_rewrite import execute_query_rewrite
+from hyf_core.capabilities.semantic_rank import execute_semantic_rank
 from hyf_core.errors import CapabilityFailure, CapabilitySuccess
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.control.capabilities import build_capabilities_output
@@ -100,6 +102,30 @@ def _write_query_rewrite(request: WireRequest, request_id: String) raises:
     )
 
 
+def _write_semantic_rank(request: WireRequest, request_id: String) raises:
+    var result = execute_semantic_rank(
+        request.input.clone(), request.context.copy()
+    )
+    if result.failure:
+        _write_error(_wire_error_from_core_failure(request_id, result.failure.value()))
+        return
+    _write_success(
+        _wire_success_from_core_success(request_id, result.success.value())
+    )
+
+
+def _write_explain_result(request: WireRequest, request_id: String) raises:
+    var result = execute_explain_result(
+        request.input.clone(), request.context.copy()
+    )
+    if result.failure:
+        _write_error(_wire_error_from_core_failure(request_id, result.failure.value()))
+        return
+    _write_success(
+        _wire_success_from_core_success(request_id, result.success.value())
+    )
+
+
 def run_stdio_server() raises:
     if stdin.isatty():
         return
@@ -130,6 +156,10 @@ def run_stdio_server() raises:
                     )
                 elif request.capability == "query_rewrite":
                     _write_query_rewrite(request^, request_id)
+                elif request.capability == "semantic_rank":
+                    _write_semantic_rank(request^, request_id)
+                elif request.capability == "explain_result":
+                    _write_explain_result(request^, request_id)
                 elif is_deferred_capability(request.capability):
                     _write_error(_disabled_response(request))
                 elif is_known_business_capability(request.capability):

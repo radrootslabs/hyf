@@ -10,6 +10,19 @@ from hyf_core.provenance import (
 from hyf_core.request_context import RequestContext
 
 
+def _require_object(value: Value, context: String) raises:
+    if not value.is_object():
+        raise Error(context + " must be a JSON object")
+
+
+def _require_allowed_keys(
+    value: Value, key_a: String, key_b: String, context: String
+) raises:
+    for key in value.object_keys():
+        if key != key_a and key != key_b:
+            raise Error(context + " contains unexpected field '" + key + "'")
+
+
 def has_key(value: Value, key: String) -> Bool:
     for candidate in value.object_keys():
         if candidate == key:
@@ -130,6 +143,11 @@ struct QueryAnalysis(Copyable, Movable):
     var extracted_filters: ExtractedFilters
 
 
+@fieldwise_init
+struct QueryRewriteRequest(Copyable, Movable):
+    var text: String
+
+
 def extract_text_input(input: Value, capability_name: String) raises -> String:
     if not input.is_object():
         raise Error(capability_name + " input must be a JSON object")
@@ -160,13 +178,45 @@ def extract_text_input(input: Value, capability_name: String) raises -> String:
         )
 
 
-def analyze_query(
-    input: Value, context: RequestContext, capability_name: String
-) raises -> QueryAnalysis:
-    var original_text = extract_text_input(input, capability_name)
+def parse_query_rewrite_request(input: Value) raises -> QueryRewriteRequest:
+    _require_object(input, "query_rewrite input")
+    _require_allowed_keys(input, "text", "query", "query_rewrite input")
+
+    var has_text = has_key(input, "text")
+    var has_query = has_key(input, "query")
+
+    if has_text and has_query:
+        raise Error(
+            "query_rewrite input must provide exactly one of 'text' or 'query'"
+        )
+    if not has_text and not has_query:
+        raise Error(
+            "query_rewrite input requires exactly one of 'text' or 'query'"
+        )
+
+    var source_field = "text" if has_text else "query"
+    var text_value = input[source_field]
+    if not text_value.is_string():
+        raise Error(
+            "query_rewrite input field '" + source_field + "' must be a string"
+        )
+
+    var collapsed = collapse_whitespace(text_value.string_value())
+    if collapsed == "":
+        raise Error("query_rewrite input text must not be empty")
+
+    return QueryRewriteRequest(text=collapsed)
+
+
+def analyze_query_text(
+    original_text: String, context: RequestContext
+) -> QueryAnalysis:
+    var normalized_input = String(original_text)
 
     var normalization_signals = List[String]()
-    var normalized_text = normalize_free_text(original_text, normalization_signals)
+    var normalized_text = normalize_free_text(
+        normalized_input, normalization_signals
+    )
     var normalized_tokens = normalized_text.split()
 
     var query_terms = List[String]()
@@ -239,7 +289,7 @@ def analyze_query(
         normalization_signals.append("fallback_to_normalized_query")
 
     return QueryAnalysis(
-        original_text=original_text,
+        original_text=normalized_input,
         normalized_text=normalized_text,
         rewritten_text=join_strings(query_terms),
         query_terms=query_terms^,
@@ -251,6 +301,13 @@ def analyze_query(
             time_window=time_window,
         ),
     )
+
+
+def analyze_query(
+    input: Value, context: RequestContext, capability_name: String
+) raises -> QueryAnalysis:
+    var original_text = extract_text_input(input, capability_name)
+    return analyze_query_text(original_text, context)
 
 
 def serialize_extracted_filters(filters: ExtractedFilters) raises -> Value:

@@ -230,6 +230,52 @@ def test_query_rewrite_returns_deterministic_output() raises:
     assert_equal(result["meta"]["backend"].string_value(), "heuristic")
 
 
+def test_query_rewrite_accepts_query_alias_with_same_behavior() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rewrite-query-1","capability":"query_rewrite","input":{"query":"eggs near me with weekend pickup"}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), True)
+    assert_equal(
+        result["output"]["rewritten_text"].string_value(),
+        "eggs",
+    )
+    assert_equal(
+        result["output"]["extracted_filters"]["fulfillment"].string_value(),
+        "pickup",
+    )
+
+
+def test_query_rewrite_rejects_unknown_input_field() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rewrite-bad-field-1","capability":"query_rewrite","input":{"text":"eggs near me","tone":"brief"}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(result["request_id"].string_value(), "rewrite-bad-field-1")
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("unexpected field")
+        >= 0
+    )
+
+
+def test_query_rewrite_rejects_text_and_query_together() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rewrite-bad-dual-1","capability":"query_rewrite","input":{"text":"eggs near me","query":"eggs"}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(result["request_id"].string_value(), "rewrite-bad-dual-1")
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("exactly one") >= 0
+    )
+
+
 def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
     var result = _dispatch(
         '{"version":1,"request_id":"rank-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'

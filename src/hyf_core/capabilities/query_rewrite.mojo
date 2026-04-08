@@ -4,8 +4,10 @@ from mojson import Value, loads
 
 from hyf_core.capabilities.query_analysis import (
     QueryAnalysis,
-    analyze_query,
+    QueryRewriteRequest,
+    analyze_query_text,
     build_deterministic_meta,
+    parse_query_rewrite_request,
     query_signal_tags,
     serialize_extracted_filters,
     string_array_value,
@@ -51,7 +53,8 @@ def execute_query_rewrite(
         )
 
     try:
-        var analysis = analyze_query(input, context, "query_rewrite")
+        var request: QueryRewriteRequest = parse_query_rewrite_request(input)
+        var analysis = analyze_query_text(request.text, context)
 
         var source_refs = List[ProvenanceSourceRef]()
         return successful_capability(

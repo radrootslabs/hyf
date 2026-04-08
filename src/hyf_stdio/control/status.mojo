@@ -22,7 +22,7 @@ def build_status_output() raises -> Value:
     output.set("daemon", Value("hyfd"))
     output.set("transport", Value("stdio"))
     output.set("request_framing", Value("newline_delimited_json"))
-    output.set("implementation_status", Value("bootstrap_control_plane_only"))
+    output.set("implementation_status", Value("bootstrap_partial_mode_a"))
 
     var modes = loads("{}")
     modes.set("a", Value(True))
@@ -30,7 +30,7 @@ def build_status_output() raises -> Value:
     output.set("enabled_modes", modes)
 
     var backends = loads("{}")
-    backends.set("mode_a_deterministic", Value("not_implemented"))
+    backends.set("mode_a_deterministic", Value("partially_available"))
     backends.set("mode_b_model_assisted", Value("unavailable"))
     output.set("backend_reachability", backends)
 

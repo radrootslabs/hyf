@@ -33,9 +33,13 @@ def build_capabilities_output() raises -> Value:
         )
         value.set(
             "implementation_status",
-            Value("not_implemented")
-            if capability.mode_a_enabled
-            else Value("disabled"),
+            Value("implemented")
+            if capability.implemented
+            else (
+                Value("not_implemented")
+                if capability.mode_a_enabled
+                else Value("disabled")
+            ),
         )
         value.set("callable", Value(capability.callable))
         value.set("implemented", Value(capability.implemented))

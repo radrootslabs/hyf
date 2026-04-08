@@ -1,3 +1,5 @@
+from std.collections import Optional
+
 from mojson import Value, loads
 from mojson.deserialize import Deserializable, get_string
 
@@ -26,7 +28,7 @@ def _require_request_keys(value: Value) raises:
             and key != "input"
         ):
             raise Error(
-            "request envelope contains unexpected field '" + key + "'"
+                "request envelope contains unexpected field '" + key + "'"
             )
 
 
@@ -73,12 +75,15 @@ struct WireRequest(Deserializable, Copyable, Movable):
 struct WireSuccessResponse(Copyable, Movable):
     var request_id: String
     var output: Value
+    var meta: Optional[Value]
 
     def to_json_value(self) raises -> Value:
         var value = loads("{}")
         value.set("request_id", Value(String(self.request_id)))
         value.set("ok", Value(True))
         value.set("output", self.output.clone())
+        if self.meta:
+            value.set("meta", self.meta.value().clone())
         return value^
 
 

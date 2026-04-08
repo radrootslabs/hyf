@@ -17,8 +17,8 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
         BusinessCapabilityDescriptor(
             id="query_rewrite",
             mode_a_enabled=True,
-            implemented=False,
-            callable=False,
+            implemented=True,
+            callable=True,
             mode_b_available=False,
             disabled_reason="",
         )

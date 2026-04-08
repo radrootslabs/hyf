@@ -1,3 +1,4 @@
+from std.os import getenv
 from std.pathlib import Path, _dir_of_current_file
 
 
@@ -28,6 +29,15 @@ def _package_surface_manifest_path() raises -> Path:
     return _dir_of_current_file() / ".." / ".." / "pixi.toml"
 
 
+def _package_surface_manifest_text() raises -> String:
+    if (
+        getenv("HYF_TEST_FAULT_CURRENT_PACKAGE_SURFACE", "")
+        == "invalid_unquoted_version"
+    ):
+        return '[workspace]\nname = "hyf"\nversion = 0.1.0\n'
+    return _package_surface_manifest_path().read_text()
+
+
 def _parse_quoted_assignment_value(value: String) raises -> String:
     var trimmed_value = value.strip()
     if (
@@ -47,7 +57,7 @@ def current_package_surface() raises -> HyfPackageSurface:
     var package_name = String("")
     var package_version = String("")
 
-    for raw_line in _package_surface_manifest_path().read_text().splitlines():
+    for raw_line in _package_surface_manifest_text().splitlines():
         var line = String(raw_line).strip()
         if line == "" or line.startswith("#"):
             continue

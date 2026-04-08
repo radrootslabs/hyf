@@ -1,7 +1,16 @@
+from std.os import getenv, setenv, unsetenv
 from std.subprocess import run
 from std.testing import assert_equal, assert_true, TestSuite
 
 from mojson import Value, loads
+
+
+comptime _EXPECTED_INTERNAL_ERROR_MESSAGE = (
+    "internal hyf daemon error; inspect local diagnostics"
+)
+comptime _PACKAGE_SURFACE_FAULT_ENV = (
+    "HYF_TEST_FAULT_CURRENT_PACKAGE_SURFACE"
+)
 
 
 def _run_hyf(request_json: String) raises -> Value:
@@ -14,7 +23,6 @@ def _run_hyf(request_json: String) raises -> Value:
     if output == "":
         raise Error("hyf process returned no stdout payload")
     return loads(output)
-
 
 def _has_key(value: Value, key: String) -> Bool:
     for candidate in value.object_keys():
@@ -111,6 +119,52 @@ def test_strict_semantic_rank_failure() raises:
         response["error"]["message"].string_value().find("unexpected field")
         >= 0
     )
+
+
+def test_internal_error_is_bounded_on_wire() raises:
+    var original_fault = getenv(_PACKAGE_SURFACE_FAULT_ENV, "")
+    _ = setenv(
+        _PACKAGE_SURFACE_FAULT_ENV, "invalid_unquoted_version"
+    )
+    try:
+        var response = _run_hyf(
+            '{"version":1,"request_id":"status-internal-proc-1","trace_id":"trace-status-internal-proc-1","capability":"sys.status","input":{}}'
+        )
+
+        assert_equal(Int(response["version"].int_value()), 1)
+        assert_equal(
+            response["request_id"].string_value(),
+            "status-internal-proc-1",
+        )
+        assert_equal(
+            response["trace_id"].string_value(),
+            "trace-status-internal-proc-1",
+        )
+        assert_true(not response["ok"].bool_value())
+        assert_equal(
+            response["error"]["code"].string_value(), "internal_error"
+        )
+        assert_equal(
+            response["error"]["message"].string_value(),
+            _EXPECTED_INTERNAL_ERROR_MESSAGE,
+        )
+        assert_true(
+            response["error"]["message"].string_value().find(
+                "quoted string"
+            )
+            < 0
+        )
+    except e:
+        if original_fault == "":
+            _ = unsetenv(_PACKAGE_SURFACE_FAULT_ENV)
+        else:
+            _ = setenv(_PACKAGE_SURFACE_FAULT_ENV, original_fault)
+        raise e^
+
+    if original_fault == "":
+        _ = unsetenv(_PACKAGE_SURFACE_FAULT_ENV)
+    else:
+        _ = setenv(_PACKAGE_SURFACE_FAULT_ENV, original_fault)
 
 
 def main() raises:

@@ -1,5 +1,7 @@
 from std.collections import Optional
 from std.io.io import _fdopen
+from std.os import getenv
+from std.pathlib import Path
 from std.sys import stdin
 
 from mojson import Value
@@ -73,6 +75,42 @@ def _write_error(response: WireErrorResponse) raises:
 
 def _write_success(response: WireSuccessResponse) raises:
     print(encode_success(response))
+
+
+def _diagnostic_value(value: String) -> String:
+    return value.replace("\n", "\\n").replace("\r", "\\r")
+
+
+def _internal_diagnostic_path() -> Path:
+    return Path(getenv("TMPDIR", "/tmp")) / "hyf-internal-error.log"
+
+
+def _diagnostic_trace_id(trace_id: Optional[String]) -> String:
+    if trace_id:
+        return _diagnostic_value(String(trace_id.value()))
+    return ""
+
+
+def _emit_internal_diagnostic(
+    request_id: String,
+    trace_id: Optional[String],
+    capability: String,
+    detail: String,
+):
+    try:
+        _internal_diagnostic_path().write_text(
+            "hyf_internal_error request_id=\""
+            + _diagnostic_value(request_id)
+            + "\" trace_id=\""
+            + _diagnostic_trace_id(trace_id)
+            + "\" capability=\""
+            + _diagnostic_value(capability)
+            + "\" detail=\""
+            + _diagnostic_value(detail)
+            + "\"\n"
+        )
+    except:
+        pass
 
 
 def _wire_error_from_core_failure(
@@ -171,12 +209,18 @@ def handle_request(request: WireRequest) raises -> String:
             return encode_error(_unavailable_response(request))
         return encode_error(_unsupported_response(request))
     except e:
+        _emit_internal_diagnostic(
+            request_id,
+            trace_id,
+            String(request.capability),
+            String(e),
+        )
         return encode_error(
             WireErrorResponse(
                 version=hyf_protocol_version(),
                 request_id=request_id,
                 trace_id=trace_id,
-                error=internal_error(String(e)),
+                error=internal_error(),
             )
         )
 

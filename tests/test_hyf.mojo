@@ -1,4 +1,10 @@
-from std.testing import assert_equal, assert_true, assert_raises, TestSuite
+from std.os import getenv, setenv, unsetenv
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_raises,
+    assert_true,
+)
 
 from mojson import Value, loads
 
@@ -12,6 +18,15 @@ from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.envelope import WireErrorResponse, WireSuccessResponse
 from hyf_stdio.errors import WireError
 from hyf_stdio.server import handle_request_line
+
+
+comptime _EXPECTED_INTERNAL_ERROR_MESSAGE = (
+    "internal hyf daemon error; inspect local diagnostics"
+)
+
+comptime _PACKAGE_SURFACE_FAULT_ENV = (
+    "HYF_TEST_FAULT_CURRENT_PACKAGE_SURFACE"
+)
 
 
 def _dispatch(line: String) raises -> Value:
@@ -618,6 +633,54 @@ def test_invalid_request_preserves_request_and_trace_correlation() raises:
     assert_true(
         result["error"]["message"].string_value().find("unsupported") >= 0
     )
+
+
+def test_internal_error_is_bounded_on_wire() raises:
+    var original_fault = getenv(_PACKAGE_SURFACE_FAULT_ENV, "")
+    _ = setenv(
+        _PACKAGE_SURFACE_FAULT_ENV, "invalid_unquoted_version"
+    )
+    try:
+        var result = _dispatch(
+            '{"version":1,"request_id":"status-internal-1","trace_id":"trace-status-internal-1","capability":"sys.status","input":{}}'
+        )
+
+        assert_equal(Int(result["version"].int_value()), 1)
+        assert_equal(
+            result["request_id"].string_value(), "status-internal-1"
+        )
+        assert_equal(
+            result["trace_id"].string_value(), "trace-status-internal-1"
+        )
+        assert_equal(result["ok"].bool_value(), False)
+        assert_equal(
+            result["error"]["code"].string_value(), "internal_error"
+        )
+        assert_equal(
+            result["error"]["message"].string_value(),
+            _EXPECTED_INTERNAL_ERROR_MESSAGE,
+        )
+        assert_true(
+            result["error"]["message"].string_value().find("quoted string")
+            < 0
+        )
+        assert_true(
+            result["error"]["message"].string_value().find(
+                "unable to derive hyf package surface"
+            )
+            < 0
+        )
+    except e:
+        if original_fault == "":
+            _ = unsetenv(_PACKAGE_SURFACE_FAULT_ENV)
+        else:
+            _ = setenv(_PACKAGE_SURFACE_FAULT_ENV, original_fault)
+        raise e^
+
+    if original_fault == "":
+        _ = unsetenv(_PACKAGE_SURFACE_FAULT_ENV)
+    else:
+        _ = setenv(_PACKAGE_SURFACE_FAULT_ENV, original_fault)
 
 
 def main() raises:

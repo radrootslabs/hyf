@@ -13,6 +13,10 @@ struct WireError(Copyable, Movable):
         return value^
 
 
+def internal_error_message() -> String:
+    return "internal hyf daemon error; inspect local diagnostics"
+
+
 def invalid_request_error(message: String) -> WireError:
     return WireError(code="invalid_request", message=message)
 
@@ -38,5 +42,7 @@ def capability_unavailable_error(capability: String) -> WireError:
     )
 
 
-def internal_error(message: String) -> WireError:
-    return WireError(code="internal_error", message=message)
+def internal_error() -> WireError:
+    return WireError(
+        code="internal_error", message=internal_error_message()
+    )

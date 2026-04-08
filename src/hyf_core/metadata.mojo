@@ -1,3 +1,7 @@
+def hyf_protocol_version() -> Int:
+    return 1
+
+
 @fieldwise_init
 struct HyfBuildIdentity(Copyable, Movable):
     var service_name: String
@@ -18,7 +22,7 @@ def current_build_identity() -> HyfBuildIdentity:
         package_version="0.1.0",
         daemon_name="hyfd",
         transport="stdio",
-        protocol_version=1,
+        protocol_version=hyf_protocol_version(),
         default_execution_mode="deterministic",
         deterministic_execution_available=True,
         assisted_execution_available=False,

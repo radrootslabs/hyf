@@ -12,6 +12,13 @@ def _dispatch(line: String) raises -> Value:
     return loads(handle_request_line(line))
 
 
+def _has_key(value: Value, key: String) -> Bool:
+    for candidate in value.object_keys():
+        if candidate == key:
+            return True
+    return False
+
+
 def _business_capability(result: Value, capability_id: String) raises -> Value:
     for capability in result["output"]["business_capabilities"].array_items():
         if capability["id"].string_value() == capability_id:
@@ -21,10 +28,12 @@ def _business_capability(result: Value, capability_id: String) raises -> Value:
 
 def test_decode_request_parses_context_and_input() raises:
     var request = decode_request(
-        '{"request_id":"req-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs near me"}}'
+        '{"version":1,"request_id":"req-1","trace_id":"trace-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs near me"}}'
     )
 
+    assert_equal(request.version, 1)
     assert_equal(request.request_id, "req-1")
+    assert_equal(request.trace_id.value(), "trace-1")
     assert_equal(request.capability, "query_rewrite")
     assert_equal(request.context.consumer, "radroots-cli")
     assert_equal(
@@ -37,7 +46,7 @@ def test_decode_request_parses_context_and_input() raises:
 def test_decode_request_rejects_unexpected_field() raises:
     with assert_raises():
         _ = decode_request(
-            '{"request_id":"req-1","capability":"query_rewrite","input":{"query":"eggs"},"unexpected":true}'
+            '{"version":1,"request_id":"req-1","capability":"query_rewrite","input":{"query":"eggs"},"unexpected":true}'
         )
 
 
@@ -51,13 +60,17 @@ def test_encode_success_and_error_shapes() raises:
     var success = loads(
         encode_success(
             WireSuccessResponse(
+                version=1,
                 request_id="req-success",
+                trace_id=String("trace-success"),
                 output=output.copy(),
                 meta=meta.copy(),
             )
         )
     )
+    assert_equal(Int(success["version"].int_value()), 1)
     assert_equal(success["request_id"].string_value(), "req-success")
+    assert_equal(success["trace_id"].string_value(), "trace-success")
     assert_equal(success["ok"].bool_value(), True)
     assert_equal(success["output"]["kind"].string_value(), "ok")
     assert_equal(
@@ -68,12 +81,16 @@ def test_encode_success_and_error_shapes() raises:
     var failure = loads(
         encode_error(
             WireErrorResponse(
+                version=1,
                 request_id="req-error",
+                trace_id=String("trace-error"),
                 error=WireError(code="invalid_request", message="bad request"),
             )
         )
     )
+    assert_equal(Int(failure["version"].int_value()), 1)
     assert_equal(failure["request_id"].string_value(), "req-error")
+    assert_equal(failure["trace_id"].string_value(), "trace-error")
     assert_equal(failure["ok"].bool_value(), False)
     assert_equal(failure["error"]["code"].string_value(), "invalid_request")
     assert_equal(failure["error"]["message"].string_value(), "bad request")
@@ -81,16 +98,20 @@ def test_encode_success_and_error_shapes() raises:
 
 def test_handle_request_line_returns_invalid_request_for_bad_line() raises:
     var result = _dispatch("")
+    assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["request_id"].string_value(), "")
+    assert_equal(_has_key(result, "trace_id"), False)
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
 
 
 def test_status_reports_registered_deterministic_ready() raises:
     var result = _dispatch(
-        '{"request_id":"status-1","capability":"sys.status","input":{}}'
+        '{"version":1,"request_id":"status-1","trace_id":"trace-status-1","capability":"sys.status","input":{}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["trace_id"].string_value(), "trace-status-1")
     assert_equal(result["ok"].bool_value(), True)
     assert_equal(
         result["output"]["build_identity"]["service_name"].string_value(),
@@ -144,9 +165,10 @@ def test_status_reports_registered_deterministic_ready() raises:
 
 def test_capabilities_report_implemented_and_disabled_states() raises:
     var result = _dispatch(
-        '{"request_id":"caps-1","capability":"sys.capabilities","input":{}}'
+        '{"version":1,"request_id":"caps-1","capability":"sys.capabilities","input":{}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
     var query_rewrite = _business_capability(result, "query_rewrite")
     var semantic_rank = _business_capability(result, "semantic_rank")
     var explain_result = _business_capability(result, "explain_result")
@@ -172,9 +194,10 @@ def test_capabilities_report_implemented_and_disabled_states() raises:
 
 def test_disabled_capability_returns_capability_disabled() raises:
     var result = _dispatch(
-        '{"request_id":"disabled-1","capability":"filter_extraction","input":{}}'
+        '{"version":1,"request_id":"disabled-1","capability":"filter_extraction","input":{}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["request_id"].string_value(), "disabled-1")
     assert_equal(result["error"]["code"].string_value(), "capability_disabled")
@@ -182,9 +205,11 @@ def test_disabled_capability_returns_capability_disabled() raises:
 
 def test_query_rewrite_returns_deterministic_output() raises:
     var result = _dispatch(
-        '{"request_id":"rewrite-1","capability":"query_rewrite","input":{"text":"eggs near me with weekend pickup"}}'
+        '{"version":1,"request_id":"rewrite-1","trace_id":"trace-rewrite-1","capability":"query_rewrite","input":{"text":"eggs near me with weekend pickup"}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["trace_id"].string_value(), "trace-rewrite-1")
     assert_equal(result["ok"].bool_value(), True)
     assert_equal(
         result["output"]["rewritten_text"].string_value(),
@@ -199,9 +224,10 @@ def test_query_rewrite_returns_deterministic_output() raises:
 
 def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
     var result = _dispatch(
-        '{"request_id":"rank-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+        '{"version":1,"request_id":"rank-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), True)
     assert_equal(
         result["output"]["ranked_ids"][0].string_value(),
@@ -223,9 +249,10 @@ def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
 
 def test_explain_result_returns_deterministic_summary_and_provenance() raises:
     var result = _dispatch(
-        '{"request_id":"explain-1","capability":"explain_result","context":{"consumer":"radroots-cli","return_provenance":true},"input":{"query":"eggs near me with weekend pickup","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
+        '{"version":1,"request_id":"explain-1","capability":"explain_result","context":{"consumer":"radroots-cli","return_provenance":true},"input":{"query":"eggs near me with weekend pickup","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), True)
     assert_equal(
         result["output"]["explanation_kind"].string_value(),
@@ -246,14 +273,31 @@ def test_explain_result_returns_deterministic_summary_and_provenance() raises:
 
 def test_semantic_rank_invalid_input_returns_invalid_request() raises:
     var result = _dispatch(
-        '{"request_id":"rank-bad-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[]}}'
+        '{"version":1,"request_id":"rank-bad-1","trace_id":"trace-rank-bad-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[]}}'
     )
 
+    assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["request_id"].string_value(), "rank-bad-1")
+    assert_equal(result["trace_id"].string_value(), "trace-rank-bad-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
         result["error"]["message"].string_value().find("must not be empty") >= 0
+    )
+
+
+def test_invalid_request_preserves_request_and_trace_correlation() raises:
+    var result = _dispatch(
+        '{"version":2,"request_id":"bad-version-1","trace_id":"trace-bad-version-1","capability":"sys.status","input":{}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["request_id"].string_value(), "bad-version-1")
+    assert_equal(result["trace_id"].string_value(), "trace-bad-version-1")
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("unsupported") >= 0
     )
 
 

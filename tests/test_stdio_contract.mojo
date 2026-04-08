@@ -1,4 +1,3 @@
-from std.os import getenv, setenv, unsetenv
 from std.os import Pipe, Process
 from std.testing import assert_equal, assert_true, TestSuite
 from std.ffi import CStringSlice, c_int, external_call
@@ -9,9 +8,6 @@ from mojson import Value, loads
 
 comptime _EXPECTED_INTERNAL_ERROR_MESSAGE = (
     "internal hyf daemon error; inspect local diagnostics"
-)
-comptime _PACKAGE_SURFACE_FAULT_ENV = (
-    "HYF_TEST_FAULT_CURRENT_PACKAGE_SURFACE"
 )
 
 
@@ -32,13 +28,16 @@ def _read_pipe_to_string(mut pipe: Pipe) raises -> String:
     return output^
 
 
-def _run_hyf(request_json: String) raises -> Value:
+def _run_entrypoint(entrypoint: String, request_json: String) raises -> Value:
     var stdin_pipe = Pipe()
     var stdout_pipe = Pipe()
     var output = String("")
     var command = String("mojo")
+    var include_flag = String("-I")
+    var include_path = String("src")
+    var entrypoint_path = String(entrypoint)
     var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](
-        length=4, fill={}
+        length=6, fill={}
     )
     argv[0] = rebind[CStringSlice[ImmutAnyOrigin]](
         command.as_c_string_slice()
@@ -47,7 +46,13 @@ def _run_hyf(request_json: String) raises -> Value:
         "run".as_c_string_slice()
     )
     argv[2] = rebind[CStringSlice[ImmutAnyOrigin]](
-        "src/main.mojo".as_c_string_slice()
+        include_flag.as_c_string_slice()
+    )
+    argv[3] = rebind[CStringSlice[ImmutAnyOrigin]](
+        include_path.as_c_string_slice()
+    )
+    argv[4] = rebind[CStringSlice[ImmutAnyOrigin]](
+        entrypoint_path.as_c_string_slice()
     )
 
     var pid = vfork()
@@ -86,6 +91,10 @@ def _run_hyf(request_json: String) raises -> Value:
     if output == "":
         raise Error("hyf process returned no stdout payload")
     return loads(output)
+
+
+def _run_hyf(request_json: String) raises -> Value:
+    return _run_entrypoint("src/main.mojo", request_json)
 
 def _has_key(value: Value, key: String) -> Bool:
     for candidate in value.object_keys():
@@ -185,49 +194,32 @@ def test_strict_semantic_rank_failure() raises:
 
 
 def test_internal_error_is_bounded_on_wire() raises:
-    var original_fault = getenv(_PACKAGE_SURFACE_FAULT_ENV, "")
-    _ = setenv(
-        _PACKAGE_SURFACE_FAULT_ENV, "invalid_unquoted_version"
+    var response = _run_entrypoint(
+        "tests/internal_error_stdio_main.mojo",
+        '{"version":1,"request_id":"status-internal-proc-1","trace_id":"trace-status-internal-proc-1","capability":"sys.status","input":{}}',
     )
-    try:
-        var response = _run_hyf(
-            '{"version":1,"request_id":"status-internal-proc-1","trace_id":"trace-status-internal-proc-1","capability":"sys.status","input":{}}'
-        )
 
-        assert_equal(Int(response["version"].int_value()), 1)
-        assert_equal(
-            response["request_id"].string_value(),
-            "status-internal-proc-1",
-        )
-        assert_equal(
-            response["trace_id"].string_value(),
-            "trace-status-internal-proc-1",
-        )
-        assert_true(not response["ok"].bool_value())
-        assert_equal(
-            response["error"]["code"].string_value(), "internal_error"
-        )
-        assert_equal(
-            response["error"]["message"].string_value(),
-            _EXPECTED_INTERNAL_ERROR_MESSAGE,
-        )
-        assert_true(
-            response["error"]["message"].string_value().find(
-                "quoted string"
-            )
-            < 0
-        )
-    except e:
-        if original_fault == "":
-            _ = unsetenv(_PACKAGE_SURFACE_FAULT_ENV)
-        else:
-            _ = setenv(_PACKAGE_SURFACE_FAULT_ENV, original_fault)
-        raise e^
-
-    if original_fault == "":
-        _ = unsetenv(_PACKAGE_SURFACE_FAULT_ENV)
-    else:
-        _ = setenv(_PACKAGE_SURFACE_FAULT_ENV, original_fault)
+    assert_equal(Int(response["version"].int_value()), 1)
+    assert_equal(
+        response["request_id"].string_value(),
+        "status-internal-proc-1",
+    )
+    assert_equal(
+        response["trace_id"].string_value(),
+        "trace-status-internal-proc-1",
+    )
+    assert_true(not response["ok"].bool_value())
+    assert_equal(
+        response["error"]["code"].string_value(), "internal_error"
+    )
+    assert_equal(
+        response["error"]["message"].string_value(),
+        _EXPECTED_INTERNAL_ERROR_MESSAGE,
+    )
+    assert_true(
+        response["error"]["message"].string_value().find("simulated test-only")
+        < 0
+    )
 
 
 def main() raises:

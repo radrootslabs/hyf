@@ -173,7 +173,11 @@ def _dispatch_business_capability(
     return _dispatch_capability_result(request_id, request.trace_id, result)
 
 
-def handle_request(request: WireRequest) raises -> String:
+@parameter
+def handle_request_with_control_builders[
+    status_builder: def() raises -> Value,
+    capabilities_builder: def() raises -> Value,
+](request: WireRequest) raises -> String:
     var request_id = String(request.request_id)
     var trace_id = request.trace_id
     try:
@@ -183,7 +187,7 @@ def handle_request(request: WireRequest) raises -> String:
                     version=hyf_protocol_version(),
                     request_id=request_id,
                     trace_id=trace_id,
-                    output=build_status_output(),
+                    output=status_builder(),
                     meta=None,
                 )
             )
@@ -193,7 +197,7 @@ def handle_request(request: WireRequest) raises -> String:
                     version=hyf_protocol_version(),
                     request_id=request_id,
                     trace_id=trace_id,
-                    output=build_capabilities_output(),
+                    output=capabilities_builder(),
                     meta=None,
                 )
             )
@@ -225,10 +229,22 @@ def handle_request(request: WireRequest) raises -> String:
         )
 
 
-def handle_request_line(line: String) raises -> String:
+def handle_request(request: WireRequest) raises -> String:
+    return handle_request_with_control_builders[
+        build_status_output, build_capabilities_output
+    ](request)
+
+
+@parameter
+def handle_request_line_with_control_builders[
+    status_builder: def() raises -> Value,
+    capabilities_builder: def() raises -> Value,
+](line: String) raises -> String:
     try:
         var request = decode_request(line)
-        return handle_request(request^)
+        return handle_request_with_control_builders[
+            status_builder, capabilities_builder
+        ](request^)
     except e:
         var correlation = extract_request_correlation(line)
         return encode_error(
@@ -239,6 +255,12 @@ def handle_request_line(line: String) raises -> String:
                 error=invalid_request_error(String(e)),
             )
         )
+
+
+def handle_request_line(line: String) raises -> String:
+    return handle_request_line_with_control_builders[
+        build_status_output, build_capabilities_output
+    ](line)
 
 
 def run_stdio_server() raises:

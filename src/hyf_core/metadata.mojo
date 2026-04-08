@@ -1,5 +1,3 @@
-from std.os import getenv
-
 from hyf_core.package_surface import hyf_package_name, hyf_package_version
 
 
@@ -26,12 +24,6 @@ struct HyfBuildIdentity(Copyable, Movable):
     var assisted_execution_available: Bool
 
 def current_package_surface() raises -> HyfPackageSurface:
-    if (
-        getenv("HYF_TEST_FAULT_CURRENT_PACKAGE_SURFACE", "")
-        == "invalid_unquoted_version"
-    ):
-        raise Error("simulated invalid package surface")
-
     return HyfPackageSurface(
         package_name=hyf_package_name(),
         package_version=hyf_package_version(),

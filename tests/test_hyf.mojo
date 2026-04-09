@@ -11,6 +11,12 @@ from std.tempfile import TemporaryDirectory
 
 from mojson import Value, loads
 
+from fixture_assertions import (
+    assert_matches_scenario_response,
+    load_scenario_request_json,
+    status_request_with_invalid_version_json,
+)
+
 from fixture_loader import (
     fixture_manifest_path,
     load_fixture_manifest,
@@ -118,13 +124,6 @@ def _has_key(value: Value, key: String) -> Bool:
         if candidate == key:
             return True
     return False
-
-
-def _business_capability(result: Value, capability_id: String) raises -> Value:
-    for capability in result["output"]["business_capabilities"].array_items():
-        if capability["id"].string_value() == capability_id:
-            return capability.clone()
-    raise Error("missing capability '" + capability_id + "' in response")
 
 
 def _array_string_values(value: Value) raises -> List[String]:
@@ -303,163 +302,24 @@ def test_repo_local_fixture_loader_reads_all_mirrored_scenarios() raises:
 
 
 def test_status_reports_registered_deterministic_ready() raises:
-    var result = _dispatch(
-        '{"version":1,"request_id":"status-1","trace_id":"trace-status-1","capability":"sys.status","input":{}}'
-    )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["trace_id"].string_value(), "trace-status-1")
-    assert_equal(result["ok"].bool_value(), True)
-    assert_equal(
-        result["output"]["build_identity"]["service_name"].string_value(),
-        "hyf",
-    )
-    assert_equal(
-        result["output"]["build_identity"]["package_name"].string_value(),
-        "hyf",
-    )
-    assert_equal(
-        result["output"]["build_identity"]["package_version"].string_value(),
-        "0.1.0",
-    )
-    assert_equal(
-        result["output"]["build_identity"]["protocol_version"].int_value(),
-        1,
-    )
-    assert_equal(
-        result["output"]["build_identity"]["default_execution_mode"].string_value(),
-        "deterministic",
-    )
-    assert_equal(
-        result["output"]["build_identity"]["deterministic_execution_available"].bool_value(),
-        True,
-    )
-    assert_equal(
-        result["output"]["build_identity"]["assisted_execution_available"].bool_value(),
-        False,
-    )
-    assert_equal(
-        result["output"]["implementation_status"].string_value(),
-        "bootstrap_registered_deterministic_ready",
-    )
-    assert_equal(
-        result["output"]["backend_reachability"]["deterministic_backend"].string_value(),
-        "available",
-    )
-    assert_equal(
-        result["output"]["execution_mode_request_behavior"]["deterministic"].string_value(),
-        "execute",
-    )
-    assert_equal(
-        result["output"]["execution_mode_request_behavior"]["assisted"].string_value(),
-        "backend_unavailable",
-    )
-    assert_equal(
-        Int(
-            result["output"]["counts"]["deterministic_registered_business_capabilities"].int_value()
-        ),
-        3,
-    )
-    assert_equal(
-        Int(
-            result["output"]["counts"]["deterministic_implemented_business_capabilities"].int_value()
-        ),
-        3,
-    )
-    assert_true(
-        not _has_key(result["output"]["limits"], "request_context_features")
-    )
-    var status_request_context_contract = result["output"][
-        "request_context_contract"
-    ]
-    var status_accepted = _array_string_values(
-        status_request_context_contract["accepted_features"]
-    )
-    assert_equal(len(status_accepted), 4)
-    assert_equal(status_accepted[0], "consumer")
-    assert_equal(status_accepted[1], "execution_mode_preference")
-    assert_equal(status_accepted[2], "scope.listing_ids")
-    assert_equal(status_accepted[3], "return_provenance")
-    var status_effective = _array_string_values(
-        status_request_context_contract["effective_features"]
-    )
-    assert_equal(len(status_effective), 3)
-    assert_equal(status_effective[0], "execution_mode_preference")
-    assert_equal(status_effective[1], "scope.listing_ids")
-    assert_equal(status_effective[2], "return_provenance")
-    assert_equal(
-        status_request_context_contract["unsupported_field_behavior"].string_value(),
-        "reject",
-    )
+    var result = _dispatch(load_scenario_request_json("scenarios/status_ok.json"))
+    assert_matches_scenario_response(result, "scenarios/status_ok.json")
 
 
 def test_capabilities_report_implemented_and_disabled_states() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"caps-1","capability":"sys.capabilities","input":{}}'
+        load_scenario_request_json("scenarios/capabilities_ok.json")
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    var query_rewrite = _business_capability(result, "query_rewrite")
-    var semantic_rank = _business_capability(result, "semantic_rank")
-    var explain_result = _business_capability(result, "explain_result")
-    var filter_extraction = _business_capability(result, "filter_extraction")
-
-    assert_equal(query_rewrite["implemented"].bool_value(), True)
-    assert_equal(query_rewrite["callable"].bool_value(), True)
-    assert_equal(
-        semantic_rank["implementation_status"].string_value(), "implemented"
-    )
-    assert_equal(
-        explain_result["implementation_status"].string_value(), "implemented"
-    )
-    assert_equal(
-        filter_extraction["deterministic_execution"].string_value(),
-        "disabled",
-    )
-    assert_equal(
-        filter_extraction["disabled_reason"].string_value(),
-        "deferred_bootstrap_capability",
-    )
-    assert_true(
-        not _has_key(result["output"], "request_context_features")
-    )
-    var capabilities_request_context_contract = result["output"][
-        "request_context_contract"
-    ]
-    var capabilities_accepted = _array_string_values(
-        capabilities_request_context_contract["accepted_features"]
-    )
-    assert_equal(len(capabilities_accepted), 4)
-    assert_equal(capabilities_accepted[0], "consumer")
-    assert_equal(
-        capabilities_accepted[1], "execution_mode_preference"
-    )
-    assert_equal(capabilities_accepted[2], "scope.listing_ids")
-    assert_equal(capabilities_accepted[3], "return_provenance")
-    var capabilities_effective = _array_string_values(
-        capabilities_request_context_contract["effective_features"]
-    )
-    assert_equal(len(capabilities_effective), 3)
-    assert_equal(
-        capabilities_effective[0], "execution_mode_preference"
-    )
-    assert_equal(capabilities_effective[1], "scope.listing_ids")
-    assert_equal(capabilities_effective[2], "return_provenance")
-    assert_equal(
-        capabilities_request_context_contract["unsupported_field_behavior"].string_value(),
-        "reject",
-    )
+    assert_matches_scenario_response(result, "scenarios/capabilities_ok.json")
 
 
 def test_disabled_capability_returns_capability_disabled() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"disabled-1","capability":"filter_extraction","input":{}}'
+        load_scenario_request_json("scenarios/deferred_capability_disabled.json")
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["ok"].bool_value(), False)
-    assert_equal(result["request_id"].string_value(), "disabled-1")
-    assert_equal(result["error"]["code"].string_value(), "capability_disabled")
+    assert_matches_scenario_response(
+        result, "scenarios/deferred_capability_disabled.json"
+    )
 
 
 def test_backend_selector_routes_deterministic_wave() raises:
@@ -744,32 +604,23 @@ def test_semantic_rank_invalid_input_returns_invalid_request() raises:
 
 def test_assisted_request_returns_backend_unavailable() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rewrite-assisted-1","trace_id":"trace-rewrite-assisted-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted"},"input":{"text":"eggs near me"}}'
+        load_scenario_request_json("scenarios/assisted_backend_unavailable.json")
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["request_id"].string_value(), "rewrite-assisted-1")
-    assert_equal(
-        result["trace_id"].string_value(), "trace-rewrite-assisted-1"
-    )
-    assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["error"]["code"].string_value(), "backend_unavailable"
-    )
-    assert_true(
-        result["error"]["message"].string_value().find("assisted_execution")
-        >= 0
+    assert_matches_scenario_response(
+        result, "scenarios/assisted_backend_unavailable.json"
     )
 
 
 def test_invalid_request_preserves_request_and_trace_correlation() raises:
-    var result = _dispatch(
-        '{"version":2,"request_id":"bad-version-1","trace_id":"trace-bad-version-1","capability":"sys.status","input":{}}'
-    )
+    var result = _dispatch(status_request_with_invalid_version_json())
 
     assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["request_id"].string_value(), "bad-version-1")
-    assert_equal(result["trace_id"].string_value(), "trace-bad-version-1")
+    assert_equal(
+        result["request_id"].string_value(), "status-fixture-1"
+    )
+    assert_equal(
+        result["trace_id"].string_value(), "trace-status-fixture-1"
+    )
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(

@@ -5,6 +5,11 @@ from std.testing import assert_equal, assert_true, TestSuite
 from std.tempfile import TemporaryDirectory
 
 from mojson import Value
+from fixture_assertions import (
+    assert_matches_scenario_response,
+    load_scenario_request_json,
+    status_request_with_invalid_version_json,
+)
 from stdio_process_helper import (
     HYF_DIAGNOSTICS_DIR_ENV,
     ScopedEnvVar,
@@ -25,40 +30,27 @@ def _has_key(value: Value, key: String) -> Bool:
 
 def test_status_success() raises:
     var response = run_hyf_stdio(
-        '{"version":1,"request_id":"status-proc-1","trace_id":"trace-status-proc-1","capability":"sys.status","input":{}}'
+        load_scenario_request_json("scenarios/status_ok.json")
     )
+    assert_matches_scenario_response(response, "scenarios/status_ok.json")
 
-    assert_equal(Int(response["version"].int_value()), 1)
-    assert_equal(response["request_id"].string_value(), "status-proc-1")
-    assert_equal(response["trace_id"].string_value(), "trace-status-proc-1")
-    assert_true(response["ok"].bool_value())
-    assert_equal(
-        response["output"]["build_identity"]["service_name"].string_value(),
-        "hyf",
+
+def test_capabilities_success() raises:
+    var response = run_hyf_stdio(
+        load_scenario_request_json("scenarios/capabilities_ok.json")
     )
-    assert_equal(
-        response["output"]["execution_mode_request_behavior"]["assisted"].string_value(),
-        "backend_unavailable",
-    )
-    assert_equal(
-        response["output"]["request_context_contract"]["accepted_features"][2].string_value(),
-        "scope.listing_ids",
-    )
-    assert_equal(
-        response["output"]["request_context_contract"]["effective_features"][0].string_value(),
-        "execution_mode_preference",
-    )
+    assert_matches_scenario_response(response, "scenarios/capabilities_ok.json")
 
 
 def test_invalid_envelope_preserves_correlation() raises:
-    var response = run_hyf_stdio(
-        '{"version":2,"request_id":"bad-envelope-proc-1","trace_id":"trace-bad-envelope-proc-1","capability":"sys.status","input":{}}'
-    )
+    var response = run_hyf_stdio(status_request_with_invalid_version_json())
 
     assert_equal(Int(response["version"].int_value()), 1)
-    assert_equal(response["request_id"].string_value(), "bad-envelope-proc-1")
     assert_equal(
-        response["trace_id"].string_value(), "trace-bad-envelope-proc-1"
+        response["request_id"].string_value(), "status-fixture-1"
+    )
+    assert_equal(
+        response["trace_id"].string_value(), "trace-status-fixture-1"
     )
     assert_true(not response["ok"].bool_value())
     assert_equal(response["error"]["code"].string_value(), "invalid_request")
@@ -66,11 +58,20 @@ def test_invalid_envelope_preserves_correlation() raises:
 
 def test_assisted_request_fails_explicitly() raises:
     var response = run_hyf_stdio(
-        '{"version":1,"request_id":"assisted-proc-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted"},"input":{"text":"eggs near me"}}'
+        load_scenario_request_json("scenarios/assisted_backend_unavailable.json")
+    )
+    assert_matches_scenario_response(
+        response, "scenarios/assisted_backend_unavailable.json"
     )
 
-    assert_true(not response["ok"].bool_value())
-    assert_equal(response["error"]["code"].string_value(), "backend_unavailable")
+
+def test_deferred_capability_returns_disabled_error() raises:
+    var response = run_hyf_stdio(
+        load_scenario_request_json("scenarios/deferred_capability_disabled.json")
+    )
+    assert_matches_scenario_response(
+        response, "scenarios/deferred_capability_disabled.json"
+    )
 
 
 def test_semantic_rank_exports_heuristic_score_without_latency() raises:

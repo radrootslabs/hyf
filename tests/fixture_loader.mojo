@@ -11,12 +11,8 @@ def fixture_manifest_path() raises -> Path:
     return fixture_root_path() / "manifest.json"
 
 
-def load_fixture_manifest() raises -> Value:
-    return loads(fixture_manifest_path().read_text())
-
-
-def load_fixture_scenario(relative_path: String) raises -> Value:
-    return loads((fixture_root_path() / String(relative_path)).read_text())
+def load_fixture_json_file(path: Path) raises -> Value:
+    return loads(path.read_text())
 
 
 def _skip_whitespace(raw: String, start_index: Int) -> Int:
@@ -64,16 +60,11 @@ def _extract_json_value(raw: String, start_index: Int) raises -> String:
                 elif byte == UInt8(ord("}")) or byte == UInt8(ord("]")):
                     depth -= 1
                     if depth == 0:
-                        return String(
-                            raw[
-                                byte=start_index : index + 1
-                            ]
-                        )
+                        return String(raw[byte=start_index : index + 1])
             index += 1
         raise Error("unterminated fixture object or array field")
 
     if first == UInt8(ord('"')):
-        var in_string = True
         var escaped = False
         var index = start_index + 1
         while index < len(data):
@@ -82,7 +73,7 @@ def _extract_json_value(raw: String, start_index: Int) raises -> String:
                 escaped = False
             elif byte == UInt8(ord("\\")):
                 escaped = True
-            elif byte == UInt8(ord('"')) and in_string:
+            elif byte == UInt8(ord('"')):
                 return String(raw[byte=start_index : index + 1])
             index += 1
         raise Error("unterminated fixture string field")
@@ -101,20 +92,75 @@ def _extract_json_value(raw: String, start_index: Int) raises -> String:
     return String(raw[byte=start_index:])
 
 
-def load_fixture_scenario_field(relative_path: String, key: String) raises -> Value:
-    var raw = (fixture_root_path() / String(relative_path)).read_text()
-    var pattern = "\"" + key + "\""
-    var key_index = raw.find(pattern)
-    if key_index < 0:
-        raise Error("fixture scenario missing field '" + key + "'")
-
+def load_fixture_top_level_field_from_path(path: Path, key: String) raises -> Value:
+    var raw = path.read_text()
     var data = raw.as_bytes()
-    var index = key_index + pattern.byte_length()
-    while index < len(data) and data[index] != UInt8(ord(":")):
-        index += 1
+    var index = _skip_whitespace(raw, 0)
+    if index >= len(data) or data[index] != UInt8(ord("{")):
+        raise Error("fixture scenario must be a top-level JSON object")
 
-    if index >= len(data):
-        raise Error("fixture scenario field '" + key + "' missing colon")
+    index += 1
+    while index < len(data):
+        index = _skip_whitespace(raw, index)
+        if index >= len(data):
+            break
 
-    var value_start = _skip_whitespace(raw, index + 1)
-    return loads(_extract_json_value(raw, value_start))
+        if data[index] == UInt8(ord("}")):
+            break
+
+        if data[index] != UInt8(ord('"')):
+            raise Error("fixture scenario object key must be a JSON string")
+
+        var key_json = _extract_json_value(raw, index)
+        var parsed_key = loads(key_json)
+        if not parsed_key.is_string():
+            raise Error("fixture scenario object key did not parse as a string")
+
+        index += key_json.byte_length()
+        index = _skip_whitespace(raw, index)
+        if index >= len(data) or data[index] != UInt8(ord(":")):
+            raise Error(
+                "fixture scenario field '" + parsed_key.string_value()
+                + "' missing colon"
+            )
+
+        var value_start = _skip_whitespace(raw, index + 1)
+        var value_json = _extract_json_value(raw, value_start)
+        if parsed_key.string_value() == key:
+            return loads(value_json)
+
+        index = value_start + value_json.byte_length()
+        index = _skip_whitespace(raw, index)
+        if index >= len(data):
+            break
+        if data[index] == UInt8(ord(",")):
+            index += 1
+            continue
+        if data[index] == UInt8(ord("}")):
+            break
+        raise Error(
+            "fixture scenario field '" + parsed_key.string_value()
+            + "' missing delimiter"
+        )
+
+    raise Error("fixture scenario missing field '" + key + "'")
+
+
+def load_fixture_manifest() raises -> Value:
+    return load_fixture_json_file(fixture_manifest_path())
+
+
+def load_fixture_scenario(relative_path: String) raises -> Value:
+    return load_fixture_json_file(fixture_root_path() / String(relative_path))
+
+
+def load_fixture_scenario_request(relative_path: String) raises -> Value:
+    return load_fixture_top_level_field_from_path(
+        fixture_root_path() / String(relative_path), "request"
+    )
+
+
+def load_fixture_scenario_expected(relative_path: String) raises -> Value:
+    return load_fixture_top_level_field_from_path(
+        fixture_root_path() / String(relative_path), "expected"
+    )

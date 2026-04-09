@@ -19,8 +19,12 @@ from fixture_assertions import (
 
 from fixture_loader import (
     fixture_manifest_path,
+    load_fixture_json_file,
     load_fixture_manifest,
     load_fixture_scenario,
+    load_fixture_scenario_expected,
+    load_fixture_scenario_request,
+    load_fixture_top_level_field_from_path,
 )
 from hyf_core.backends.selector import (
     execute_capability as execute_core_capability,
@@ -353,6 +357,49 @@ def test_repo_local_fixture_loader_reads_all_mirrored_scenarios() raises:
         rewrite_scenario["request"]["input"]["query"].string_value(),
         "apples near me with weekend pickup",
     )
+
+
+def test_fixture_loader_reads_top_level_request_and_expected_structurally() raises:
+    with TemporaryDirectory() as temp_dir:
+        var scenario_path = Path(temp_dir) / "scenario.json"
+        scenario_path.write_text(
+            '{'
+            + '"fixture_id":"shadowed-top-level-fields",'
+            + '"description":"this description mentions request and expected before the real fields",'
+            + '"request":{"version":1,"request_id":"shadow-1","capability":"sys.status","input":{}},'
+            + '"expected":{"ok":true,"equals":{"output.kind":"status"}}'
+            + '}'
+        )
+
+        var scenario = load_fixture_json_file(scenario_path)
+        var request = load_fixture_scenario_request("scenarios/status_ok.json")
+        var expected = load_fixture_scenario_expected("scenarios/status_ok.json")
+        var temp_request = load_fixture_top_level_field_from_path(
+            scenario_path, "request"
+        )
+        var temp_expected = load_fixture_top_level_field_from_path(
+            scenario_path, "expected"
+        )
+
+        assert_equal(
+            scenario["fixture_id"].string_value(),
+            "shadowed-top-level-fields",
+        )
+        assert_equal(
+            temp_request["request_id"].string_value(),
+            "shadow-1",
+        )
+        assert_equal(
+            temp_request["capability"].string_value(),
+            "sys.status",
+        )
+        assert_true(temp_expected["ok"].bool_value())
+        assert_equal(
+            temp_expected["equals"]["output.kind"].string_value(),
+            "status",
+        )
+        assert_equal(request["capability"].string_value(), "sys.status")
+        assert_true(expected["ok"].bool_value())
 
 
 def test_status_reports_registered_deterministic_ready() raises:

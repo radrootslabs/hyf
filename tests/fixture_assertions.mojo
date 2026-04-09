@@ -2,11 +2,14 @@ from std.testing import assert_equal, assert_true
 
 from mojson import Value, dumps, loads
 
-from fixture_loader import load_fixture_scenario_field
+from fixture_loader import (
+    load_fixture_scenario_expected,
+    load_fixture_scenario_request,
+)
 
 
 def load_scenario_request(relative_path: String) raises -> Value:
-    return load_fixture_scenario_field(relative_path, "request")
+    return load_fixture_scenario_request(relative_path)
 
 
 def load_scenario_request_json(relative_path: String) raises -> String:
@@ -22,7 +25,7 @@ def status_request_with_invalid_version_json() raises -> String:
 def assert_matches_scenario_response(
     actual: Value, relative_path: String
 ) raises:
-    var expected = load_fixture_scenario_field(relative_path, "expected")
+    var expected = load_fixture_scenario_expected(relative_path)
 
     if _has_key(expected, "ok"):
         _assert_json_equal(actual["ok"], expected["ok"])
@@ -110,47 +113,30 @@ def _compact_json(value: Value) raises -> String:
     if value.is_string():
         return dumps(Value(value.string_value()))
 
-    if value.is_array() or value.is_object():
-        return _minify_json(value.raw_json())
+    if value.is_array():
+        var result = String("[")
+        var items = value.array_items()
+        for index in range(len(items)):
+            if index > 0:
+                result += ","
+            result += _compact_json(items[index])
+        result += "]"
+        return result^
+
+    if value.is_object():
+        var result = String("{")
+        var first = True
+        for key in value.object_keys():
+            if not first:
+                result += ","
+            first = False
+            result += dumps(Value(String(key)))
+            result += ":"
+            result += _compact_json(value[key])
+        result += "}"
+        return result^
 
     return dumps(value)
-
-
-def _minify_json(raw: String) -> String:
-    var result = String("")
-    var in_string = False
-    var escaped = False
-
-    for byte in raw.as_bytes():
-        if escaped:
-            result += chr(Int(byte))
-            escaped = False
-            continue
-
-        if in_string:
-            result += chr(Int(byte))
-            if byte == UInt8(ord("\\")):
-                escaped = True
-            elif byte == UInt8(ord('"')):
-                in_string = False
-            continue
-
-        if byte == UInt8(ord('"')):
-            in_string = True
-            result += chr(Int(byte))
-            continue
-
-        if (
-            byte == UInt8(ord(" "))
-            or byte == UInt8(ord("\n"))
-            or byte == UInt8(ord("\t"))
-            or byte == UInt8(ord("\r"))
-        ):
-            continue
-
-        result += chr(Int(byte))
-
-    return result^
 
 
 def _assert_contains_all(actual: Value, expected_subset: Value) raises:

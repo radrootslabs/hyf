@@ -15,6 +15,8 @@ struct RuntimeStartupContext(Copyable, Movable):
     var paths_profile: String
     var repo_local_base_root: String
     var user_home: String
+    var startup_config_path: String
+    var startup_config_path_source: String
     var paths: RuntimePaths
 
 
@@ -30,6 +32,7 @@ struct RuntimeStartupInput(Copyable, Movable):
 struct _StartupOverrides(Copyable, Movable):
     var paths_profile: String
     var repo_local_base_root: String
+    var startup_config_path: String
 
 
 def _require_flag_value(
@@ -48,7 +51,9 @@ def _require_flag_value(
 
 
 def _parse_startup_overrides(args: List[String]) raises -> _StartupOverrides:
-    var overrides = _StartupOverrides(paths_profile="", repo_local_base_root="")
+    var overrides = _StartupOverrides(
+        paths_profile="", repo_local_base_root="", startup_config_path=""
+    )
     var index = 0
     while index < len(args):
         var arg = String(args[index])
@@ -87,6 +92,22 @@ def _parse_startup_overrides(args: List[String]) raises -> _StartupOverrides:
             index += 1
             continue
 
+        if arg == "--config":
+            overrides.startup_config_path = _require_flag_value(
+                args, index + 1, "--config"
+            )
+            index += 2
+            continue
+
+        if arg.startswith("--config="):
+            overrides.startup_config_path = String(
+                arg[byte = len("--config=") :]
+            )
+            if overrides.startup_config_path == "":
+                raise_runtime_contract_error("--config requires a value")
+            index += 1
+            continue
+
         raise_runtime_contract_error("unknown startup argument '" + arg + "'")
 
     return overrides^
@@ -109,10 +130,18 @@ def resolve_startup_context(
     var paths = hyf_runtime_paths_for_unix_profile(
         profile, input.user_home, repo_local_base_root
     )
+    var startup_config_path = String(paths.config_path)
+    var startup_config_path_source = String("canonical_runtime_path")
+    if overrides.startup_config_path != "":
+        startup_config_path = String(overrides.startup_config_path)
+        startup_config_path_source = String("startup_flag")
+
     return RuntimeStartupContext(
         paths_profile=profile,
         repo_local_base_root=repo_local_base_root,
         user_home=String(input.user_home),
+        startup_config_path=startup_config_path,
+        startup_config_path_source=startup_config_path_source,
         paths=paths^,
     )
 

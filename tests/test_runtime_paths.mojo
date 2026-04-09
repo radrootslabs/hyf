@@ -119,6 +119,8 @@ def test_startup_context_defaults_from_env_and_home() raises:
         context.paths.config_path,
         "/home/hyf-test/.radroots/config/services/hyf/config.toml",
     )
+    assert_equal(context.startup_config_path, context.paths.config_path)
+    assert_equal(context.startup_config_path_source, "canonical_runtime_path")
 
 
 def test_startup_context_cli_flags_override_env() raises:
@@ -140,6 +142,24 @@ def test_startup_context_cli_flags_override_env() raises:
         context.paths.config_path,
         "/tmp/hyf-runtime/config/services/hyf/config.toml",
     )
+
+
+def test_startup_context_config_flag_overrides_config_artifact_only() raises:
+    var context = resolve_startup_context(
+        RuntimeStartupInput(
+            env_paths_profile="repo_local",
+            env_repo_local_base_root="/tmp/hyf-runtime",
+            user_home="/home/ignored",
+            argv=_startup_argv2("--config", "/tmp/hyf-config/config.toml"),
+        )
+    )
+
+    assert_equal(
+        context.paths.config_path,
+        "/tmp/hyf-runtime/config/services/hyf/config.toml",
+    )
+    assert_equal(context.startup_config_path, "/tmp/hyf-config/config.toml")
+    assert_equal(context.startup_config_path_source, "startup_flag")
 
 
 def test_startup_context_rejects_missing_root_unknown_flag_and_flag_as_value() raises:

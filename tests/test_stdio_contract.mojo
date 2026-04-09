@@ -40,11 +40,14 @@ def test_status_success() raises:
 
 def test_status_reports_repo_local_runtime_truth() raises:
     with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
                     load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
                 )
 
                 assert_equal(
@@ -72,6 +75,24 @@ def test_status_reports_repo_local_runtime_truth() raises:
                         "config_path"
                     ].string_value(),
                     temp_dir + "/config/services/hyf/config.toml",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "artifact_path"
+                    ].string_value(),
+                    startup_config_path.__fspath__(),
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "artifact_path_source"
+                    ].string_value(),
+                    "startup_flag",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "compiled_defaults_active"
+                    ].bool_value(),
+                    True,
                 )
                 assert_equal(
                     response["output"]["runtime"]["paths"][

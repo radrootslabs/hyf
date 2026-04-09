@@ -27,6 +27,16 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
     )
     status.set("paths", _runtime_paths_status_value(context))
 
+    var config = loads("{}")
+    config.set("artifact_path", Value(String(context.startup_config_path)))
+    config.set(
+        "artifact_path_source",
+        Value(String(context.startup_config_path_source)),
+    )
+    config.set("loaded", Value(False))
+    config.set("compiled_defaults_active", Value(True))
+    status.set("config", config)
+
     var secret_storage = loads("{}")
     secret_storage.set("default_backend", Value("local_file"))
     secret_storage.set("secret_values_reported", Value(False))

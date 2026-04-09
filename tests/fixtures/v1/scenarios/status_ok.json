@@ -1,0 +1,75 @@
+{
+  "fixture_id": "status_ok",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Control-plane status reports the truthful deterministic bootstrap posture for the stdio daemon.",
+  "request": {
+    "version": 1,
+    "request_id": "status-fixture-1",
+    "trace_id": "trace-status-fixture-1",
+    "capability": "sys.status",
+    "input": {}
+  },
+  "expected": {
+    "ok": true,
+    "equals": {
+      "version": 1,
+      "request_id": "status-fixture-1",
+      "trace_id": "trace-status-fixture-1",
+      "output.build_identity.service_name": "hyf",
+      "output.build_identity.package_name": "hyf",
+      "output.build_identity.package_version": "0.1.0",
+      "output.build_identity.daemon_name": "hyfd",
+      "output.build_identity.transport": "stdio",
+      "output.build_identity.protocol_version": 1,
+      "output.build_identity.default_execution_mode": "deterministic",
+      "output.build_identity.deterministic_execution_available": true,
+      "output.build_identity.assisted_execution_available": false,
+      "output.daemon": "hyfd",
+      "output.transport": "stdio",
+      "output.request_framing": "newline_delimited_json",
+      "output.implementation_status": "bootstrap_registered_deterministic_ready",
+      "output.enabled_execution_modes.deterministic": true,
+      "output.enabled_execution_modes.assisted": false,
+      "output.execution_mode_request_behavior.deterministic": "execute",
+      "output.execution_mode_request_behavior.assisted": "backend_unavailable",
+      "output.backend_reachability.deterministic_backend": "available",
+      "output.backend_reachability.assisted_backend": "unavailable",
+      "output.counts.canonical_business_capabilities": 8,
+      "output.counts.deterministic_registered_business_capabilities": 3,
+      "output.counts.deterministic_implemented_business_capabilities": 3,
+      "output.counts.disabled_business_capabilities": 5,
+      "output.limits.max_requests_per_process": 1,
+      "output.request_context_contract.accepted_features": [
+        "consumer",
+        "execution_mode_preference",
+        "scope.listing_ids",
+        "return_provenance"
+      ],
+      "output.request_context_contract.effective_features": [
+        "execution_mode_preference",
+        "scope.listing_ids",
+        "return_provenance"
+      ],
+      "output.request_context_contract.unsupported_field_behavior": "reject"
+    },
+    "contains_all": {
+      "output.deterministic_registered_capabilities": [
+        "query_rewrite",
+        "semantic_rank",
+        "explain_result"
+      ],
+      "output.disabled_capabilities": [
+        "filter_extraction",
+        "summarize_listing",
+        "summarize_farm",
+        "workflow_plan",
+        "dedupe_cluster"
+      ]
+    },
+    "absent_paths": [
+      "error",
+      "meta"
+    ]
+  }
+}

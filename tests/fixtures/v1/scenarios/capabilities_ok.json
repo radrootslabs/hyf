@@ -1,0 +1,53 @@
+{
+  "fixture_id": "capabilities_ok",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Control-plane capabilities report implemented deterministic routes and deferred bootstrap routes truthfully.",
+  "request": {
+    "version": 1,
+    "request_id": "capabilities-fixture-1",
+    "capability": "sys.capabilities",
+    "input": {}
+  },
+  "expected": {
+    "ok": true,
+    "equals": {
+      "version": 1,
+      "request_id": "capabilities-fixture-1",
+      "output.control_routes": [
+        "sys.status",
+        "sys.capabilities"
+      ],
+      "output.business_capabilities.0.id": "query_rewrite",
+      "output.business_capabilities.0.deterministic_execution": "enabled",
+      "output.business_capabilities.0.implementation_status": "implemented",
+      "output.business_capabilities.0.callable": true,
+      "output.business_capabilities.1.id": "filter_extraction",
+      "output.business_capabilities.1.deterministic_execution": "disabled",
+      "output.business_capabilities.1.implementation_status": "disabled",
+      "output.business_capabilities.1.callable": false,
+      "output.business_capabilities.1.disabled_reason": "deferred_bootstrap_capability",
+      "output.business_capabilities.2.id": "semantic_rank",
+      "output.business_capabilities.2.implementation_status": "implemented",
+      "output.business_capabilities.6.id": "explain_result",
+      "output.business_capabilities.6.implementation_status": "implemented",
+      "output.assisted_backend_capabilities": [],
+      "output.request_context_contract.accepted_features": [
+        "consumer",
+        "execution_mode_preference",
+        "scope.listing_ids",
+        "return_provenance"
+      ],
+      "output.request_context_contract.effective_features": [
+        "execution_mode_preference",
+        "scope.listing_ids",
+        "return_provenance"
+      ],
+      "output.request_context_contract.unsupported_field_behavior": "reject"
+    },
+    "absent_paths": [
+      "error",
+      "meta"
+    ]
+  }
+}

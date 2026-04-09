@@ -1,0 +1,20 @@
+{
+  "fixture_id": "query_rewrite_unexpected_field",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Strict request validation rejects unexpected query_rewrite input fields.",
+  "request": {
+    "version": 1,
+    "request_id": "rewrite-bad-fixture-1",
+    "capability": "query_rewrite",
+    "input": {
+      "text": "apples near me",
+      "tone": "brief"
+    }
+  },
+  "expected": {
+    "ok": false,
+    "error_code": "invalid_request",
+    "message_contains": "unexpected field"
+  }
+}

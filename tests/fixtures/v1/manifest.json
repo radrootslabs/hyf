@@ -1,0 +1,18 @@
+{
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Canonical HYF stdio request and response scenarios for deterministic bootstrap capabilities.",
+  "family_kind": "wire_compatibility",
+  "transport": "stdio",
+  "request_framing": "newline_delimited_json",
+  "scenario_files": [
+    "scenarios/status_ok.json",
+    "scenarios/capabilities_ok.json",
+    "scenarios/query_rewrite_local_pickup_weekend.json",
+    "scenarios/semantic_rank_local_pickup_weekend.json",
+    "scenarios/explain_result_local_pickup_weekend.json",
+    "scenarios/assisted_backend_unavailable.json",
+    "scenarios/deferred_capability_disabled.json",
+    "scenarios/query_rewrite_unexpected_field.json"
+  ]
+}

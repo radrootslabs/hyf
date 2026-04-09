@@ -1,0 +1,22 @@
+{
+  "fixture_id": "assisted_backend_unavailable",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Explicit assisted execution requests fail with a bounded unavailable-backend error.",
+  "request": {
+    "version": 1,
+    "request_id": "assisted-fixture-1",
+    "capability": "query_rewrite",
+    "context": {
+      "execution_mode_preference": "assisted"
+    },
+    "input": {
+      "text": "apples near me"
+    }
+  },
+  "expected": {
+    "ok": false,
+    "error_code": "backend_unavailable",
+    "message_contains": "assisted_execution"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "fixture_id": "query_rewrite_local_pickup_weekend",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Deterministic query rewrite extracts normalized terms and structured filters from a local produce search.",
+  "request": {
+    "version": 1,
+    "request_id": "rewrite-fixture-1",
+    "trace_id": "trace-rewrite-fixture-1",
+    "capability": "query_rewrite",
+    "context": {
+      "return_provenance": true
+    },
+    "input": {
+      "query": "apples near me with weekend pickup"
+    }
+  },
+  "expected": {
+    "ok": true,
+    "equals": {
+      "version": 1,
+      "request_id": "rewrite-fixture-1",
+      "trace_id": "trace-rewrite-fixture-1",
+      "output.original_text": "apples near me with weekend pickup",
+      "output.normalized_text": "apples near me with weekend pickup",
+      "output.rewritten_text": "apples",
+      "output.query_terms": [
+        "apples"
+      ],
+      "output.extracted_filters.local_intent": true,
+      "output.extracted_filters.fulfillment": "pickup",
+      "output.extracted_filters.time_window": "weekend",
+      "meta.execution_mode": "deterministic",
+      "meta.backend": "heuristic"
+    },
+    "contains_all": {
+      "output.normalization_signals": [
+        "local_intent_detected",
+        "pickup_filter_detected",
+        "weekend_filter_detected",
+        "stopwords_removed",
+        "filter_tokens_extracted"
+      ],
+      "output.ranking_hints": [
+        "prefer_local_results",
+        "prefer_pickup",
+        "prefer_weekend_availability"
+      ]
+    },
+    "present_paths": [
+      "meta.provenance",
+      "meta.provenance.source_refs"
+    ],
+    "absent_paths": [
+      "error",
+      "meta.latency_ms"
+    ]
+  }
+}

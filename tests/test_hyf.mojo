@@ -11,6 +11,11 @@ from std.tempfile import TemporaryDirectory
 
 from mojson import Value, loads
 
+from fixture_loader import (
+    fixture_manifest_path,
+    load_fixture_manifest,
+    load_fixture_scenario,
+)
 from hyf_core.backends.selector import (
     execute_capability as execute_core_capability,
     resolve_backend,
@@ -234,6 +239,66 @@ def test_current_build_identity_matches_manifest_package_surface() raises:
     assert_equal(build_identity.package_name, manifest_package_name)
     assert_equal(
         build_identity.package_version, manifest_package_version
+    )
+
+
+def test_repo_local_fixture_manifest_declares_expected_scenarios() raises:
+    assert_true(exists(fixture_manifest_path()))
+
+    var manifest = load_fixture_manifest()
+    assert_equal(
+        manifest["fixture_namespace"].string_value(),
+        "radroots-canonical-hyf-v1",
+    )
+    assert_equal(Int(manifest["schema_version"].int_value()), 1)
+    assert_equal(
+        manifest["family_kind"].string_value(), "wire_compatibility"
+    )
+    assert_equal(manifest["transport"].string_value(), "stdio")
+    assert_equal(
+        manifest["request_framing"].string_value(),
+        "newline_delimited_json",
+    )
+
+    var scenario_files = _array_string_values(manifest["scenario_files"])
+    assert_equal(len(scenario_files), 8)
+    assert_equal(scenario_files[0], "scenarios/status_ok.json")
+    assert_equal(
+        scenario_files[7], "scenarios/query_rewrite_unexpected_field.json"
+    )
+
+
+def test_repo_local_fixture_loader_reads_all_mirrored_scenarios() raises:
+    var manifest = load_fixture_manifest()
+    assert_equal(
+        manifest["fixture_namespace"].string_value(),
+        "radroots-canonical-hyf-v1",
+    )
+
+    var status_scenario = load_fixture_scenario("scenarios/status_ok.json")
+    assert_equal(
+        status_scenario["fixture_id"].string_value(), "status_ok"
+    )
+    assert_equal(
+        status_scenario["request"]["capability"].string_value(),
+        "sys.status",
+    )
+    assert_true(_has_key(status_scenario, "expected"))
+
+    var rewrite_scenario = load_fixture_scenario(
+        "scenarios/query_rewrite_local_pickup_weekend.json"
+    )
+    assert_equal(
+        rewrite_scenario["fixture_id"].string_value(),
+        "query_rewrite_local_pickup_weekend",
+    )
+    assert_equal(
+        rewrite_scenario["request"]["capability"].string_value(),
+        "query_rewrite",
+    )
+    assert_equal(
+        rewrite_scenario["request"]["input"]["query"].string_value(),
+        "apples near me with weekend pickup",
     )
 
 

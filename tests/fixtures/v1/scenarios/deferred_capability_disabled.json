@@ -1,0 +1,17 @@
+{
+  "fixture_id": "deferred_capability_disabled",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Deferred bootstrap capabilities fail with an explicit disabled-capability wire error.",
+  "request": {
+    "version": 1,
+    "request_id": "disabled-fixture-1",
+    "capability": "filter_extraction",
+    "input": {}
+  },
+  "expected": {
+    "ok": false,
+    "error_code": "capability_disabled",
+    "message_contains": "deferred capability"
+  }
+}

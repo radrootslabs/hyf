@@ -1,0 +1,66 @@
+{
+  "fixture_id": "explain_result_local_pickup_weekend",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Deterministic explanation reports stable reasons and signal assessment for a ranked produce result.",
+  "request": {
+    "version": 1,
+    "request_id": "explain-fixture-1",
+    "capability": "explain_result",
+    "context": {
+      "return_provenance": true
+    },
+    "input": {
+      "query": "apples near me with weekend pickup",
+      "candidate": {
+        "id": "listing_local_1",
+        "title": "Organic apples",
+        "farm": "Local Orchard",
+        "delivery": "pickup",
+        "distance_km": 4.1,
+        "freshness_minutes": 3
+      }
+    }
+  },
+  "expected": {
+    "ok": true,
+    "equals": {
+      "version": 1,
+      "request_id": "explain-fixture-1",
+      "output.result_id": "listing_local_1",
+      "output.explanation_kind": "deterministic",
+      "output.summary": "Result listing_local_1 was ranked using deterministic heuristic signals: apples match, pickup match, closer and fresher.",
+      "output.score": 102,
+      "output.signal_assessment.delivery_alignment": "match",
+      "output.signal_assessment.distance_band": "closer",
+      "output.signal_assessment.freshness_band": "fresher",
+      "output.signal_assessment.scope_match": false,
+      "output.extracted_filters.local_intent": true,
+      "output.extracted_filters.fulfillment": "pickup",
+      "output.extracted_filters.time_window": "weekend",
+      "meta.execution_mode": "deterministic",
+      "meta.backend": "heuristic"
+    },
+    "contains_all": {
+      "output.reasons": [
+        "apples match",
+        "pickup match",
+        "closer",
+        "fresher"
+      ],
+      "output.ranking_hints": [
+        "prefer_local_results",
+        "prefer_pickup",
+        "prefer_weekend_availability"
+      ]
+    },
+    "present_paths": [
+      "meta.provenance",
+      "meta.provenance.source_refs"
+    ],
+    "absent_paths": [
+      "error",
+      "meta.latency_ms"
+    ]
+  }
+}

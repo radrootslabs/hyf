@@ -1,0 +1,85 @@
+{
+  "fixture_id": "semantic_rank_local_pickup_weekend",
+  "fixture_namespace": "radroots-canonical-hyf-v1",
+  "schema_version": 1,
+  "description": "Deterministic ranking prefers closer, fresher, pickup-aligned results for a local produce search.",
+  "request": {
+    "version": 1,
+    "request_id": "rank-fixture-1",
+    "capability": "semantic_rank",
+    "input": {
+      "query": "apples near me with weekend pickup",
+      "candidates": [
+        {
+          "id": "listing_local_1",
+          "title": "Organic apples",
+          "farm": "Local Orchard",
+          "delivery": "pickup",
+          "distance_km": 4.1,
+          "freshness_minutes": 3
+        },
+        {
+          "id": "listing_regional_1",
+          "title": "Honeycrisp apples",
+          "farm": "Regional Orchard",
+          "delivery": "delivery",
+          "distance_km": 28.0,
+          "freshness_minutes": 25
+        }
+      ]
+    }
+  },
+  "expected": {
+    "ok": true,
+    "equals": {
+      "version": 1,
+      "request_id": "rank-fixture-1",
+      "output.ranked_ids": [
+        "listing_local_1",
+        "listing_regional_1"
+      ],
+      "output.scored_candidates.0.id": "listing_local_1",
+      "output.scored_candidates.0.heuristic_score": 102,
+      "output.scored_candidates.0.delivery_alignment": "match",
+      "output.scored_candidates.0.distance_band": "closer",
+      "output.scored_candidates.0.freshness_band": "fresher",
+      "output.scored_candidates.0.scope_match": false,
+      "output.scored_candidates.1.id": "listing_regional_1",
+      "output.scored_candidates.1.heuristic_score": 17,
+      "output.scored_candidates.1.delivery_alignment": "mismatch",
+      "output.scored_candidates.1.distance_band": "farther",
+      "output.scored_candidates.1.freshness_band": "standard",
+      "output.scored_candidates.1.scope_match": false,
+      "output.extracted_filters.local_intent": true,
+      "output.extracted_filters.fulfillment": "pickup",
+      "output.extracted_filters.time_window": "weekend",
+      "meta.execution_mode": "deterministic",
+      "meta.backend": "heuristic"
+    },
+    "contains_all": {
+      "output.scored_candidates.0.reasons": [
+        "apples match",
+        "pickup match",
+        "closer",
+        "fresher"
+      ],
+      "output.scored_candidates.1.reasons": [
+        "apples match",
+        "delivery mismatch",
+        "farther"
+      ],
+      "output.ranking_hints": [
+        "prefer_local_results",
+        "prefer_pickup",
+        "prefer_weekend_availability"
+      ]
+    },
+    "absent_paths": [
+      "error",
+      "meta.latency_ms",
+      "meta.provenance",
+      "output.scored_candidates.0.score",
+      "output.scored_candidates.1.score"
+    ]
+  }
+}

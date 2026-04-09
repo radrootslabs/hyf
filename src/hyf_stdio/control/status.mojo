@@ -10,6 +10,11 @@ from hyf_core.capabilities.registry import (
     implemented_deterministic_capability_count,
 )
 from hyf_core.metadata import current_build_identity
+from hyf_runtime.startup import (
+    RuntimeStartupContext,
+    resolve_startup_context_from_process,
+)
+from hyf_runtime.status import build_runtime_status_value
 from hyf_stdio.control.request_context_contract import (
     build_request_context_contract_value,
 )
@@ -47,6 +52,14 @@ def _build_identity_value() raises -> Value:
 
 
 def build_status_output() raises -> Value:
+    return build_status_output_with_runtime_context(
+        resolve_startup_context_from_process()
+    )
+
+
+def build_status_output_with_runtime_context(
+    runtime_context: RuntimeStartupContext,
+) raises -> Value:
     var output = loads("{}")
     var build_identity = _build_identity_value()
     output.set("build_identity", build_identity.copy())
@@ -55,9 +68,11 @@ def build_status_output() raises -> Value:
     output.set("request_framing", Value("newline_delimited_json"))
     output.set(
         "implementation_status",
-        Value("bootstrap_registered_deterministic_ready")
-        if all_deterministic_capabilities_implemented()
-        else Value("bootstrap_partial_deterministic"),
+        Value(
+            "bootstrap_registered_deterministic_ready"
+        ) if all_deterministic_capabilities_implemented() else Value(
+            "bootstrap_partial_deterministic"
+        ),
     )
 
     var execution_modes = loads("{}")
@@ -78,15 +93,19 @@ def build_status_output() raises -> Value:
     var backends = loads("{}")
     backends.set(
         "deterministic_backend",
-        Value("available")
-        if all_deterministic_capabilities_implemented()
-        else Value("partially_available"),
+        Value(
+            "available"
+        ) if all_deterministic_capabilities_implemented() else Value(
+            "partially_available"
+        ),
     )
     backends.set("assisted_backend", Value("unavailable"))
     output.set("backend_reachability", backends)
 
     var counts = loads("{}")
-    counts.set("canonical_business_capabilities", Value(bootstrap_capability_count()))
+    counts.set(
+        "canonical_business_capabilities", Value(bootstrap_capability_count())
+    )
     counts.set(
         "deterministic_registered_business_capabilities",
         Value(len(deterministic_enabled_capabilities())),
@@ -114,5 +133,6 @@ def build_status_output() raises -> Value:
         "request_context_contract",
         build_request_context_contract_value(),
     )
+    output.set("runtime", build_runtime_status_value(runtime_context))
 
     return output^

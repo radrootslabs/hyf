@@ -38,6 +38,61 @@ def test_status_success() raises:
     assert_matches_scenario_response(response, "scenarios/status_ok.json")
 
 
+def test_status_reports_repo_local_runtime_truth() raises:
+    with TemporaryDirectory() as temp_dir:
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                )
+
+                assert_equal(
+                    response["output"]["runtime"]["id"].string_value(),
+                    "hyf_runtime",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["namespace"].string_value(),
+                    "services/hyf",
+                )
+                assert_equal(
+                    response["output"]["runtime"][
+                        "paths_profile"
+                    ].string_value(),
+                    "repo_local",
+                )
+                assert_equal(
+                    response["output"]["runtime"][
+                        "repo_local_base_root"
+                    ].string_value(),
+                    temp_dir,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["paths"][
+                        "config_path"
+                    ].string_value(),
+                    temp_dir + "/config/services/hyf/config.toml",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["paths"][
+                        "diagnostics_dir"
+                    ].string_value(),
+                    temp_dir + "/logs/services/hyf/diagnostics",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "default_backend"
+                    ].string_value(),
+                    "local_file",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "secret_values_reported"
+                    ].bool_value(),
+                    False,
+                )
+
+
 def test_capabilities_success() raises:
     var response = run_hyf_stdio(
         load_scenario_request_json("scenarios/capabilities_ok.json")

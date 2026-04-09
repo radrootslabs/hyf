@@ -31,7 +31,10 @@ from hyf_stdio.codec import (
     extract_request_correlation,
 )
 from hyf_stdio.control.capabilities import build_capabilities_output
-from hyf_stdio.control.status import build_status_output
+from hyf_stdio.control.status import (
+    build_status_output,
+    build_status_output_with_runtime_context,
+)
 from hyf_stdio.envelope import (
     WireErrorResponse,
     WireRequest,
@@ -268,6 +271,18 @@ def handle_request(request: WireRequest) raises -> String:
 def handle_request_with_runtime_context(
     request: WireRequest, runtime_context: RuntimeStartupContext
 ) raises -> String:
+    if request.capability == "sys.status":
+        return encode_success(
+            WireSuccessResponse(
+                version=hyf_protocol_version(),
+                request_id=String(request.request_id),
+                trace_id=request.trace_id,
+                output=build_status_output_with_runtime_context(
+                    runtime_context
+                ),
+                meta=None,
+            )
+        )
     return handle_request_with_runtime_context_and_control_builders[
         build_status_output, build_capabilities_output
     ](request, runtime_context)

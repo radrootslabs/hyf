@@ -129,13 +129,19 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     response["output"]["runtime"]["secret_storage"][
                         "status"
                     ].string_value(),
-                    "reserved_pending_shared_secret_storage",
+                    "reserved",
                 )
                 assert_equal(
                     response["output"]["runtime"]["secret_storage"][
                         "identity_path"
                     ].string_value(),
                     temp_dir + "/secrets/services/hyf/identity.secret.json",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_material_configured"
+                    ].bool_value(),
+                    False,
                 )
                 assert_equal(
                     response["output"]["runtime"]["secret_storage"][
@@ -165,13 +171,25 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     response["output"]["runtime"]["protected_local_data"][
                         "status"
                     ].string_value(),
-                    "reserved_pending_protected_store",
+                    "reserved",
                 )
                 assert_equal(
                     response["output"]["runtime"]["protected_local_data"][
                         "default_dir"
                     ].string_value(),
                     temp_dir + "/data/services/hyf/protected",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "configured"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "support_implemented"
+                    ].bool_value(),
+                    False,
                 )
                 assert_equal(
                     response["output"]["runtime"]["protected_local_data"][
@@ -196,6 +214,83 @@ def test_status_reports_repo_local_runtime_truth() raises:
                         / "hyf"
                         / "protected"
                     )
+                )
+
+
+def test_status_reports_configured_but_deferred_custody_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var identity_dir = Path(temp_dir) / "secrets" / "services" / "hyf"
+        _ = std.os.makedirs(identity_dir.__fspath__(), exist_ok=True)
+        (identity_dir / "identity.secret.json").write_text(
+            "{\"configured\":\"test-only-placeholder\"}"
+        )
+
+        var protected_dir = (
+            Path(temp_dir) / "data" / "services" / "hyf" / "protected"
+        )
+        _ = std.os.makedirs(protected_dir.__fspath__(), exist_ok=True)
+
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                )
+
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "status"
+                    ].string_value(),
+                    "reserved",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "backend_implemented"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_material_configured"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_material_loaded"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_material_created_by_startup"
+                    ].bool_value(),
+                    False,
+                )
+
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "status"
+                    ].string_value(),
+                    "reserved",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "configured"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "support_implemented"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "store_open"
+                    ].bool_value(),
+                    False,
                 )
 
 

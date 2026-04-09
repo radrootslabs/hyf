@@ -6,9 +6,12 @@ from hyf_runtime.diagnostics import (
 )
 from hyf_runtime.secrets import (
     default_secret_backend_name,
+    identity_material_configured_for_runtime_paths,
     identity_material_created_by_startup,
     identity_material_loaded,
+    protected_local_data_configured_for_runtime_paths,
     protected_local_data_dir_for_runtime_paths,
+    protected_local_data_support_implemented,
     protected_local_data_status_name,
     protected_local_data_store_open,
     secret_storage_backend_implemented,
@@ -73,6 +76,10 @@ def _secret_storage_status_value(
         "identity_path", Value(String(context.paths.identity_path))
     )
     secret_storage.set(
+        "identity_material_configured",
+        Value(identity_material_configured_for_runtime_paths(context.paths)),
+    )
+    secret_storage.set(
         "identity_material_loaded", Value(identity_material_loaded())
     )
     secret_storage.set(
@@ -105,6 +112,13 @@ def _protected_local_data_status_value(
     protected_data.set(
         "default_dir",
         Value(protected_local_data_dir_for_runtime_paths(context.paths)),
+    )
+    protected_data.set(
+        "configured",
+        Value(protected_local_data_configured_for_runtime_paths(context.paths)),
+    )
+    protected_data.set(
+        "support_implemented", Value(protected_local_data_support_implemented())
     )
     protected_data.set("store_open", Value(protected_local_data_store_open()))
     return protected_data^

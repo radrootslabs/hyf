@@ -415,6 +415,37 @@ def test_query_rewrite_success() raises:
     )
 
 
+def test_query_rewrite_does_not_create_protected_local_artifacts() raises:
+    with TemporaryDirectory() as temp_dir:
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json(
+                        "scenarios/query_rewrite_local_pickup_weekend.json"
+                    ),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_true(
+                    not exists(
+                        Path(temp_dir)
+                        / "data"
+                        / "services"
+                        / "hyf"
+                        / "protected"
+                    )
+                )
+                assert_true(
+                    not exists(
+                        Path(temp_dir)
+                        / "cache"
+                        / "services"
+                        / "hyf"
+                    )
+                )
+
+
 def test_semantic_rank_exports_heuristic_score_without_latency() raises:
     var response = run_hyf_stdio(
         load_scenario_request_json(

@@ -3,6 +3,9 @@
   "schema_version": 1,
   "description": "Canonical HYF stdio request and response scenarios for deterministic bootstrap capabilities.",
   "family_kind": "wire_compatibility",
+  "family_role": "dependency_surface",
+  "canonical_authority_path": "testing/fixtures/canonical/hyf/v1",
+  "shared_scenario_sync_policy": "same_logical_workstream",
   "transport": "stdio",
   "request_framing": "newline_delimited_json",
   "scenario_files": [

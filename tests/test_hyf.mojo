@@ -258,6 +258,18 @@ def test_repo_local_fixture_manifest_declares_expected_scenarios() raises:
         manifest["request_framing"].string_value(),
         "newline_delimited_json",
     )
+    assert_equal(
+        manifest["family_role"].string_value(),
+        "dependency_surface",
+    )
+    assert_equal(
+        manifest["canonical_authority_path"].string_value(),
+        "testing/fixtures/canonical/hyf/v1",
+    )
+    assert_equal(
+        manifest["shared_scenario_sync_policy"].string_value(),
+        "same_logical_workstream",
+    )
 
     var scenario_files = _array_string_values(manifest["scenario_files"])
     assert_equal(len(scenario_files), 8)

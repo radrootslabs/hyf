@@ -366,22 +366,13 @@ def test_backend_selector_reports_assisted_unavailable() raises:
 
 def test_query_rewrite_returns_deterministic_output() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rewrite-1","trace_id":"trace-rewrite-1","capability":"query_rewrite","input":{"text":"eggs near me with weekend pickup"}}'
+        load_scenario_request_json(
+            "scenarios/query_rewrite_local_pickup_weekend.json"
+        )
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["trace_id"].string_value(), "trace-rewrite-1")
-    assert_equal(result["ok"].bool_value(), True)
-    assert_equal(
-        result["output"]["rewritten_text"].string_value(),
-        "eggs",
+    assert_matches_scenario_response(
+        result, "scenarios/query_rewrite_local_pickup_weekend.json"
     )
-    assert_equal(
-        result["output"]["extracted_filters"]["fulfillment"].string_value(),
-        "pickup",
-    )
-    assert_equal(result["meta"]["backend"].string_value(), "heuristic")
-    assert_true(not _has_key(result["meta"], "latency_ms"))
 
 
 def test_query_rewrite_accepts_query_alias_with_same_behavior() raises:
@@ -403,16 +394,12 @@ def test_query_rewrite_accepts_query_alias_with_same_behavior() raises:
 
 def test_query_rewrite_rejects_unknown_input_field() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rewrite-bad-field-1","capability":"query_rewrite","input":{"text":"eggs near me","tone":"brief"}}'
+        load_scenario_request_json(
+            "scenarios/query_rewrite_unexpected_field.json"
+        )
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["ok"].bool_value(), False)
-    assert_equal(result["request_id"].string_value(), "rewrite-bad-field-1")
-    assert_equal(result["error"]["code"].string_value(), "invalid_request")
-    assert_true(
-        result["error"]["message"].string_value().find("unexpected field")
-        >= 0
+    assert_matches_scenario_response(
+        result, "scenarios/query_rewrite_unexpected_field.json"
     )
 
 

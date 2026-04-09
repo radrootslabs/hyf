@@ -74,6 +74,17 @@ def test_deferred_capability_returns_disabled_error() raises:
     )
 
 
+def test_query_rewrite_success() raises:
+    var response = run_hyf_stdio(
+        load_scenario_request_json(
+            "scenarios/query_rewrite_local_pickup_weekend.json"
+        )
+    )
+    assert_matches_scenario_response(
+        response, "scenarios/query_rewrite_local_pickup_weekend.json"
+    )
+
+
 def test_semantic_rank_exports_heuristic_score_without_latency() raises:
     var response = run_hyf_stdio(
         '{"version":1,"request_id":"rank-proc-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
@@ -90,14 +101,12 @@ def test_semantic_rank_exports_heuristic_score_without_latency() raises:
 
 def test_strict_query_rewrite_failure() raises:
     var response = run_hyf_stdio(
-        '{"version":1,"request_id":"rewrite-bad-proc-1","capability":"query_rewrite","input":{"text":"eggs near me","tone":"brief"}}'
+        load_scenario_request_json(
+            "scenarios/query_rewrite_unexpected_field.json"
+        )
     )
-
-    assert_true(not response["ok"].bool_value())
-    assert_equal(response["error"]["code"].string_value(), "invalid_request")
-    assert_true(
-        response["error"]["message"].string_value().find("unexpected field")
-        >= 0
+    assert_matches_scenario_response(
+        response, "scenarios/query_rewrite_unexpected_field.json"
     )
 
 

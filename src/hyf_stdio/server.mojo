@@ -4,11 +4,25 @@ from std.sys import stdin
 
 from mojson import Value
 
-from hyf_core.backends.selector import execute_capability as execute_backend_capability
+from hyf_runtime.diagnostics import (
+    append_internal_diagnostic as append_internal_diagnostic_to_dir,
+    effective_diagnostics_dir_for_runtime_paths,
+)
+from hyf_runtime.startup import (
+    RuntimeStartupContext,
+    resolve_startup_context_from_process,
+)
+from hyf_core.backends.selector import (
+    execute_capability as execute_backend_capability,
+)
 from hyf_core.capabilities.registry import (
     canonical_business_capability,
 )
-from hyf_core.errors import CapabilityFailure, CapabilityResult, CapabilitySuccess
+from hyf_core.errors import (
+    CapabilityFailure,
+    CapabilityResult,
+    CapabilitySuccess,
+)
 from hyf_core.metadata import hyf_protocol_version
 from hyf_stdio.codec import (
     decode_request,
@@ -18,7 +32,6 @@ from hyf_stdio.codec import (
 )
 from hyf_stdio.control.capabilities import build_capabilities_output
 from hyf_stdio.control.status import build_status_output
-from hyf_stdio.diagnostics import append_internal_diagnostic
 from hyf_stdio.envelope import (
     WireErrorResponse,
     WireRequest,
@@ -78,6 +91,7 @@ def _write_success(response: WireSuccessResponse) raises:
 def _diagnostic_value(value: String) -> String:
     return value.replace("\n", "\\n").replace("\r", "\\r")
 
+
 def _diagnostic_trace_id(trace_id: Optional[String]) -> String:
     if trace_id:
         return _diagnostic_value(String(trace_id.value()))
@@ -89,17 +103,19 @@ def _emit_internal_diagnostic(
     trace_id: Optional[String],
     capability: String,
     detail: String,
+    diagnostics_dir: String,
 ):
-    append_internal_diagnostic(
-        "hyf_internal_error request_id=\""
+    append_internal_diagnostic_to_dir(
+        'hyf_internal_error request_id="'
         + _diagnostic_value(request_id)
-        + "\" trace_id=\""
+        + '" trace_id="'
         + _diagnostic_trace_id(trace_id)
-        + "\" capability=\""
+        + '" capability="'
         + _diagnostic_value(capability)
-        + "\" detail=\""
+        + '" detail="'
         + _diagnostic_value(detail)
-        + "\"\n"
+        + '"\n',
+        diagnostics_dir,
     )
 
 
@@ -185,8 +201,24 @@ def handle_request_with_control_builders[
     status_builder: def() raises -> Value,
     capabilities_builder: def() raises -> Value,
 ](request: WireRequest) raises -> String:
+    return handle_request_with_runtime_context_and_control_builders[
+        status_builder, capabilities_builder
+    ](request, resolve_startup_context_from_process())
+
+
+@parameter
+def handle_request_with_runtime_context_and_control_builders[
+    status_builder: def() raises -> Value,
+    capabilities_builder: def() raises -> Value,
+](
+    request: WireRequest,
+    runtime_context: RuntimeStartupContext,
+) raises -> String:
     var request_id = String(request.request_id)
     var trace_id = request.trace_id
+    var diagnostics_dir = effective_diagnostics_dir_for_runtime_paths(
+        runtime_context.paths
+    )
     try:
         if request.capability == "sys.status":
             return encode_success(
@@ -215,6 +247,7 @@ def handle_request_with_control_builders[
             trace_id,
             String(request.capability),
             String(e),
+            diagnostics_dir,
         )
         return encode_error(
             WireErrorResponse(
@@ -230,6 +263,14 @@ def handle_request(request: WireRequest) raises -> String:
     return handle_request_with_control_builders[
         build_status_output, build_capabilities_output
     ](request)
+
+
+def handle_request_with_runtime_context(
+    request: WireRequest, runtime_context: RuntimeStartupContext
+) raises -> String:
+    return handle_request_with_runtime_context_and_control_builders[
+        build_status_output, build_capabilities_output
+    ](request, runtime_context)
 
 
 @parameter
@@ -254,20 +295,58 @@ def handle_request_line_with_control_builders[
         )
 
 
+@parameter
+def handle_request_line_with_runtime_context_and_control_builders[
+    status_builder: def() raises -> Value,
+    capabilities_builder: def() raises -> Value,
+](line: String, runtime_context: RuntimeStartupContext) raises -> String:
+    try:
+        var request = decode_request(line)
+        return handle_request_with_runtime_context_and_control_builders[
+            status_builder, capabilities_builder
+        ](request^, runtime_context)
+    except e:
+        var correlation = extract_request_correlation(line)
+        return encode_error(
+            WireErrorResponse(
+                version=hyf_protocol_version(),
+                request_id=correlation.request_id,
+                trace_id=correlation.trace_id,
+                error=invalid_request_error(String(e)),
+            )
+        )
+
+
 def handle_request_line(line: String) raises -> String:
     return handle_request_line_with_control_builders[
         build_status_output, build_capabilities_output
     ](line)
 
 
+def handle_request_line_with_runtime_context(
+    line: String, runtime_context: RuntimeStartupContext
+) raises -> String:
+    return handle_request_line_with_runtime_context_and_control_builders[
+        build_status_output, build_capabilities_output
+    ](line, runtime_context)
+
+
 def run_stdio_server() raises:
+    run_stdio_server_with_runtime_context(
+        resolve_startup_context_from_process()
+    )
+
+
+def run_stdio_server_with_runtime_context(
+    runtime_context: RuntimeStartupContext,
+) raises:
     if stdin.isatty():
         return
 
     try:
         var line = _read_request_line()
 
-        print(handle_request_line(line))
+        print(handle_request_line_with_runtime_context(line, runtime_context))
     except e:
         if String(e) == "EOF":
             return

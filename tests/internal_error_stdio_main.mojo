@@ -3,7 +3,10 @@ from std.sys import stdin
 
 from mojson import Value, loads
 
-from hyf_stdio.server import handle_request_line_with_control_builders
+from hyf_runtime.startup import resolve_startup_context_from_process
+from hyf_stdio.server import (
+    handle_request_line_with_runtime_context_and_control_builders,
+)
 
 
 def _read_request_line() raises -> String:
@@ -24,8 +27,9 @@ def main() raises:
         return
 
     var line = _read_request_line()
+    var startup_context = resolve_startup_context_from_process()
     print(
-        handle_request_line_with_control_builders[
+        handle_request_line_with_runtime_context_and_control_builders[
             _failing_status_output, _unused_capabilities_output
-        ](line)
+        ](line, startup_context)
     )

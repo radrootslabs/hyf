@@ -2,11 +2,13 @@ import std.os
 from std.os import Pipe, Process
 from std.ffi import CStringSlice, c_int, external_call
 from std.sys._libc import close, exit, vfork
+from std.tempfile import TemporaryDirectory
 
 from mojson import Value, loads
 
 
-comptime HYF_DIAGNOSTICS_DIR_ENV = "HYF_DIAGNOSTICS_DIR"
+comptime HYF_PATHS_PROFILE_ENV = "HYF_PATHS_PROFILE"
+comptime HYF_PATHS_REPO_LOCAL_ROOT_ENV = "HYF_PATHS_REPO_LOCAL_ROOT"
 
 
 struct ScopedEnvVar:
@@ -48,7 +50,9 @@ def _read_pipe_to_string(mut pipe: Pipe) raises -> String:
     return output^
 
 
-def run_stdio_entrypoint(entrypoint: String, request_json: String) raises -> Value:
+def run_stdio_entrypoint(
+    entrypoint: String, request_json: String
+) raises -> Value:
     var stdin_pipe = Pipe()
     var stdout_pipe = Pipe()
     var output = String("")
@@ -56,15 +60,9 @@ def run_stdio_entrypoint(entrypoint: String, request_json: String) raises -> Val
     var include_flag = String("-I")
     var include_path = String("src")
     var entrypoint_path = String(entrypoint)
-    var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](
-        length=6, fill={}
-    )
-    argv[0] = rebind[CStringSlice[ImmutAnyOrigin]](
-        command.as_c_string_slice()
-    )
-    argv[1] = rebind[CStringSlice[ImmutAnyOrigin]](
-        "run".as_c_string_slice()
-    )
+    var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](length=6, fill={})
+    argv[0] = rebind[CStringSlice[ImmutAnyOrigin]](command.as_c_string_slice())
+    argv[1] = rebind[CStringSlice[ImmutAnyOrigin]]("run".as_c_string_slice())
     argv[2] = rebind[CStringSlice[ImmutAnyOrigin]](
         include_flag.as_c_string_slice()
     )
@@ -114,4 +112,9 @@ def run_stdio_entrypoint(entrypoint: String, request_json: String) raises -> Val
 
 
 def run_hyf_stdio(request_json: String) raises -> Value:
-    return run_stdio_entrypoint("src/main.mojo", request_json)
+    var response = Value(None)
+    with TemporaryDirectory() as temp_dir:
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                response = run_stdio_entrypoint("src/main.mojo", request_json)
+    return response^

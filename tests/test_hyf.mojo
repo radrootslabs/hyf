@@ -116,11 +116,11 @@ def _parse_manifest_quoted_value(value: String) raises -> String:
     var trimmed = value.strip()
     if (
         trimmed.byte_length() < 2
-        or not trimmed.startswith("\"")
-        or not trimmed.endswith("\"")
+        or not trimmed.startswith('"')
+        or not trimmed.endswith('"')
     ):
         raise Error("manifest assignment value must be quoted")
-    return String(trimmed[byte=1 : trimmed.byte_length() - 1])
+    return String(trimmed[byte = 1 : trimmed.byte_length() - 1])
 
 
 def _manifest_workspace_value(target_key: String) raises -> String:
@@ -147,7 +147,7 @@ def _manifest_workspace_value(target_key: String) raises -> String:
             continue
 
         return _parse_manifest_quoted_value(
-            String(line[byte=equals_index + 1 :])
+            String(line[byte = equals_index + 1 :])
         )
 
     raise Error("missing workspace manifest key '" + target_key + "'")
@@ -169,7 +169,8 @@ def _array_string_values(value: Value) raises -> List[String]:
 
 def test_decode_request_parses_context_and_input() raises:
     var request = decode_request(
-        '{"version":1,"request_id":"req-1","trace_id":"trace-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs near me"}}'
+        '{"version":1,"request_id":"req-1","trace_id":"trace-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs'
+        ' near me"}}'
     )
 
     assert_equal(request.version, 1)
@@ -177,9 +178,7 @@ def test_decode_request_parses_context_and_input() raises:
     assert_equal(request.trace_id.value(), "trace-1")
     assert_equal(request.capability, "query_rewrite")
     assert_equal(request.context.consumer, "radroots-cli")
-    assert_equal(
-        request.context.execution_mode_preference, "deterministic"
-    )
+    assert_equal(request.context.execution_mode_preference, "deterministic")
     assert_equal(request.context.return_provenance, True)
     assert_equal(request.input["query"].string_value(), "eggs near me")
 
@@ -213,7 +212,8 @@ def test_decode_request_rejects_unsupported_context_field() raises:
 def test_decode_request_rejects_unsupported_scope_field() raises:
     with assert_raises():
         _ = decode_request(
-            '{"version":1,"request_id":"req-scope-1","capability":"semantic_rank","context":{"scope":{"farm_ids":["farm-1"]}},"input":{"query":"eggs","candidates":[{"id":"lst_1","title":"Eggs","farm":"One Farm","delivery":"pickup","distance_km":1.0,"freshness_minutes":5}]}}'
+            '{"version":1,"request_id":"req-scope-1","capability":"semantic_rank","context":{"scope":{"farm_ids":["farm-1"]}},"input":{"query":"eggs","candidates":[{"id":"lst_1","title":"Eggs","farm":"One'
+            ' Farm","delivery":"pickup","distance_km":1.0,"freshness_minutes":5}]}}'
         )
 
 
@@ -282,9 +282,7 @@ def test_current_build_identity_matches_manifest_package_surface() raises:
     assert_equal(package_surface.package_name, manifest_package_name)
     assert_equal(package_surface.package_version, manifest_package_version)
     assert_equal(build_identity.package_name, manifest_package_name)
-    assert_equal(
-        build_identity.package_version, manifest_package_version
-    )
+    assert_equal(build_identity.package_version, manifest_package_version)
 
 
 def test_repo_local_fixture_manifest_declares_expected_scenarios() raises:
@@ -296,9 +294,7 @@ def test_repo_local_fixture_manifest_declares_expected_scenarios() raises:
         "radroots-canonical-hyf-v1",
     )
     assert_equal(Int(manifest["schema_version"].int_value()), 1)
-    assert_equal(
-        manifest["family_kind"].string_value(), "wire_compatibility"
-    )
+    assert_equal(manifest["family_kind"].string_value(), "wire_compatibility")
     assert_equal(manifest["transport"].string_value(), "stdio")
     assert_equal(
         manifest["request_framing"].string_value(),
@@ -333,9 +329,7 @@ def test_repo_local_fixture_loader_reads_all_mirrored_scenarios() raises:
     )
 
     var status_scenario = load_fixture_scenario("scenarios/status_ok.json")
-    assert_equal(
-        status_scenario["fixture_id"].string_value(), "status_ok"
-    )
+    assert_equal(status_scenario["fixture_id"].string_value(), "status_ok")
     assert_equal(
         status_scenario["request"]["capability"].string_value(),
         "sys.status",
@@ -363,17 +357,20 @@ def test_fixture_loader_reads_top_level_request_and_expected_structurally() rais
     with TemporaryDirectory() as temp_dir:
         var scenario_path = Path(temp_dir) / "scenario.json"
         scenario_path.write_text(
-            '{'
+            "{"
             + '"fixture_id":"shadowed-top-level-fields",'
-            + '"description":"this description mentions request and expected before the real fields",'
+            + '"description":"this description mentions request and expected'
+            ' before the real fields",'
             + '"request":{"version":1,"request_id":"shadow-1","capability":"sys.status","input":{}},'
             + '"expected":{"ok":true,"equals":{"output.kind":"status"}}'
-            + '}'
+            + "}"
         )
 
         var scenario = load_fixture_json_file(scenario_path)
         var request = load_fixture_scenario_request("scenarios/status_ok.json")
-        var expected = load_fixture_scenario_expected("scenarios/status_ok.json")
+        var expected = load_fixture_scenario_expected(
+            "scenarios/status_ok.json"
+        )
         var temp_request = load_fixture_top_level_field_from_path(
             scenario_path, "request"
         )
@@ -403,7 +400,9 @@ def test_fixture_loader_reads_top_level_request_and_expected_structurally() rais
 
 
 def test_status_reports_registered_deterministic_ready() raises:
-    var result = _dispatch(load_scenario_request_json("scenarios/status_ok.json"))
+    var result = _dispatch(
+        load_scenario_request_json("scenarios/status_ok.json")
+    )
     assert_matches_scenario_response(result, "scenarios/status_ok.json")
 
 
@@ -431,12 +430,8 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
         )
         assert_equal(
             entry["implementation_status"].string_value(),
-            "implemented"
-            if capability.implemented
-            else (
-                "not_implemented"
-                if capability.deterministic_enabled
-                else "disabled"
+            "implemented" if capability.implemented else (
+                "not_implemented" if capability.deterministic_enabled else "disabled"
             ),
         )
         if capability.disabled_reason != "":
@@ -450,7 +445,9 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
 
 def test_disabled_capability_returns_capability_disabled() raises:
     var result = _dispatch(
-        load_scenario_request_json("scenarios/deferred_capability_disabled.json")
+        load_scenario_request_json(
+            "scenarios/deferred_capability_disabled.json"
+        )
     )
     assert_matches_scenario_response(
         result, "scenarios/deferred_capability_disabled.json"
@@ -480,13 +477,13 @@ def test_non_callable_registry_business_capabilities_do_not_route_as_success() r
             + '","input":{}}'
         )
         assert_equal(Int(result["version"].int_value()), 1)
-        assert_equal(result["request_id"].string_value(), capability.id + "-routing-1")
+        assert_equal(
+            result["request_id"].string_value(), capability.id + "-routing-1"
+        )
         assert_equal(result["ok"].bool_value(), False)
         assert_equal(
             result["error"]["code"].string_value(),
-            "capability_disabled"
-            if not capability.deterministic_enabled
-            else "capability_unavailable",
+            "capability_disabled" if not capability.deterministic_enabled else "capability_unavailable",
         )
 
 
@@ -545,7 +542,8 @@ def test_query_rewrite_returns_deterministic_output() raises:
 
 def test_query_rewrite_accepts_query_alias_with_same_behavior() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rewrite-query-1","capability":"query_rewrite","input":{"query":"eggs near me with weekend pickup"}}'
+        '{"version":1,"request_id":"rewrite-query-1","capability":"query_rewrite","input":{"query":"eggs'
+        ' near me with weekend pickup"}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -573,7 +571,8 @@ def test_query_rewrite_rejects_unknown_input_field() raises:
 
 def test_query_rewrite_rejects_text_and_query_together() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rewrite-bad-dual-1","capability":"query_rewrite","input":{"text":"eggs near me","query":"eggs"}}'
+        '{"version":1,"request_id":"rewrite-bad-dual-1","capability":"query_rewrite","input":{"text":"eggs'
+        ' near me","query":"eggs"}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -598,7 +597,11 @@ def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
 
 def test_semantic_rank_scope_listing_ids_remains_effective() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-scope-1","capability":"semantic_rank","context":{"scope":{"listing_ids":["lst_8k1p"]}},"input":{"query":"eggs","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+        '{"version":1,"request_id":"rank-scope-1","capability":"semantic_rank","context":{"scope":{"listing_ids":["lst_8k1p"]}},"input":{"query":"eggs","candidates":[{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free'
+        ' range eggs","farm":"Santa'
+        ' Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -618,7 +621,10 @@ def test_semantic_rank_scope_listing_ids_remains_effective() raises:
 
 def test_semantic_rank_rejects_unknown_top_level_field() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-bad-top-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}],"tone":"brief"}}'
+        '{"version":1,"request_id":"rank-bad-top-1","capability":"semantic_rank","input":{"query":"eggs'
+        ' near me","candidates":[{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}],"tone":"brief"}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -626,31 +632,35 @@ def test_semantic_rank_rejects_unknown_top_level_field() raises:
     assert_equal(result["request_id"].string_value(), "rank-bad-top-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("unexpected field")
-        >= 0
+        result["error"]["message"].string_value().find("unexpected field") >= 0
     )
 
 
 def test_semantic_rank_rejects_unknown_candidate_field() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-bad-candidate-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2,"rating":5}]}}'
+        '{"version":1,"request_id":"rank-bad-candidate-1","capability":"semantic_rank","input":{"query":"eggs'
+        ' near me","candidates":[{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2,"rating":5}]}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["request_id"].string_value(), "rank-bad-candidate-1"
-    )
+    assert_equal(result["request_id"].string_value(), "rank-bad-candidate-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("unexpected field")
-        >= 0
+        result["error"]["message"].string_value().find("unexpected field") >= 0
     )
 
 
 def test_semantic_rank_rejects_duplicate_candidate_ids() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-dup-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_dup","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_dup","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+        '{"version":1,"request_id":"rank-dup-1","capability":"semantic_rank","input":{"query":"eggs'
+        ' near me","candidates":[{"id":"lst_dup","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_dup","title":"Free'
+        ' range eggs","farm":"Santa'
+        ' Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -665,18 +675,18 @@ def test_semantic_rank_rejects_duplicate_candidate_ids() raises:
 
 def test_semantic_rank_rejects_invalid_delivery_value() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-bad-delivery-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"ship","distance_km":3.2,"freshness_minutes":2}]}}'
+        '{"version":1,"request_id":"rank-bad-delivery-1","capability":"semantic_rank","input":{"query":"eggs'
+        ' near me","candidates":[{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"ship","distance_km":3.2,"freshness_minutes":2}]}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["request_id"].string_value(), "rank-bad-delivery-1"
-    )
+    assert_equal(result["request_id"].string_value(), "rank-bad-delivery-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("must be one of")
-        >= 0
+        result["error"]["message"].string_value().find("must be one of") >= 0
     )
 
 
@@ -693,7 +703,11 @@ def test_explain_result_returns_deterministic_summary_and_provenance() raises:
 
 def test_explain_result_accepts_result_alias() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"explain-result-1","capability":"explain_result","input":{"query":"eggs near me with weekend pickup","result":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
+        '{"version":1,"request_id":"explain-result-1","capability":"explain_result","input":{"query":"eggs'
+        " near me with weekend"
+        ' pickup","result":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La'
+        " Huerta del"
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -710,58 +724,59 @@ def test_explain_result_accepts_result_alias() raises:
 
 def test_explain_result_rejects_unknown_top_level_field() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"explain-bad-top-1","capability":"explain_result","input":{"query":"eggs near me","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},"tone":"brief"}}'
+        '{"version":1,"request_id":"explain-bad-top-1","capability":"explain_result","input":{"query":"eggs'
+        ' near me","candidate":{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},"tone":"brief"}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["request_id"].string_value(), "explain-bad-top-1"
-    )
+    assert_equal(result["request_id"].string_value(), "explain-bad-top-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("unexpected field")
-        >= 0
+        result["error"]["message"].string_value().find("unexpected field") >= 0
     )
 
 
 def test_explain_result_rejects_unknown_candidate_field() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"explain-bad-candidate-1","capability":"explain_result","input":{"query":"eggs near me","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2,"rating":5}}}'
+        '{"version":1,"request_id":"explain-bad-candidate-1","capability":"explain_result","input":{"query":"eggs'
+        ' near me","candidate":{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2,"rating":5}}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["request_id"].string_value(), "explain-bad-candidate-1"
-    )
+    assert_equal(result["request_id"].string_value(), "explain-bad-candidate-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("unexpected field")
-        >= 0
+        result["error"]["message"].string_value().find("unexpected field") >= 0
     )
 
 
 def test_explain_result_rejects_invalid_delivery_value() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"explain-bad-delivery-1","capability":"explain_result","input":{"query":"eggs near me","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"ship","distance_km":3.2,"freshness_minutes":2}}}'
+        '{"version":1,"request_id":"explain-bad-delivery-1","capability":"explain_result","input":{"query":"eggs'
+        ' near me","candidate":{"id":"lst_7ak2","title":"Pasture'
+        ' eggs","farm":"La Huerta del'
+        ' Sur","delivery":"ship","distance_km":3.2,"freshness_minutes":2}}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["request_id"].string_value(), "explain-bad-delivery-1"
-    )
+    assert_equal(result["request_id"].string_value(), "explain-bad-delivery-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("must be one of")
-        >= 0
+        result["error"]["message"].string_value().find("must be one of") >= 0
     )
 
 
 def test_semantic_rank_invalid_input_returns_invalid_request() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-bad-1","trace_id":"trace-rank-bad-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[]}}'
+        '{"version":1,"request_id":"rank-bad-1","trace_id":"trace-rank-bad-1","capability":"semantic_rank","input":{"query":"eggs'
+        ' near me with weekend pickup","candidates":[]}}'
     )
 
     assert_equal(Int(result["version"].int_value()), 1)
@@ -782,19 +797,21 @@ def test_missing_input_returns_invalid_request() raises:
     assert_equal(Int(result["version"].int_value()), 1)
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["request_id"].string_value(), "missing-input-1")
-    assert_equal(
-        result["trace_id"].string_value(), "trace-missing-input-1"
-    )
+    assert_equal(result["trace_id"].string_value(), "trace-missing-input-1")
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
-        result["error"]["message"].string_value().find("field 'input' is required")
+        result["error"]["message"]
+        .string_value()
+        .find("field 'input' is required")
         >= 0
     )
 
 
 def test_assisted_request_returns_backend_unavailable() raises:
     var result = _dispatch(
-        load_scenario_request_json("scenarios/assisted_backend_unavailable.json")
+        load_scenario_request_json(
+            "scenarios/assisted_backend_unavailable.json"
+        )
     )
     assert_matches_scenario_response(
         result, "scenarios/assisted_backend_unavailable.json"
@@ -805,12 +822,8 @@ def test_invalid_request_preserves_request_and_trace_correlation() raises:
     var result = _dispatch(status_request_with_invalid_version_json())
 
     assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(
-        result["request_id"].string_value(), "status-fixture-1"
-    )
-    assert_equal(
-        result["trace_id"].string_value(), "trace-status-fixture-1"
-    )
+    assert_equal(result["request_id"].string_value(), "status-fixture-1")
+    assert_equal(result["trace_id"].string_value(), "trace-status-fixture-1")
     assert_equal(result["ok"].bool_value(), False)
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
@@ -819,25 +832,28 @@ def test_invalid_request_preserves_request_and_trace_correlation() raises:
 
 
 def test_internal_error_is_bounded_on_wire() raises:
-    var result = loads(
-        handle_request_line_with_control_builders[
-            _failing_status_output, build_capabilities_output
-        ](
-            '{"version":1,"request_id":"status-internal-1","trace_id":"trace-status-internal-1","capability":"sys.status","input":{}}'
-        )
-    )
+    with TemporaryDirectory() as temp_dir:
+        var diagnostics_dir = Path(temp_dir) / "hyf-internal-diagnostics"
+        with ScopedEnvVar(
+            _HYF_DIAGNOSTICS_DIR_ENV, diagnostics_dir.__fspath__()
+        ):
+            var result = loads(
+                handle_request_line_with_control_builders[
+                    _failing_status_output, build_capabilities_output
+                ](
+                    '{"version":1,"request_id":"status-internal-1","trace_id":"trace-status-internal-1","capability":"sys.status","input":{}}'
+                )
+            )
 
+            _assert_internal_error_is_bounded(result)
+
+
+def _assert_internal_error_is_bounded(result: Value) raises:
     assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(
-        result["request_id"].string_value(), "status-internal-1"
-    )
-    assert_equal(
-        result["trace_id"].string_value(), "trace-status-internal-1"
-    )
+    assert_equal(result["request_id"].string_value(), "status-internal-1")
+    assert_equal(result["trace_id"].string_value(), "trace-status-internal-1")
     assert_equal(result["ok"].bool_value(), False)
-    assert_equal(
-        result["error"]["code"].string_value(), "internal_error"
-    )
+    assert_equal(result["error"]["code"].string_value(), "internal_error")
     assert_equal(
         result["error"]["message"].string_value(),
         _EXPECTED_INTERNAL_ERROR_MESSAGE,

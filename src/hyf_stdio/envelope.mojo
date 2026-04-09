@@ -70,6 +70,16 @@ def _parse_optional_trace_id(json: Value) raises -> Optional[String]:
     return String(trace_id)
 
 
+def _require_input_value(json: Value) raises -> Value:
+    if not _has_key(json, "input"):
+        raise Error("request envelope field 'input' is required")
+
+    var input = json["input"]
+    if not input.is_object():
+        raise Error("request envelope field 'input' must be a JSON object")
+    return input.clone()
+
+
 @fieldwise_init
 struct WireRequest(Deserializable, Copyable, Movable):
     var version: Int
@@ -98,6 +108,7 @@ struct WireRequest(Deserializable, Copyable, Movable):
             context_json = json["context"].clone()
 
         var context = parse_request_context(context_json)
+        var input = _require_input_value(json)
 
         return Self(
             version=version,
@@ -105,7 +116,7 @@ struct WireRequest(Deserializable, Copyable, Movable):
             trace_id=trace_id^,
             capability=capability,
             context=context^,
-            input=json["input"].clone(),
+            input=input^,
         )
 
 

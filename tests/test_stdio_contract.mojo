@@ -131,6 +131,32 @@ def test_strict_semantic_rank_failure() raises:
     )
 
 
+def test_duplicate_candidate_ids_fail_explicitly() raises:
+    var response = run_hyf_stdio(
+        '{"version":1,"request_id":"rank-dup-proc-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_dup","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_dup","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+    )
+
+    assert_true(not response["ok"].bool_value())
+    assert_equal(response["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        response["error"]["message"].string_value().find("duplicate candidate id")
+        >= 0
+    )
+
+
+def test_missing_input_fails_explicitly() raises:
+    var response = run_hyf_stdio(
+        '{"version":1,"request_id":"missing-input-proc-1","capability":"query_rewrite"}'
+    )
+
+    assert_true(not response["ok"].bool_value())
+    assert_equal(response["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        response["error"]["message"].string_value().find("field 'input' is required")
+        >= 0
+    )
+
+
 def test_internal_error_is_bounded_on_wire() raises:
     var response = run_stdio_entrypoint(
         "tests/internal_error_stdio_main.mojo",

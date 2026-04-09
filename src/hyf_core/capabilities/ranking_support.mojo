@@ -120,8 +120,14 @@ def _parse_candidate(json: Value, context: String) raises -> SemanticCandidate:
         raise Error(context + " field 'farm' must not be empty")
 
     var delivery = get_string(json, "delivery")
-    if collapse_whitespace(delivery) == "":
+    var normalized_delivery = collapse_whitespace(delivery).lower()
+    if normalized_delivery == "":
         raise Error(context + " field 'delivery' must not be empty")
+    if normalized_delivery != "pickup" and normalized_delivery != "delivery":
+        raise Error(
+            context
+            + " field 'delivery' must be one of 'pickup' or 'delivery'"
+        )
 
     var distance_km = get_float(json, "distance_km")
     if distance_km < 0.0:
@@ -137,7 +143,7 @@ def _parse_candidate(json: Value, context: String) raises -> SemanticCandidate:
         id=collapse_whitespace(id),
         title=collapse_whitespace(title),
         farm=collapse_whitespace(farm),
-        delivery=collapse_whitespace(delivery).lower(),
+        delivery=normalized_delivery,
         distance_km=distance_km,
         freshness_minutes=freshness_minutes,
     )
@@ -219,10 +225,19 @@ def parse_candidate_array(
         )
 
     var candidates = List[SemanticCandidate]()
+    var seen_ids = List[String]()
     for item in candidates_value.array_items():
-        candidates.append(
-            _parse_candidate(item, capability_name + " candidate")
-        )
+        var candidate = _parse_candidate(item, capability_name + " candidate")
+        for seen_id in seen_ids:
+            if seen_id == candidate.id:
+                raise Error(
+                    capability_name
+                    + " input contains duplicate candidate id '"
+                    + candidate.id
+                    + "'"
+                )
+        seen_ids.append(String(candidate.id))
+        candidates.append(candidate^)
 
     if len(candidates) == 0:
         raise Error(

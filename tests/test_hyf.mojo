@@ -157,6 +157,18 @@ def test_decode_request_rejects_unexpected_field() raises:
         )
 
 
+def test_decode_request_requires_input_object() raises:
+    with assert_raises():
+        _ = decode_request(
+            '{"version":1,"request_id":"req-no-input-1","capability":"query_rewrite"}'
+        )
+
+    with assert_raises():
+        _ = decode_request(
+            '{"version":1,"request_id":"req-bad-input-1","capability":"query_rewrite","input":"eggs"}'
+        )
+
+
 def test_decode_request_rejects_unsupported_context_field() raises:
     with assert_raises():
         _ = decode_request(
@@ -492,6 +504,38 @@ def test_semantic_rank_rejects_unknown_candidate_field() raises:
     )
 
 
+def test_semantic_rank_rejects_duplicate_candidate_ids() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rank-dup-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_dup","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_dup","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(result["request_id"].string_value(), "rank-dup-1")
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("duplicate candidate id")
+        >= 0
+    )
+
+
+def test_semantic_rank_rejects_invalid_delivery_value() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"rank-bad-delivery-1","capability":"semantic_rank","input":{"query":"eggs near me","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"ship","distance_km":3.2,"freshness_minutes":2}]}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(
+        result["request_id"].string_value(), "rank-bad-delivery-1"
+    )
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("must be one of")
+        >= 0
+    )
+
+
 def test_explain_result_returns_deterministic_summary_and_provenance() raises:
     var result = _dispatch(
         load_scenario_request_json(
@@ -554,6 +598,23 @@ def test_explain_result_rejects_unknown_candidate_field() raises:
     )
 
 
+def test_explain_result_rejects_invalid_delivery_value() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"explain-bad-delivery-1","capability":"explain_result","input":{"query":"eggs near me","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"ship","distance_km":3.2,"freshness_minutes":2}}}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(
+        result["request_id"].string_value(), "explain-bad-delivery-1"
+    )
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("must be one of")
+        >= 0
+    )
+
+
 def test_semantic_rank_invalid_input_returns_invalid_request() raises:
     var result = _dispatch(
         '{"version":1,"request_id":"rank-bad-1","trace_id":"trace-rank-bad-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[]}}'
@@ -566,6 +627,24 @@ def test_semantic_rank_invalid_input_returns_invalid_request() raises:
     assert_equal(result["error"]["code"].string_value(), "invalid_request")
     assert_true(
         result["error"]["message"].string_value().find("must not be empty") >= 0
+    )
+
+
+def test_missing_input_returns_invalid_request() raises:
+    var result = _dispatch(
+        '{"version":1,"request_id":"missing-input-1","trace_id":"trace-missing-input-1","capability":"query_rewrite"}'
+    )
+
+    assert_equal(Int(result["version"].int_value()), 1)
+    assert_equal(result["ok"].bool_value(), False)
+    assert_equal(result["request_id"].string_value(), "missing-input-1")
+    assert_equal(
+        result["trace_id"].string_value(), "trace-missing-input-1"
+    )
+    assert_equal(result["error"]["code"].string_value(), "invalid_request")
+    assert_true(
+        result["error"]["message"].string_value().find("field 'input' is required")
+        >= 0
     )
 
 

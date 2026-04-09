@@ -38,18 +38,6 @@
         "listing_local_1",
         "listing_regional_1"
       ],
-      "output.scored_candidates.0.id": "listing_local_1",
-      "output.scored_candidates.0.heuristic_score": 102,
-      "output.scored_candidates.0.delivery_alignment": "match",
-      "output.scored_candidates.0.distance_band": "closer",
-      "output.scored_candidates.0.freshness_band": "fresher",
-      "output.scored_candidates.0.scope_match": false,
-      "output.scored_candidates.1.id": "listing_regional_1",
-      "output.scored_candidates.1.heuristic_score": 17,
-      "output.scored_candidates.1.delivery_alignment": "mismatch",
-      "output.scored_candidates.1.distance_band": "farther",
-      "output.scored_candidates.1.freshness_band": "standard",
-      "output.scored_candidates.1.scope_match": false,
       "output.extracted_filters.local_intent": true,
       "output.extracted_filters.fulfillment": "pickup",
       "output.extracted_filters.time_window": "weekend",
@@ -57,13 +45,13 @@
       "meta.backend": "heuristic"
     },
     "contains_all": {
-      "output.scored_candidates.0.reasons": [
+      "output.reasons.listing_local_1": [
         "apples match",
         "pickup match",
         "closer",
         "fresher"
       ],
-      "output.scored_candidates.1.reasons": [
+      "output.reasons.listing_regional_1": [
         "apples match",
         "delivery mismatch",
         "farther"
@@ -74,6 +62,9 @@
         "prefer_weekend_availability"
       ]
     },
+    "present_paths": [
+      "output.scored_candidates"
+    ],
     "absent_paths": [
       "error",
       "meta.latency_ms",

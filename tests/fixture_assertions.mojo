@@ -1,12 +1,12 @@
 from std.testing import assert_equal, assert_true
 
-from mojson import Value, dumps
+from mojson import Value, dumps, loads
 
-from fixture_loader import load_fixture_scenario
+from fixture_loader import load_fixture_scenario_field
 
 
 def load_scenario_request(relative_path: String) raises -> Value:
-    return load_fixture_scenario(relative_path)["request"].clone()
+    return load_fixture_scenario_field(relative_path, "request")
 
 
 def load_scenario_request_json(relative_path: String) raises -> String:
@@ -22,7 +22,7 @@ def status_request_with_invalid_version_json() raises -> String:
 def assert_matches_scenario_response(
     actual: Value, relative_path: String
 ) raises:
-    var expected = load_fixture_scenario(relative_path)["expected"]
+    var expected = load_fixture_scenario_field(relative_path, "expected")
 
     if _has_key(expected, "ok"):
         _assert_json_equal(actual["ok"], expected["ok"])
@@ -30,13 +30,16 @@ def assert_matches_scenario_response(
     if _has_key(expected, "equals"):
         var equals = expected["equals"]
         for path in equals.object_keys():
-            _assert_json_equal(_lookup_path(actual, path), equals[path])
+            _assert_json_equal(
+                _require_path(actual, path, "equals"), equals[path]
+            )
 
     if _has_key(expected, "contains_all"):
         var contains_all = expected["contains_all"]
         for path in contains_all.object_keys():
             _assert_contains_all(
-                _lookup_path(actual, path), contains_all[path]
+                _require_path(actual, path, "contains_all"),
+                contains_all[path],
             )
 
     if _has_key(expected, "present_paths"):
@@ -66,7 +69,30 @@ def assert_matches_scenario_response(
 
 
 def _lookup_path(value: Value, dotted_path: String) raises -> Value:
-    return value.at(_to_json_pointer(dotted_path))
+    var current = value.copy()
+    for token in dotted_path.split("."):
+        var token_string = String(token)
+        if current.is_array():
+            var items = current.array_items()
+            current = items[Int(token_string)].copy()
+        else:
+            current = loads(current.get(token_string))
+    return current^
+
+
+def _require_path(
+    value: Value, dotted_path: String, section: String
+) raises -> Value:
+    try:
+        return _lookup_path(value, dotted_path)
+    except:
+        raise Error(
+            "missing "
+            + section
+            + " path '"
+            + dotted_path
+            + "' in actual response"
+        )
 
 
 def _path_exists(value: Value, dotted_path: String) -> Bool:
@@ -77,13 +103,6 @@ def _path_exists(value: Value, dotted_path: String) -> Bool:
         return False
 
 
-def _to_json_pointer(dotted_path: String) -> String:
-    var pointer = String("")
-    for token in dotted_path.split("."):
-        pointer += "/" + token
-    return pointer^
-
-
 def _compact_json(value: Value) raises -> String:
     if value.is_null() or value.is_bool() or value.is_int() or value.is_float():
         return dumps(value)
@@ -91,29 +110,47 @@ def _compact_json(value: Value) raises -> String:
     if value.is_string():
         return dumps(Value(value.string_value()))
 
-    if value.is_array():
-        var items = value.array_items()
-        var json = String("[")
-        for i in range(len(items)):
-            if i > 0:
-                json += ","
-            json += _compact_json(items[i])
-        json += "]"
-        return json^
-
-    if value.is_object():
-        var json = String("{")
-        var keys = value.object_keys()
-        for i in range(len(keys)):
-            if i > 0:
-                json += ","
-            json += dumps(Value(keys[i]))
-            json += ":"
-            json += _compact_json(value[keys[i]])
-        json += "}"
-        return json^
+    if value.is_array() or value.is_object():
+        return _minify_json(value.raw_json())
 
     return dumps(value)
+
+
+def _minify_json(raw: String) -> String:
+    var result = String("")
+    var in_string = False
+    var escaped = False
+
+    for byte in raw.as_bytes():
+        if escaped:
+            result += chr(Int(byte))
+            escaped = False
+            continue
+
+        if in_string:
+            result += chr(Int(byte))
+            if byte == UInt8(ord("\\")):
+                escaped = True
+            elif byte == UInt8(ord('"')):
+                in_string = False
+            continue
+
+        if byte == UInt8(ord('"')):
+            in_string = True
+            result += chr(Int(byte))
+            continue
+
+        if (
+            byte == UInt8(ord(" "))
+            or byte == UInt8(ord("\n"))
+            or byte == UInt8(ord("\t"))
+            or byte == UInt8(ord("\r"))
+        ):
+            continue
+
+        result += chr(Int(byte))
+
+    return result^
 
 
 def _assert_contains_all(actual: Value, expected_subset: Value) raises:

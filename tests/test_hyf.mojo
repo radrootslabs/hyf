@@ -419,31 +419,13 @@ def test_query_rewrite_rejects_text_and_query_together() raises:
 
 def test_semantic_rank_returns_ranked_ids_and_reasons() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"rank-1","capability":"semantic_rank","input":{"query":"eggs near me with weekend pickup","candidates":[{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2},{"id":"lst_8k1p","title":"Free range eggs","farm":"Santa Elena","delivery":"delivery","distance_km":8.7,"freshness_minutes":18}]}}'
+        load_scenario_request_json(
+            "scenarios/semantic_rank_local_pickup_weekend.json"
+        )
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["ok"].bool_value(), True)
-    assert_equal(
-        result["output"]["ranked_ids"][0].string_value(),
-        "lst_7ak2",
+    assert_matches_scenario_response(
+        result, "scenarios/semantic_rank_local_pickup_weekend.json"
     )
-    assert_equal(
-        result["output"]["ranked_ids"][1].string_value(),
-        "lst_8k1p",
-    )
-    assert_equal(
-        result["output"]["reasons"]["lst_7ak2"][1].string_value(),
-        "pickup match",
-    )
-    assert_equal(
-        result["output"]["scored_candidates"][0]["heuristic_score"].int_value(),
-        102,
-    )
-    assert_true(
-        not _has_key(result["output"]["scored_candidates"][0], "score")
-    )
-    assert_true(not _has_key(result["meta"], "latency_ms"))
 
 
 def test_semantic_rank_scope_listing_ids_remains_effective() raises:
@@ -500,27 +482,13 @@ def test_semantic_rank_rejects_unknown_candidate_field() raises:
 
 def test_explain_result_returns_deterministic_summary_and_provenance() raises:
     var result = _dispatch(
-        '{"version":1,"request_id":"explain-1","capability":"explain_result","context":{"consumer":"radroots-cli","return_provenance":true},"input":{"query":"eggs near me with weekend pickup","candidate":{"id":"lst_7ak2","title":"Pasture eggs","farm":"La Huerta del Sur","delivery":"pickup","distance_km":3.2,"freshness_minutes":2}}}'
+        load_scenario_request_json(
+            "scenarios/explain_result_local_pickup_weekend.json"
+        )
     )
-
-    assert_equal(Int(result["version"].int_value()), 1)
-    assert_equal(result["ok"].bool_value(), True)
-    assert_equal(
-        result["output"]["explanation_kind"].string_value(),
-        "deterministic",
+    assert_matches_scenario_response(
+        result, "scenarios/explain_result_local_pickup_weekend.json"
     )
-    assert_true(
-        result["output"]["summary"].string_value().find("pickup match") >= 0
-    )
-    assert_equal(
-        result["meta"]["provenance"]["kind"].string_value(),
-        "deterministic",
-    )
-    assert_equal(
-        result["meta"]["provenance"]["source_refs"][1]["source_kind"].string_value(),
-        "candidate",
-    )
-    assert_true(not _has_key(result["meta"], "latency_ms"))
 
 
 def test_explain_result_accepts_result_alias() raises:

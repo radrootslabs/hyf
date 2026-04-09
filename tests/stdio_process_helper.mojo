@@ -1,7 +1,7 @@
 import std.os
 from std.os import Pipe, Process
 from std.ffi import CStringSlice, c_int, external_call
-from std.sys._libc import close, exit, vfork
+from std.sys._libc import close
 from std.tempfile import TemporaryDirectory
 
 from mojson import Value, loads
@@ -35,6 +35,16 @@ struct ScopedEnvVar:
 
 def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
     return external_call["dup2", c_int](oldfd, newfd)
+
+
+@always_inline
+def _fork() -> c_int:
+    return external_call["fork", c_int]()
+
+
+@always_inline
+def _exit_child(code: c_int):
+    _ = external_call["_exit", c_int](code)
 
 
 def _read_pipe_to_string(mut pipe: Pipe) raises -> String:
@@ -97,24 +107,28 @@ def run_stdio_entrypoint_with_2_args(
             process_arg1.as_c_string_slice()
         )
 
-    var pid = vfork()
+    var stdin_read_fd = c_int(stdin_pipe.fd_in.value().value)
+    var stdin_write_fd = c_int(stdin_pipe.fd_out.value().value)
+    var stdout_read_fd = c_int(stdout_pipe.fd_in.value().value)
+    var stdout_write_fd = c_int(stdout_pipe.fd_out.value().value)
+    var command_ptr = command.as_c_string_slice().unsafe_ptr()
+    var argv_ptr = argv.unsafe_ptr()
+
+    var pid = _fork()
     if pid < 0:
         raise Error("failed to spawn hyf process test child")
 
     if pid == 0:
-        if _dup2(c_int(stdin_pipe.fd_in.value().value), 0) < 0:
-            exit(126)
-        if _dup2(c_int(stdout_pipe.fd_out.value().value), 1) < 0:
-            exit(126)
-        _ = close(c_int(stdin_pipe.fd_in.value().value))
-        _ = close(c_int(stdin_pipe.fd_out.value().value))
-        _ = close(c_int(stdout_pipe.fd_in.value().value))
-        _ = close(c_int(stdout_pipe.fd_out.value().value))
-        _ = external_call["execvp", c_int](
-            command.as_c_string_slice().unsafe_ptr(),
-            argv.unsafe_ptr(),
-        )
-        exit(127)
+        if _dup2(stdin_read_fd, 0) < 0:
+            _exit_child(c_int(126))
+        if _dup2(stdout_write_fd, 1) < 0:
+            _exit_child(c_int(126))
+        _ = close(stdin_read_fd)
+        _ = close(stdin_write_fd)
+        _ = close(stdout_read_fd)
+        _ = close(stdout_write_fd)
+        _ = external_call["execvp", c_int](command_ptr, argv_ptr)
+        _exit_child(c_int(127))
 
     stdin_pipe.set_output_only()
     stdout_pipe.set_input_only()

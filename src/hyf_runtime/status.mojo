@@ -1,5 +1,15 @@
 from mojson import Value, loads
 
+from hyf_runtime.secrets import (
+    default_secret_backend_name,
+    identity_material_created_by_startup,
+    identity_material_loaded,
+    protected_local_data_dir_for_runtime_paths,
+    protected_local_data_status_name,
+    protected_local_data_store_open,
+    secret_storage_backend_implemented,
+    secret_storage_status_name,
+)
 from hyf_runtime.startup import RuntimeStartupContext
 
 
@@ -37,9 +47,45 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
     config.set("compiled_defaults_active", Value(True))
     status.set("config", config)
 
-    var secret_storage = loads("{}")
-    secret_storage.set("default_backend", Value("local_file"))
-    secret_storage.set("secret_values_reported", Value(False))
-    status.set("secret_storage", secret_storage)
+    status.set("secret_storage", _secret_storage_status_value(context))
+    status.set(
+        "protected_local_data", _protected_local_data_status_value(context)
+    )
 
     return status^
+
+
+def _secret_storage_status_value(
+    context: RuntimeStartupContext,
+) raises -> Value:
+    var secret_storage = loads("{}")
+    secret_storage.set("default_backend", Value(default_secret_backend_name()))
+    secret_storage.set("status", Value(secret_storage_status_name()))
+    secret_storage.set(
+        "backend_implemented", Value(secret_storage_backend_implemented())
+    )
+    secret_storage.set(
+        "identity_path", Value(String(context.paths.identity_path))
+    )
+    secret_storage.set(
+        "identity_material_loaded", Value(identity_material_loaded())
+    )
+    secret_storage.set(
+        "identity_material_created_by_startup",
+        Value(identity_material_created_by_startup()),
+    )
+    secret_storage.set("secret_values_reported", Value(False))
+    return secret_storage^
+
+
+def _protected_local_data_status_value(
+    context: RuntimeStartupContext,
+) raises -> Value:
+    var protected_data = loads("{}")
+    protected_data.set("status", Value(protected_local_data_status_name()))
+    protected_data.set(
+        "default_dir",
+        Value(protected_local_data_dir_for_runtime_paths(context.paths)),
+    )
+    protected_data.set("store_open", Value(protected_local_data_store_open()))
+    return protected_data^

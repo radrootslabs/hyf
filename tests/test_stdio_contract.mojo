@@ -104,13 +104,79 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     response["output"]["runtime"]["secret_storage"][
                         "default_backend"
                     ].string_value(),
-                    "local_file",
+                    "encrypted_file",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "status"
+                    ].string_value(),
+                    "reserved_pending_shared_secret_storage",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_path"
+                    ].string_value(),
+                    temp_dir + "/secrets/services/hyf/identity.secret.json",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "backend_implemented"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_material_loaded"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["secret_storage"][
+                        "identity_material_created_by_startup"
+                    ].bool_value(),
+                    False,
                 )
                 assert_equal(
                     response["output"]["runtime"]["secret_storage"][
                         "secret_values_reported"
                     ].bool_value(),
                     False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "status"
+                    ].string_value(),
+                    "reserved_pending_protected_store",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "default_dir"
+                    ].string_value(),
+                    temp_dir + "/data/services/hyf/protected",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["protected_local_data"][
+                        "store_open"
+                    ].bool_value(),
+                    False,
+                )
+                assert_true(
+                    not exists(
+                        Path(temp_dir)
+                        / "secrets"
+                        / "services"
+                        / "hyf"
+                        / "identity.secret.json"
+                    )
+                )
+                assert_true(
+                    not exists(
+                        Path(temp_dir)
+                        / "data"
+                        / "services"
+                        / "hyf"
+                        / "protected"
+                    )
                 )
 
 

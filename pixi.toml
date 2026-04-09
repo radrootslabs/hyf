@@ -19,5 +19,11 @@ mojson = { path = "../../../../vendor/mojo/mojson" }
 run = "mojo run src/main.mojo"
 test-unit = "mojo -I src tests/test_hyf.mojo"
 test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
+test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
 test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
+test-runtime-contract = { depends-on = [
+  "test-runtime",
+  "test-repo-local-process",
+  "test-stdio",
+] }
 test = { depends-on = ["test-unit", "test-runtime", "test-stdio"] }

@@ -320,6 +320,11 @@ def test_internal_error_records_detail_in_canonical_runtime_diagnostics_dir() ra
                     )
                     >= 0
                 )
+                assert_true(
+                    (diagnostics_dir / entries[0])
+                    .__fspath__()
+                    .startswith(temp_dir + "/logs/services/hyf/diagnostics/")
+                )
 
 
 def main() raises:

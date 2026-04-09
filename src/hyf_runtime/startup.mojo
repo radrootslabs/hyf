@@ -8,6 +8,7 @@ from hyf_runtime.env import (
 )
 from hyf_runtime.errors import raise_runtime_contract_error
 from hyf_runtime.paths import RuntimePaths, hyf_runtime_paths_for_unix_profile
+from hyf_runtime.profile import repo_local_profile
 
 
 @fieldwise_init
@@ -135,6 +136,8 @@ def resolve_startup_context(
     if overrides.startup_config_path != "":
         startup_config_path = String(overrides.startup_config_path)
         startup_config_path_source = String("startup_flag")
+    if profile != repo_local_profile():
+        repo_local_base_root = String("")
 
     return RuntimeStartupContext(
         paths_profile=profile,

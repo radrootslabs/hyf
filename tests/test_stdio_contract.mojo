@@ -22,6 +22,7 @@ from stdio_process_helper import (
 comptime _EXPECTED_INTERNAL_ERROR_MESSAGE = (
     "internal hyf daemon error; inspect local diagnostics"
 )
+comptime _HYF_DIAGNOSTICS_DIR_ENV = "HYF_DIAGNOSTICS_DIR"
 
 
 def _has_key(value: Value, key: String) -> Bool:
@@ -101,6 +102,24 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     temp_dir + "/logs/services/hyf/diagnostics",
                 )
                 assert_equal(
+                    response["output"]["runtime"]["diagnostics"][
+                        "canonical_dir"
+                    ].string_value(),
+                    temp_dir + "/logs/services/hyf/diagnostics",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["diagnostics"][
+                        "effective_dir"
+                    ].string_value(),
+                    temp_dir + "/logs/services/hyf/diagnostics",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["diagnostics"][
+                        "debug_override_active"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
                     response["output"]["runtime"]["secret_storage"][
                         "default_backend"
                     ].string_value(),
@@ -178,6 +197,77 @@ def test_status_reports_repo_local_runtime_truth() raises:
                         / "protected"
                     )
                 )
+
+
+def test_status_clears_repo_local_root_outside_repo_local_profile() raises:
+    with TemporaryDirectory() as temp_dir:
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "interactive_user"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                )
+
+                assert_equal(
+                    response["output"]["runtime"][
+                        "paths_profile"
+                    ].string_value(),
+                    "interactive_user",
+                )
+                assert_equal(
+                    response["output"]["runtime"][
+                        "repo_local_base_root"
+                    ].string_value(),
+                    "",
+                )
+                assert_true(
+                    response["output"]["runtime"]["paths"][
+                        "config_path"
+                    ].string_value().find(temp_dir)
+                    < 0
+                )
+
+
+def test_status_reports_effective_diagnostics_override_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var diagnostics_override_dir = (
+            Path(temp_dir) / "debug-diagnostics-override"
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                with ScopedEnvVar(
+                    _HYF_DIAGNOSTICS_DIR_ENV,
+                    diagnostics_override_dir.__fspath__(),
+                ):
+                    var response = run_stdio_entrypoint(
+                        "src/main.mojo",
+                        load_scenario_request_json("scenarios/status_ok.json"),
+                    )
+
+                    assert_equal(
+                        response["output"]["runtime"]["paths"][
+                            "diagnostics_dir"
+                        ].string_value(),
+                        temp_dir + "/logs/services/hyf/diagnostics",
+                    )
+                    assert_equal(
+                        response["output"]["runtime"]["diagnostics"][
+                            "canonical_dir"
+                        ].string_value(),
+                        temp_dir + "/logs/services/hyf/diagnostics",
+                    )
+                    assert_equal(
+                        response["output"]["runtime"]["diagnostics"][
+                            "effective_dir"
+                        ].string_value(),
+                        diagnostics_override_dir.__fspath__(),
+                    )
+                    assert_equal(
+                        response["output"]["runtime"]["diagnostics"][
+                            "debug_override_active"
+                        ].bool_value(),
+                        True,
+                    )
 
 
 def test_capabilities_success() raises:

@@ -1,5 +1,9 @@
 from mojson import Value, loads
 
+from hyf_runtime.diagnostics import (
+    diagnostics_debug_override_dir_from_env,
+    effective_diagnostics_dir_for_runtime_paths,
+)
 from hyf_runtime.secrets import (
     default_secret_backend_name,
     identity_material_created_by_startup,
@@ -47,6 +51,7 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
     config.set("compiled_defaults_active", Value(True))
     status.set("config", config)
 
+    status.set("diagnostics", _diagnostics_status_value(context))
     status.set("secret_storage", _secret_storage_status_value(context))
     status.set(
         "protected_local_data", _protected_local_data_status_value(context)
@@ -76,6 +81,20 @@ def _secret_storage_status_value(
     )
     secret_storage.set("secret_values_reported", Value(False))
     return secret_storage^
+
+
+def _diagnostics_status_value(context: RuntimeStartupContext) raises -> Value:
+    var diagnostics = loads("{}")
+    var debug_override_dir = diagnostics_debug_override_dir_from_env()
+    diagnostics.set(
+        "canonical_dir", Value(String(context.paths.diagnostics_dir))
+    )
+    diagnostics.set(
+        "effective_dir",
+        Value(effective_diagnostics_dir_for_runtime_paths(context.paths)),
+    )
+    diagnostics.set("debug_override_active", Value(debug_override_dir != ""))
+    return diagnostics^
 
 
 def _protected_local_data_status_value(

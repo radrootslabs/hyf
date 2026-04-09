@@ -144,6 +144,24 @@ def test_startup_context_cli_flags_override_env() raises:
     )
 
 
+def test_startup_context_clears_inactive_repo_local_root() raises:
+    var context = resolve_startup_context(
+        RuntimeStartupInput(
+            env_paths_profile="interactive_user",
+            env_repo_local_base_root="/tmp/hyf-runtime",
+            user_home="/home/hyf-test",
+            argv=_startup_argv2("--repo-local-root", "/tmp/hyf-override"),
+        )
+    )
+
+    assert_equal(context.paths_profile, "interactive_user")
+    assert_equal(context.repo_local_base_root, "")
+    assert_equal(
+        context.paths.config_path,
+        "/home/hyf-test/.radroots/config/services/hyf/config.toml",
+    )
+
+
 def test_startup_context_config_flag_overrides_config_artifact_only() raises:
     var context = resolve_startup_context(
         RuntimeStartupInput(

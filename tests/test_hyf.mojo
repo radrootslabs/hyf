@@ -26,6 +26,7 @@ from hyf_core.backends.selector import (
     execute_capability as execute_core_capability,
     resolve_backend,
 )
+from hyf_core.capabilities.registry import canonical_business_capabilities
 from hyf_core.metadata import current_build_identity, current_package_surface
 from hyf_core.request_context import default_request_context
 from hyf_stdio.control.capabilities import build_capabilities_output
@@ -68,6 +69,35 @@ struct ScopedEnvVar:
 
 def _dispatch(line: String) raises -> Value:
     return loads(handle_request_line(line))
+
+
+def _capability_output_entry_by_id(
+    output: Value, capability_id: String
+) raises -> Value:
+    for entry in output["business_capabilities"].array_items():
+        if entry["id"].string_value() == capability_id:
+            return entry.clone()
+    raise Error("missing business capability entry '" + capability_id + "'")
+
+
+def _sample_request_json_for_callable_capability(
+    capability_id: String,
+) raises -> String:
+    if capability_id == "query_rewrite":
+        return load_scenario_request_json(
+            "scenarios/query_rewrite_local_pickup_weekend.json"
+        )
+    if capability_id == "semantic_rank":
+        return load_scenario_request_json(
+            "scenarios/semantic_rank_local_pickup_weekend.json"
+        )
+    if capability_id == "explain_result":
+        return load_scenario_request_json(
+            "scenarios/explain_result_local_pickup_weekend.json"
+        )
+    raise Error(
+        "missing sample request for callable capability '" + capability_id + "'"
+    )
 
 
 def _failing_status_output() raises -> Value:
@@ -337,6 +367,40 @@ def test_capabilities_report_implemented_and_disabled_states() raises:
     assert_matches_scenario_response(result, "scenarios/capabilities_ok.json")
 
 
+def test_capabilities_output_reflects_registry_truth_for_all_business_capabilities() raises:
+    var output = build_capabilities_output()
+    for capability in canonical_business_capabilities():
+        var entry = _capability_output_entry_by_id(output, capability.id)
+        assert_equal(entry["id"].string_value(), capability.id)
+        assert_equal(entry["implemented"].bool_value(), capability.implemented)
+        assert_equal(entry["callable"].bool_value(), capability.callable)
+        assert_equal(
+            entry["assisted_backend_available"].bool_value(),
+            capability.assisted_available,
+        )
+        assert_equal(
+            entry["deterministic_execution"].string_value(),
+            "enabled" if capability.deterministic_enabled else "disabled",
+        )
+        assert_equal(
+            entry["implementation_status"].string_value(),
+            "implemented"
+            if capability.implemented
+            else (
+                "not_implemented"
+                if capability.deterministic_enabled
+                else "disabled"
+            ),
+        )
+        if capability.disabled_reason != "":
+            assert_equal(
+                entry["disabled_reason"].string_value(),
+                capability.disabled_reason,
+            )
+        else:
+            assert_true(not _has_key(entry, "disabled_reason"))
+
+
 def test_disabled_capability_returns_capability_disabled() raises:
     var result = _dispatch(
         load_scenario_request_json("scenarios/deferred_capability_disabled.json")
@@ -344,6 +408,39 @@ def test_disabled_capability_returns_capability_disabled() raises:
     assert_matches_scenario_response(
         result, "scenarios/deferred_capability_disabled.json"
     )
+
+
+def test_all_callable_registry_business_capabilities_are_dispatchable() raises:
+    for capability in canonical_business_capabilities():
+        if not capability.callable:
+            continue
+        var result = _dispatch(
+            _sample_request_json_for_callable_capability(capability.id)
+        )
+        assert_equal(Int(result["version"].int_value()), 1)
+        assert_equal(result["ok"].bool_value(), True)
+
+
+def test_non_callable_registry_business_capabilities_do_not_route_as_success() raises:
+    for capability in canonical_business_capabilities():
+        if capability.callable:
+            continue
+        var result = _dispatch(
+            '{"version":1,"request_id":"'
+            + capability.id
+            + '-routing-1","capability":"'
+            + capability.id
+            + '","input":{}}'
+        )
+        assert_equal(Int(result["version"].int_value()), 1)
+        assert_equal(result["request_id"].string_value(), capability.id + "-routing-1")
+        assert_equal(result["ok"].bool_value(), False)
+        assert_equal(
+            result["error"]["code"].string_value(),
+            "capability_disabled"
+            if not capability.deterministic_enabled
+            else "capability_unavailable",
+        )
 
 
 def test_backend_selector_routes_deterministic_wave() raises:

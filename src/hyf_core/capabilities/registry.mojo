@@ -1,4 +1,16 @@
-from std.collections import List
+from std.collections import List, Optional
+
+from mojson import Value
+
+from hyf_core.capabilities.explain_result import execute_explain_result
+from hyf_core.capabilities.query_rewrite import execute_query_rewrite
+from hyf_core.capabilities.semantic_rank import execute_semantic_rank
+from hyf_core.errors import (
+    CapabilityResult,
+    capability_not_implemented_error,
+    failed_capability,
+)
+from hyf_core.request_context import RequestContext
 
 
 @fieldwise_init
@@ -7,6 +19,7 @@ struct BusinessCapabilityDescriptor(Copyable, Movable):
     var deterministic_enabled: Bool
     var implemented: Bool
     var callable: Bool
+    var deterministic_backend: String
     var assisted_available: Bool
     var disabled_reason: String
 
@@ -19,6 +32,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=True,
             implemented=True,
             callable=True,
+            deterministic_backend="heuristic",
             assisted_available=False,
             disabled_reason="",
         )
@@ -29,6 +43,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=False,
             implemented=False,
             callable=False,
+            deterministic_backend="",
             assisted_available=False,
             disabled_reason="deferred_bootstrap_capability",
         )
@@ -39,6 +54,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=True,
             implemented=True,
             callable=True,
+            deterministic_backend="heuristic",
             assisted_available=False,
             disabled_reason="",
         )
@@ -49,6 +65,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=False,
             implemented=False,
             callable=False,
+            deterministic_backend="",
             assisted_available=False,
             disabled_reason="deferred_bootstrap_capability",
         )
@@ -59,6 +76,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=False,
             implemented=False,
             callable=False,
+            deterministic_backend="",
             assisted_available=False,
             disabled_reason="deferred_bootstrap_capability",
         )
@@ -69,6 +87,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=False,
             implemented=False,
             callable=False,
+            deterministic_backend="",
             assisted_available=False,
             disabled_reason="deferred_bootstrap_capability",
         )
@@ -79,6 +98,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=True,
             implemented=True,
             callable=True,
+            deterministic_backend="heuristic",
             assisted_available=False,
             disabled_reason="",
         )
@@ -89,6 +109,7 @@ def canonical_business_capabilities() -> List[BusinessCapabilityDescriptor]:
             deterministic_enabled=False,
             implemented=False,
             callable=False,
+            deterministic_backend="",
             assisted_available=False,
             disabled_reason="deferred_bootstrap_capability",
         )
@@ -130,15 +151,45 @@ def deferred_capabilities() -> List[String]:
     return disabled^
 
 
-def is_known_business_capability(capability_id: String) -> Bool:
+def canonical_business_capability(
+    capability_id: String,
+) -> Optional[BusinessCapabilityDescriptor]:
     for capability in canonical_business_capabilities():
         if capability.id == capability_id:
-            return True
-    return False
+            return Optional[BusinessCapabilityDescriptor](capability.copy())
+    return Optional[BusinessCapabilityDescriptor](None)
 
 
-def is_deferred_capability(capability_id: String) -> Bool:
-    for capability in canonical_business_capabilities():
-        if capability.id == capability_id:
-            return not capability.deterministic_enabled
-    return False
+def _dispatch_heuristic_registered_business_capability(
+    capability_id: String, input: Value, context: RequestContext
+) raises -> CapabilityResult:
+    if capability_id == "query_rewrite":
+        return execute_query_rewrite(input, context)
+    if capability_id == "semantic_rank":
+        return execute_semantic_rank(input, context)
+    if capability_id == "explain_result":
+        return execute_explain_result(input, context)
+    return failed_capability(capability_not_implemented_error(capability_id))
+
+
+def execute_registered_business_capability(
+    capability_id: String, input: Value, context: RequestContext
+) raises -> CapabilityResult:
+    var capability = canonical_business_capability(capability_id)
+    if not capability:
+        return failed_capability(capability_not_implemented_error(capability_id))
+
+    var descriptor = capability.value().copy()
+    if (
+        not descriptor.deterministic_enabled
+        or not descriptor.implemented
+        or not descriptor.callable
+    ):
+        return failed_capability(capability_not_implemented_error(capability_id))
+
+    if descriptor.deterministic_backend == "heuristic":
+        return _dispatch_heuristic_registered_business_capability(
+            capability_id, input, context
+        )
+
+    return failed_capability(capability_not_implemented_error(capability_id))

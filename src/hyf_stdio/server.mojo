@@ -6,8 +6,7 @@ from mojson import Value
 
 from hyf_core.backends.selector import execute_capability as execute_backend_capability
 from hyf_core.capabilities.registry import (
-    is_deferred_capability,
-    is_known_business_capability,
+    canonical_business_capability,
 )
 from hyf_core.errors import CapabilityFailure, CapabilityResult, CapabilitySuccess
 from hyf_core.metadata import hyf_protocol_version
@@ -164,6 +163,23 @@ def _dispatch_business_capability(
     return _dispatch_capability_result(request_id, request.trace_id, result)
 
 
+def _route_business_capability(
+    request: WireRequest, request_id: String
+) raises -> String:
+    var capability = canonical_business_capability(request.capability)
+    if not capability:
+        return encode_error(_unsupported_response(request))
+
+    var descriptor = capability.value().copy()
+    if not descriptor.deterministic_enabled:
+        return encode_error(_disabled_response(request))
+
+    if descriptor.implemented and descriptor.callable:
+        return _dispatch_business_capability(request, request_id)
+
+    return encode_error(_unavailable_response(request))
+
+
 @parameter
 def handle_request_with_control_builders[
     status_builder: def() raises -> Value,
@@ -192,17 +208,7 @@ def handle_request_with_control_builders[
                     meta=None,
                 )
             )
-        elif (
-            request.capability == "query_rewrite"
-            or request.capability == "semantic_rank"
-            or request.capability == "explain_result"
-        ):
-            return _dispatch_business_capability(request.copy(), request_id)
-        elif is_deferred_capability(request.capability):
-            return encode_error(_disabled_response(request))
-        elif is_known_business_capability(request.capability):
-            return encode_error(_unavailable_response(request))
-        return encode_error(_unsupported_response(request))
+        return _route_business_capability(request.copy(), request_id)
     except e:
         _emit_internal_diagnostic(
             request_id,

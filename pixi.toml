@@ -26,4 +26,4 @@ test-runtime-contract = { depends-on = [
   "test-repo-local-process",
   "test-stdio",
 ] }
-test = { depends-on = ["test-unit", "test-runtime", "test-stdio"] }
+test = { depends-on = ["test-unit", "test-runtime-contract"] }

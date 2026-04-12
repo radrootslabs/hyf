@@ -6,6 +6,7 @@ from hyf_runtime.env import (
     configured_repo_local_root_from_env,
     configured_user_home_from_env,
 )
+from hyf_runtime.config import HyfLoadedRuntimeConfig, load_runtime_config
 from hyf_runtime.errors import raise_runtime_contract_error
 from hyf_runtime.paths import RuntimePaths, hyf_runtime_paths_for_unix_profile
 from hyf_runtime.profile import repo_local_profile
@@ -18,6 +19,7 @@ struct RuntimeStartupContext(Copyable, Movable):
     var user_home: String
     var startup_config_path: String
     var startup_config_path_source: String
+    var config: HyfLoadedRuntimeConfig
     var paths: RuntimePaths
 
 
@@ -138,6 +140,7 @@ def resolve_startup_context(
         startup_config_path_source = String("startup_flag")
     if profile != repo_local_profile():
         repo_local_base_root = String("")
+    var config = load_runtime_config(startup_config_path)
 
     return RuntimeStartupContext(
         paths_profile=profile,
@@ -145,6 +148,7 @@ def resolve_startup_context(
         user_home=String(input.user_home),
         startup_config_path=startup_config_path,
         startup_config_path_source=startup_config_path_source,
+        config=config^,
         paths=paths^,
     )
 

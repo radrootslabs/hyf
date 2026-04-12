@@ -32,7 +32,7 @@
       "output.enabled_execution_modes.deterministic": true,
       "output.enabled_execution_modes.assisted": false,
       "output.execution_mode_request_behavior.deterministic": "execute",
-      "output.execution_mode_request_behavior.assisted": "backend_unavailable",
+      "output.execution_mode_request_behavior.assisted": "disabled_by_runtime_config",
       "output.backend_reachability.deterministic_backend": "available",
       "output.backend_reachability.assisted_backend": "unavailable",
       "output.counts.canonical_business_capabilities": 8,

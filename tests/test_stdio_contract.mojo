@@ -91,9 +91,33 @@ def test_status_reports_repo_local_runtime_truth() raises:
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"][
+                        "artifact_present"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "load_state"
+                    ].string_value(),
+                    "not_found",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
                         "compiled_defaults_active"
                     ].bool_value(),
                     True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "default_execution_mode"
+                    ].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "allow_assisted"
+                    ].bool_value(),
+                    False,
                 )
                 assert_equal(
                     response["output"]["runtime"]["paths"][
@@ -214,6 +238,170 @@ def test_status_reports_repo_local_runtime_truth() raises:
                         / "hyf"
                         / "protected"
                     )
+                )
+
+
+def test_status_loads_valid_runtime_config_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["enabled_execution_modes"][
+                        "assisted"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["execution_mode_request_behavior"][
+                        "assisted"
+                    ].string_value(),
+                    "backend_unavailable",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "artifact_present"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "loaded"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "load_state"
+                    ].string_value(),
+                    "loaded",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "compiled_defaults_active"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "service_transport"
+                    ].string_value(),
+                    "stdio",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "default_execution_mode"
+                    ].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "allow_assisted"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "assist_bridge_enabled"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "assist_bridge_configured"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "assist_endpoint"
+                    ].string_value(),
+                    "hyf-assistd://local",
+                )
+                assert_true(
+                    not _has_key(
+                        response["output"]["runtime"]["config"],
+                        "load_error",
+                    )
+                )
+
+
+def test_status_reports_invalid_runtime_config_without_crashing() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "invalid-hyf-config.toml"
+        startup_config_path.write_text(
+            '[runtime]\ndefault_execution_mode = "assisted"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["enabled_execution_modes"][
+                        "assisted"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["execution_mode_request_behavior"][
+                        "assisted"
+                    ].string_value(),
+                    "disabled_by_runtime_config",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "artifact_present"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "loaded"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "load_state"
+                    ].string_value(),
+                    "invalid",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"][
+                        "compiled_defaults_active"
+                    ].bool_value(),
+                    True,
+                )
+                assert_true(
+                    response["output"]["runtime"]["config"]["load_error"]
+                    .string_value()
+                    .find("default_execution_mode")
+                    >= 0
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "allow_assisted"
+                    ].bool_value(),
+                    False,
                 )
 
 

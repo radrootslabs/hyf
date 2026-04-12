@@ -10,6 +10,7 @@ from hyf_core.capabilities.registry import (
     implemented_deterministic_capability_count,
 )
 from hyf_core.metadata import current_build_identity
+from hyf_runtime.config import assisted_execution_enabled
 from hyf_runtime.startup import (
     RuntimeStartupContext,
     resolve_startup_context_from_process,
@@ -62,6 +63,7 @@ def build_status_output_with_runtime_context(
 ) raises -> Value:
     var output = loads("{}")
     var build_identity = _build_identity_value()
+    var assisted_enabled = assisted_execution_enabled(runtime_context.config)
     output.set("build_identity", build_identity.copy())
     output.set("daemon", build_identity["daemon_name"].clone())
     output.set("transport", build_identity["transport"].clone())
@@ -77,13 +79,16 @@ def build_status_output_with_runtime_context(
 
     var execution_modes = loads("{}")
     execution_modes.set("deterministic", Value(True))
-    execution_modes.set("assisted", Value(False))
+    execution_modes.set("assisted", Value(assisted_enabled))
     output.set("enabled_execution_modes", execution_modes)
 
     var execution_mode_request_behavior = loads("{}")
     execution_mode_request_behavior.set("deterministic", Value("execute"))
     execution_mode_request_behavior.set(
-        "assisted", Value("backend_unavailable")
+        "assisted",
+        Value("backend_unavailable")
+        if assisted_enabled
+        else Value("disabled_by_runtime_config"),
     )
     output.set(
         "execution_mode_request_behavior",

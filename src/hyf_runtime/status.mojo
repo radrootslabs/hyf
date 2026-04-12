@@ -1,5 +1,6 @@
 from mojson import Value, loads
 
+from hyf_runtime.config import assist_bridge_configured
 from hyf_runtime.diagnostics import (
     diagnostics_debug_override_dir_from_env,
     effective_diagnostics_dir_for_runtime_paths,
@@ -50,8 +51,46 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
         "artifact_path_source",
         Value(String(context.startup_config_path_source)),
     )
-    config.set("loaded", Value(False))
-    config.set("compiled_defaults_active", Value(True))
+    config.set("artifact_present", Value(context.config.artifact_present))
+    config.set("loaded", Value(context.config.loaded))
+    config.set("load_state", Value(String(context.config.load_state)))
+    config.set(
+        "compiled_defaults_active",
+        Value(context.config.compiled_defaults_active),
+    )
+    if context.config.load_error != "":
+        config.set("load_error", Value(String(context.config.load_error)))
+
+    var effective = loads("{}")
+    effective.set(
+        "service_transport",
+        Value(String(context.config.effective.service.transport)),
+    )
+    effective.set(
+        "default_execution_mode",
+        Value(String(context.config.effective.runtime.default_execution_mode)),
+    )
+    effective.set(
+        "allow_assisted",
+        Value(context.config.effective.runtime.allow_assisted),
+    )
+    effective.set(
+        "assist_bridge_enabled",
+        Value(context.config.effective.assist.bridge_enabled),
+    )
+    effective.set(
+        "assist_bridge_configured",
+        Value(assist_bridge_configured(context.config)),
+    )
+    effective.set(
+        "assist_transport",
+        Value(String(context.config.effective.assist.transport)),
+    )
+    effective.set(
+        "assist_endpoint",
+        Value(String(context.config.effective.assist.endpoint)),
+    )
+    config.set("effective", effective)
     status.set("config", config)
 
     status.set("diagnostics", _diagnostics_status_value(context))

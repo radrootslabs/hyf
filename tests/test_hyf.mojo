@@ -37,8 +37,9 @@ from hyf_stdio.control.capabilities import build_capabilities_output
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.envelope import WireErrorResponse, WireSuccessResponse
 from hyf_stdio.errors import WireError
+from hyf_runtime.startup import RuntimeStartupInput, resolve_startup_context
 from hyf_stdio.server import (
-    handle_request_line,
+    handle_request_line_with_runtime_context,
     handle_request_line_with_control_builders,
 )
 
@@ -72,7 +73,20 @@ struct ScopedEnvVar:
 
 
 def _dispatch(line: String) raises -> Value:
-    return loads(handle_request_line(line))
+    var result = Value(None)
+    with TemporaryDirectory() as temp_dir:
+        var runtime_context = resolve_startup_context(
+            RuntimeStartupInput(
+                env_paths_profile="repo_local",
+                env_repo_local_base_root=temp_dir,
+                user_home="/home/unused",
+                argv=List[String](),
+            )
+        )
+        result = loads(
+            handle_request_line_with_runtime_context(line, runtime_context)
+        )
+    return result^
 
 
 def _capability_output_entry_by_id(

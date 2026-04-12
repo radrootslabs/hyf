@@ -845,7 +845,7 @@ def test_missing_input_returns_invalid_request() raises:
     )
 
 
-def test_assisted_request_returns_backend_unavailable() raises:
+def test_assisted_request_falls_back_deterministically_when_bridge_is_unavailable() raises:
     var result = _dispatch(
         load_scenario_request_json(
             "scenarios/assisted_backend_unavailable.json"

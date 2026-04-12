@@ -32,6 +32,13 @@ def _has_key(value: Value, key: String) -> Bool:
     return False
 
 
+def _array_contains_string(value: Value, expected: String) raises -> Bool:
+    for item in value.array_items():
+        if item.is_string() and item.string_value() == expected:
+            return True
+    return False
+
+
 def test_status_success() raises:
     var response = run_hyf_stdio(
         load_scenario_request_json("scenarios/status_ok.json")
@@ -473,6 +480,192 @@ def test_capabilities_reports_configured_fake_bridge_truthfully() raises:
                         "backend_kind"
                     ].string_value(),
                     "fake",
+                )
+
+
+def test_capabilities_reports_ready_fake_bridge_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://fake-query-rewrite"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_execution"
+                    ].string_value(),
+                    "enabled",
+                )
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_backend_available"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["assisted_backend_capabilities"][0][
+                        "state"
+                    ].string_value(),
+                    "ready",
+                )
+
+
+def test_status_reports_ready_fake_bridge_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://fake-query-rewrite"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["build_identity"][
+                        "assisted_execution_available"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["execution_mode_request_behavior"][
+                        "assisted"
+                    ].string_value(),
+                    "execute",
+                )
+                assert_equal(
+                    response["output"]["assist_bridge"]["state"]
+                    .string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["backend_reachability"][
+                        "assisted_backend"
+                    ].string_value(),
+                    "ready",
+                )
+
+
+def test_query_rewrite_uses_fake_assist_bridge_when_requested() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://fake-query-rewrite"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    '{"version":1,"request_id":"rewrite-assisted-fake-1","trace_id":"rewrite-assisted-fake-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup"}}',
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "assisted",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "assist_bridge",
+                )
+                assert_equal(
+                    response["meta"]["provider"].string_value(),
+                    "fake",
+                )
+                assert_equal(
+                    response["meta"]["route"].string_value(),
+                    "assist_bridge.query_rewrite.fake",
+                )
+                assert_equal(
+                    response["meta"]["model"].string_value(),
+                    "fake_query_rewrite_v1",
+                )
+                assert_equal(
+                    Int(response["meta"]["schema_version"].int_value()),
+                    1,
+                )
+                assert_equal(
+                    Int(response["meta"]["latency_ms"].int_value()), 1
+                )
+                assert_equal(
+                    response["meta"]["provenance"]["kind"].string_value(),
+                    "assisted",
+                )
+                assert_equal(
+                    response["output"]["rewritten_text"].string_value(),
+                    "apples",
+                )
+                assert_true(
+                    _array_contains_string(
+                        response["output"]["normalization_signals"],
+                        "assist_bridge_fake",
+                    )
+                )
+
+
+def test_query_rewrite_falls_back_deterministically_when_bridge_is_unavailable() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    '{"version":1,"request_id":"rewrite-assisted-fallback-1","trace_id":"rewrite-assisted-fallback-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup"}}',
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "heuristic",
+                )
+                assert_true(not _has_key(response["meta"], "provider"))
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"][
+                        "fallback_kind"
+                    ].string_value(),
+                    "assist_bridge",
+                )
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"]["reason"]
+                    .string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["rewritten_text"].string_value(),
+                    "apples",
                 )
 
 

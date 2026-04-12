@@ -24,7 +24,7 @@
       "output.build_identity.protocol_version": 1,
       "output.build_identity.default_execution_mode": "deterministic",
       "output.build_identity.deterministic_execution_available": true,
-      "output.build_identity.assisted_execution_available": false,
+      "output.build_identity.assisted_execution_available": true,
       "output.daemon": "hyfd",
       "output.transport": "stdio",
       "output.request_framing": "newline_delimited_json",

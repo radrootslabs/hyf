@@ -89,15 +89,15 @@ def build_status_output_with_runtime_context(
 
     var execution_mode_request_behavior = loads("{}")
     execution_mode_request_behavior.set("deterministic", Value("execute"))
+    var assisted_request_behavior = "bridge_unavailable"
+    if assist_bridge.state == "ready":
+        assisted_request_behavior = "execute"
+    elif assist_bridge.state == "disabled_by_runtime_config":
+        assisted_request_behavior = "disabled_by_runtime_config"
+    elif assist_bridge.state == "unconfigured":
+        assisted_request_behavior = "bridge_unconfigured"
     execution_mode_request_behavior.set(
-        "assisted",
-        Value("disabled_by_runtime_config")
-        if assist_bridge.state == "disabled_by_runtime_config"
-        else (
-            Value("bridge_unconfigured")
-            if assist_bridge.state == "unconfigured"
-            else Value("bridge_unavailable")
-        ),
+        "assisted", Value(String(assisted_request_behavior))
     )
     output.set(
         "execution_mode_request_behavior",

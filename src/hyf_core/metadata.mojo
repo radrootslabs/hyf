@@ -41,5 +41,5 @@ def current_build_identity() raises -> HyfBuildIdentity:
         protocol_version=hyf_protocol_version(),
         default_execution_mode="deterministic",
         deterministic_execution_available=True,
-        assisted_execution_available=False,
+        assisted_execution_available=True,
     )

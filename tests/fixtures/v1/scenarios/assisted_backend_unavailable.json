@@ -2,7 +2,7 @@
   "fixture_id": "assisted_backend_unavailable",
   "fixture_namespace": "radroots-canonical-hyf-v1",
   "schema_version": 1,
-  "description": "Explicit assisted execution requests fail with a bounded unavailable-backend error.",
+  "description": "Explicit assisted query rewrite requests fall back to deterministic execution when the assist bridge is unavailable.",
   "request": {
     "version": 1,
     "request_id": "assisted-fixture-1",
@@ -15,8 +15,21 @@
     }
   },
   "expected": {
-    "ok": false,
-    "error_code": "backend_unavailable",
-    "message_contains": "assisted_execution"
+    "ok": true,
+    "equals": {
+      "version": 1,
+      "request_id": "assisted-fixture-1",
+      "output.rewritten_text": "apples",
+      "meta.execution_mode": "deterministic",
+      "meta.backend": "heuristic",
+      "meta.schema_version": 1
+    },
+    "absent_paths": [
+      "error",
+      "meta.provider",
+      "meta.route",
+      "meta.model",
+      "meta.provenance"
+    ]
   }
 }

@@ -13,7 +13,7 @@ from hyf_runtime.startup import (
     resolve_startup_context_from_process,
 )
 from hyf_core.backends.selector import (
-    execute_capability as execute_backend_capability,
+    execute_capability_with_runtime_config as execute_backend_capability_with_runtime_config,
 )
 from hyf_core.capabilities.registry import (
     canonical_business_capability,
@@ -177,16 +177,23 @@ def _dispatch_capability_result(
 
 
 def _dispatch_business_capability(
-    request: WireRequest, request_id: String
+    request: WireRequest,
+    request_id: String,
+    runtime_context: RuntimeStartupContext,
 ) raises -> String:
-    var result = execute_backend_capability(
-        request.capability, request.input.clone(), request.context.copy()
+    var result = execute_backend_capability_with_runtime_config(
+        request.capability,
+        request.input.clone(),
+        request.context.copy(),
+        runtime_context.config,
     )
     return _dispatch_capability_result(request_id, request.trace_id, result)
 
 
 def _route_business_capability(
-    request: WireRequest, request_id: String
+    request: WireRequest,
+    request_id: String,
+    runtime_context: RuntimeStartupContext,
 ) raises -> String:
     var capability = canonical_business_capability(request.capability)
     if not capability:
@@ -197,7 +204,9 @@ def _route_business_capability(
         return encode_error(_disabled_response(request))
 
     if descriptor.implemented and descriptor.callable:
-        return _dispatch_business_capability(request, request_id)
+        return _dispatch_business_capability(
+            request, request_id, runtime_context
+        )
 
     return encode_error(_unavailable_response(request))
 
@@ -246,7 +255,9 @@ def handle_request_with_runtime_context_and_control_builders[
                     meta=None,
                 )
             )
-        return _route_business_capability(request.copy(), request_id)
+        return _route_business_capability(
+            request.copy(), request_id, runtime_context
+        )
     except e:
         _emit_internal_diagnostic(
             request_id,

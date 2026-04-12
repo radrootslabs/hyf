@@ -50,6 +50,20 @@ def serialize_core_response_meta(meta: CoreResponseMeta) raises -> Value:
     var value = loads("{}")
     value.set("execution_mode", Value(String(meta.execution_mode)))
     value.set("backend", Value(String(meta.backend)))
+    if meta.provider:
+        value.set("provider", Value(String(meta.provider.value())))
+    if meta.route:
+        value.set("route", Value(String(meta.route.value())))
+    if meta.model:
+        value.set("model", Value(String(meta.model.value())))
+    if meta.latency_ms:
+        value.set("latency_ms", Value(meta.latency_ms.value()))
+    if meta.schema_version:
+        value.set("schema_version", Value(meta.schema_version.value()))
+    if meta.prompt_version:
+        value.set(
+            "prompt_version", Value(String(meta.prompt_version.value()))
+        )
     if meta.provenance:
         value.set("provenance", _serialize_provenance(meta.provenance.value()))
     return value^

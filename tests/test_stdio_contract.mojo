@@ -10,6 +10,10 @@ from fixture_assertions import (
     load_scenario_request_json,
     status_request_with_invalid_version_json,
 )
+from max_local_process_helper import (
+    reserve_loopback_port,
+    spawn_max_local_stub,
+)
 from stdio_process_helper import (
     HYF_PATHS_PROFILE_ENV,
     HYF_PATHS_REPO_LOCAL_ROOT_ENV,
@@ -623,6 +627,98 @@ def test_query_rewrite_uses_fake_assist_bridge_when_requested() raises:
                         "assist_bridge_fake",
                     )
                 )
+
+
+def test_query_rewrite_uses_pure_mojo_provider_when_requested() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+        )
+        var health_port = reserve_loopback_port()
+        var provider_port = reserve_loopback_port()
+        var health_stub = spawn_max_local_stub(health_port, "health_ok")
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "query_rewrite_ok"
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                with ScopedEnvVar(
+                    "HYF_MAX_LOCAL_HEALTH_URL",
+                    "http://127.0.0.1:" + String(health_port) + "/health",
+                ):
+                    with ScopedEnvVar(
+                        "HYF_MAX_LOCAL_BASE_URL",
+                        "http://127.0.0.1:" + String(provider_port) + "/v1",
+                    ):
+                        var response = run_stdio_entrypoint(
+                            "src/main.mojo",
+                            '{"version":1,"request_id":"rewrite-assisted-max-local-1","trace_id":"rewrite-assisted-max-local-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"local apples pickup weekend"}}',
+                            "--config",
+                            startup_config_path.__fspath__(),
+                        )
+
+                        assert_true(response["ok"].bool_value())
+                        assert_equal(
+                            response["meta"]["execution_mode"].string_value(),
+                            "assisted",
+                        )
+                        assert_equal(
+                            response["meta"]["backend"].string_value(),
+                            "assist_bridge",
+                        )
+                        assert_equal(
+                            response["meta"]["provider"].string_value(),
+                            "max_local",
+                        )
+                        assert_equal(
+                            response["meta"]["route"].string_value(),
+                            "assist_bridge.query_rewrite.max_local",
+                        )
+                        assert_equal(
+                            response["meta"]["model"].string_value(),
+                            "max-local-query-rewrite",
+                        )
+                        assert_equal(
+                            Int(response["meta"]["schema_version"].int_value()),
+                            1,
+                        )
+                        assert_true(
+                            Int(response["meta"]["latency_ms"].int_value())
+                            >= 0
+                        )
+                        assert_equal(
+                            response["meta"]["provenance"]["kind"]
+                            .string_value(),
+                            "assisted",
+                        )
+                        assert_equal(
+                            response["output"]["rewritten_text"]
+                            .string_value(),
+                            "apples pickup weekend",
+                        )
+                        assert_equal(
+                            response["output"]["query_terms"][0]
+                            .string_value(),
+                            "apples",
+                        )
+                        assert_equal(
+                            response["output"]["extracted_filters"][
+                                "fulfillment"
+                            ].string_value(),
+                            "pickup",
+                        )
+                        assert_equal(
+                            response["output"]["extracted_filters"][
+                                "time_window"
+                            ].string_value(),
+                            "weekend",
+                        )
+
+        health_stub.wait()
+        provider_stub.wait()
 
 
 def test_query_rewrite_falls_back_deterministically_when_bridge_is_unavailable() raises:

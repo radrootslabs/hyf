@@ -6,7 +6,10 @@ from hyf_assist.bridge import (
     execute_query_rewrite_via_assist_bridge,
     resolve_assist_bridge_status,
 )
-from hyf_assist.contract import AssistQueryRewriteResult
+from hyf_assist.contract import (
+    AssistQueryRewriteResult,
+    assist_bridge_fake_endpoint_prefix,
+)
 from hyf_core.capabilities.query_analysis import (
     QueryAnalysis,
     QueryRewriteRequest,
@@ -30,7 +33,16 @@ from hyf_core.provenance import (
     ProvenanceSourceRef,
 )
 from hyf_core.request_context import RequestContext, assisted_execution_requested
-from hyf_runtime.config import HyfLoadedRuntimeConfig
+from hyf_provider.config import load_max_local_provider_config
+from hyf_provider.max_local import (
+    execute_query_rewrite_via_max_local_provider,
+    max_local_provider_status,
+)
+from hyf_runtime.config import (
+    HyfLoadedRuntimeConfig,
+    assist_bridge_configured,
+    assisted_execution_enabled,
+)
 
 
 def _build_output(analysis: QueryAnalysis) raises -> Value:
@@ -154,34 +166,92 @@ def execute_query_rewrite_with_runtime_config(
     try:
         var request: QueryRewriteRequest = parse_query_rewrite_request(input)
         if assisted_execution_requested(context):
-            var bridge_status = resolve_assist_bridge_status(runtime_config)
-            if bridge_status.reachable:
-                try:
-                    var assisted_result = execute_query_rewrite_via_assist_bridge(
-                        bridge_status, request.text, context
-                    )
-                    return successful_capability(
-                        _build_output(assisted_result.analysis),
-                        meta=_build_assisted_meta(context, assisted_result),
-                    )
-                except e:
-                    var fallback_analysis = analyze_query_text(
-                        request.text, context
-                    )
-                    return successful_capability(
-                        _build_output(fallback_analysis),
-                        meta=_build_deterministic_fallback_meta(
-                            context,
-                            fallback_analysis,
-                            "bridge_execution_failed",
-                        ),
-                    )
+            if not assisted_execution_enabled(runtime_config):
+                var fallback_analysis = analyze_query_text(request.text, context)
+                return successful_capability(
+                    _build_output(fallback_analysis),
+                    meta=_build_deterministic_fallback_meta(
+                        context,
+                        fallback_analysis,
+                        "disabled_by_runtime_config",
+                    ),
+                )
+
+            if not assist_bridge_configured(runtime_config):
+                var fallback_analysis = analyze_query_text(request.text, context)
+                return successful_capability(
+                    _build_output(fallback_analysis),
+                    meta=_build_deterministic_fallback_meta(
+                        context, fallback_analysis, "unconfigured"
+                    ),
+                )
+
+            var endpoint = String(runtime_config.effective.assist.endpoint).strip()
+            if endpoint.startswith(assist_bridge_fake_endpoint_prefix()):
+                var bridge_status = resolve_assist_bridge_status(runtime_config)
+                if bridge_status.reachable:
+                    try:
+                        var assisted_result = execute_query_rewrite_via_assist_bridge(
+                            bridge_status, request.text, context
+                        )
+                        return successful_capability(
+                            _build_output(assisted_result.analysis),
+                            meta=_build_assisted_meta(context, assisted_result),
+                        )
+                    except e:
+                        var fallback_analysis = analyze_query_text(
+                            request.text, context
+                        )
+                        return successful_capability(
+                            _build_output(fallback_analysis),
+                            meta=_build_deterministic_fallback_meta(
+                                context,
+                                fallback_analysis,
+                                "bridge_execution_failed",
+                            ),
+                        )
+
+                var fallback_analysis = analyze_query_text(request.text, context)
+                return successful_capability(
+                    _build_output(fallback_analysis),
+                    meta=_build_deterministic_fallback_meta(
+                        context, fallback_analysis, bridge_status.state
+                    ),
+                )
+
+            try:
+                var provider_config = load_max_local_provider_config()
+                var provider_status = max_local_provider_status(provider_config)
+                if provider_status.reachable:
+                    try:
+                        var assisted_result =
+                            execute_query_rewrite_via_max_local_provider(
+                                provider_config, request.text, context
+                            )
+                        return successful_capability(
+                            _build_output(assisted_result.analysis),
+                            meta=_build_assisted_meta(context, assisted_result),
+                        )
+                    except e:
+                        var fallback_analysis = analyze_query_text(
+                            request.text, context
+                        )
+                        return successful_capability(
+                            _build_output(fallback_analysis),
+                            meta=_build_deterministic_fallback_meta(
+                                context,
+                                fallback_analysis,
+                                "bridge_execution_failed",
+                            ),
+                        )
+            except e:
+                pass
 
             var fallback_analysis = analyze_query_text(request.text, context)
             return successful_capability(
                 _build_output(fallback_analysis),
                 meta=_build_deterministic_fallback_meta(
-                    context, fallback_analysis, bridge_status.state
+                    context, fallback_analysis, "unavailable"
                 ),
             )
 

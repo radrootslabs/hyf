@@ -83,10 +83,11 @@ def run_stdio_entrypoint_with_2_args(
     var command = String("mojo")
     var include_flag = String("-I")
     var include_path = String("src")
+    var vendor_include_path = String("../../../../vendor/mojo/flare")
     var entrypoint_path = String(entrypoint)
     var process_arg0 = String(arg0)
     var process_arg1 = String(arg1)
-    var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](length=8, fill={})
+    var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](length=10, fill={})
     argv[0] = rebind[CStringSlice[ImmutAnyOrigin]](command.as_c_string_slice())
     argv[1] = rebind[CStringSlice[ImmutAnyOrigin]]("run".as_c_string_slice())
     argv[2] = rebind[CStringSlice[ImmutAnyOrigin]](
@@ -96,14 +97,20 @@ def run_stdio_entrypoint_with_2_args(
         include_path.as_c_string_slice()
     )
     argv[4] = rebind[CStringSlice[ImmutAnyOrigin]](
+        include_flag.as_c_string_slice()
+    )
+    argv[5] = rebind[CStringSlice[ImmutAnyOrigin]](
+        vendor_include_path.as_c_string_slice()
+    )
+    argv[6] = rebind[CStringSlice[ImmutAnyOrigin]](
         entrypoint_path.as_c_string_slice()
     )
     if process_arg0 != "":
-        argv[5] = rebind[CStringSlice[ImmutAnyOrigin]](
+        argv[7] = rebind[CStringSlice[ImmutAnyOrigin]](
             process_arg0.as_c_string_slice()
         )
     if process_arg1 != "":
-        argv[6] = rebind[CStringSlice[ImmutAnyOrigin]](
+        argv[8] = rebind[CStringSlice[ImmutAnyOrigin]](
             process_arg1.as_c_string_slice()
         )
 

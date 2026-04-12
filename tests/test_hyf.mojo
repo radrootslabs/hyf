@@ -482,7 +482,16 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
 
     assert_equal(
         output["assisted_backend_capabilities"][0]["id"].string_value(),
-        "hyf_assistd",
+        "hyf_provider_runtime",
+    )
+    assert_equal(
+        output["assisted_backend_capabilities"][0]["kind"].string_value(),
+        "provider_runtime",
+    )
+    assert_equal(
+        output["assisted_backend_capabilities"][0]["transport"]
+        .string_value(),
+        "in_process",
     )
     assert_equal(
         output["assisted_backend_capabilities"][0]["state"].string_value(),
@@ -491,7 +500,7 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
     assert_equal(
         output["assisted_backend_capabilities"][0]["backend_kind"]
         .string_value(),
-        "fake",
+        "max_local",
     )
 
 
@@ -909,7 +918,7 @@ def test_max_local_provider_status_probes_health_without_sidecar() raises:
                 assert_equal(status.backend_kind, "max_local")
                 assert_equal(status.provider, "max_local")
                 assert_equal(
-                    status.route, "assist_bridge.query_rewrite.max_local"
+                    status.route, "provider_runtime.query_rewrite.max_local"
                 )
                 assert_equal(status.model, "max-local-query-rewrite")
                 assert_equal(status.reachable, True)
@@ -1002,7 +1011,7 @@ def test_max_local_query_rewrite_request_is_mojo_owned() raises:
                 )
                 assert_equal(result.provider, "max_local")
                 assert_equal(
-                    result.route, "assist_bridge.query_rewrite.max_local"
+                    result.route, "provider_runtime.query_rewrite.max_local"
                 )
                 assert_equal(result.model, "max-local-query-rewrite")
                 assert_equal(result.schema_version, 1)

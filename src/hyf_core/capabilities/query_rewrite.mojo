@@ -84,7 +84,9 @@ def _base_source_refs(
 
 
 def _build_assisted_meta(
-    context: RequestContext, result: AssistQueryRewriteResult
+    context: RequestContext,
+    result: AssistQueryRewriteResult,
+    backend: String,
 ) -> CoreResponseMeta:
     var provenance: Optional[ExecutionProvenance] = None
     if context.return_provenance:
@@ -98,7 +100,7 @@ def _build_assisted_meta(
 
     return CoreResponseMeta(
         execution_mode="assisted",
-        backend="assist_bridge",
+        backend=String(backend),
         provider=Optional[String](String(result.provider)),
         route=Optional[String](String(result.route)),
         model=Optional[String](String(result.model)),
@@ -110,7 +112,10 @@ def _build_assisted_meta(
 
 
 def _build_deterministic_fallback_meta(
-    context: RequestContext, analysis: QueryAnalysis, reason: String
+    context: RequestContext,
+    analysis: QueryAnalysis,
+    fallback_kind: String,
+    reason: String,
 ) -> CoreResponseMeta:
     var provenance: Optional[ExecutionProvenance] = None
     if context.return_provenance:
@@ -119,7 +124,7 @@ def _build_deterministic_fallback_meta(
             signal_tags=query_signal_tags(analysis),
             source_refs=_base_source_refs(context, "query_rewrite"),
             fallback=ProvenanceFallback(
-                fallback_kind="assist_bridge", reason=String(reason)
+                fallback_kind=String(fallback_kind), reason=String(reason)
             ),
             evidence_set_id=None,
         )
@@ -173,6 +178,7 @@ def execute_query_rewrite_with_runtime_config(
                     meta=_build_deterministic_fallback_meta(
                         context,
                         fallback_analysis,
+                        "provider_runtime",
                         "disabled_by_runtime_config",
                     ),
                 )
@@ -182,7 +188,10 @@ def execute_query_rewrite_with_runtime_config(
                 return successful_capability(
                     _build_output(fallback_analysis),
                     meta=_build_deterministic_fallback_meta(
-                        context, fallback_analysis, "unconfigured"
+                        context,
+                        fallback_analysis,
+                        "provider_runtime",
+                        "unconfigured",
                     ),
                 )
 
@@ -196,7 +205,11 @@ def execute_query_rewrite_with_runtime_config(
                         )
                         return successful_capability(
                             _build_output(assisted_result.analysis),
-                            meta=_build_assisted_meta(context, assisted_result),
+                            meta=_build_assisted_meta(
+                                context,
+                                assisted_result,
+                                "assist_bridge",
+                            ),
                         )
                     except e:
                         var fallback_analysis = analyze_query_text(
@@ -207,6 +220,7 @@ def execute_query_rewrite_with_runtime_config(
                             meta=_build_deterministic_fallback_meta(
                                 context,
                                 fallback_analysis,
+                                "assist_bridge",
                                 "bridge_execution_failed",
                             ),
                         )
@@ -215,7 +229,10 @@ def execute_query_rewrite_with_runtime_config(
                 return successful_capability(
                     _build_output(fallback_analysis),
                     meta=_build_deterministic_fallback_meta(
-                        context, fallback_analysis, bridge_status.state
+                        context,
+                        fallback_analysis,
+                        "assist_bridge",
+                        bridge_status.state,
                     ),
                 )
 
@@ -230,7 +247,11 @@ def execute_query_rewrite_with_runtime_config(
                             )
                         return successful_capability(
                             _build_output(assisted_result.analysis),
-                            meta=_build_assisted_meta(context, assisted_result),
+                            meta=_build_assisted_meta(
+                                context,
+                                assisted_result,
+                                "provider_runtime",
+                            ),
                         )
                     except e:
                         var fallback_analysis = analyze_query_text(
@@ -241,7 +262,8 @@ def execute_query_rewrite_with_runtime_config(
                             meta=_build_deterministic_fallback_meta(
                                 context,
                                 fallback_analysis,
-                                "bridge_execution_failed",
+                                "provider_runtime",
+                                "provider_execution_failed",
                             ),
                         )
             except e:
@@ -251,7 +273,10 @@ def execute_query_rewrite_with_runtime_config(
             return successful_capability(
                 _build_output(fallback_analysis),
                 meta=_build_deterministic_fallback_meta(
-                    context, fallback_analysis, "unavailable"
+                    context,
+                    fallback_analysis,
+                    "provider_runtime",
+                    "unavailable",
                 ),
             )
 

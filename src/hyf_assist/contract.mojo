@@ -11,6 +11,10 @@ def assist_bridge_runtime_id() -> String:
     return "hyf_assistd"
 
 
+def provider_runtime_id() -> String:
+    return "hyf_provider_runtime"
+
+
 def assist_bridge_supported_business_capabilities() -> List[String]:
     var capabilities = List[String]()
     capabilities.append("query_rewrite")

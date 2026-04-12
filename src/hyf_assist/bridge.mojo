@@ -19,7 +19,13 @@ from hyf_assist.contract import (
     assist_bridge_fake_endpoint_prefix,
     assist_bridge_runtime_id,
     assist_bridge_supported_business_capabilities,
+    provider_runtime_id,
 )
+from hyf_provider.config import (
+    default_max_local_provider_config,
+    load_max_local_provider_config,
+)
+from hyf_provider.max_local import max_local_provider_status
 from hyf_runtime.config import (
     HyfLoadedRuntimeConfig,
     assist_bridge_configured,
@@ -240,18 +246,31 @@ def _resolve_real_bridge_status(endpoint: String) raises -> AssistBridgeStatus:
 def resolve_assist_bridge_status(
     config: HyfLoadedRuntimeConfig,
 ) -> AssistBridgeStatus:
+    var provider_config = default_max_local_provider_config()
+    try:
+        provider_config = load_max_local_provider_config()
+    except:
+        pass
+
     var configured = assist_bridge_configured(config)
     var state = "disabled_by_runtime_config"
     var reachable = False
-    var backend_kind = "fake"
+    var runtime_id = provider_runtime_id()
+    var kind = "provider_runtime"
+    var transport = "in_process"
+    var endpoint = String("")
+    var backend_kind = "max_local"
     var provider = ""
-    var route = ""
-    var model = ""
+    var route = String(provider_config.route)
+    var model = String(provider_config.model)
     var supported_capabilities = assist_bridge_supported_business_capabilities()
     if assisted_execution_enabled(config):
         if configured:
-            var endpoint = String(config.effective.assist.endpoint)
+            endpoint = String(config.effective.assist.endpoint)
             if _fake_bridge_endpoint_is_reachable(endpoint):
+                runtime_id = assist_bridge_runtime_id()
+                kind = "assist_bridge"
+                transport = String(config.effective.assist.transport)
                 reachable = True
                 state = "ready"
                 backend_kind = "fake"
@@ -259,30 +278,22 @@ def resolve_assist_bridge_status(
                 route = "assist_bridge.query_rewrite.fake"
                 model = "fake_query_rewrite_v1"
             else:
-                try:
-                    var resolved = _resolve_real_bridge_status(endpoint)
-                    reachable = resolved.reachable
-                    state = String(resolved.state)
-                    backend_kind = String(resolved.backend_kind)
-                    provider = String(resolved.provider)
-                    route = String(resolved.route)
-                    model = String(resolved.model)
-                    supported_capabilities = copy_string_list(
-                        resolved.supported_business_capabilities
-                    )
-                except e:
-                    reachable = False
-                    state = "unavailable"
-                    backend_kind = "fake"
+                var resolved = max_local_provider_status(provider_config)
+                reachable = resolved.reachable
+                state = String(resolved.state)
+                backend_kind = String(resolved.backend_kind)
+                provider = String(resolved.provider)
+                endpoint = ""
+                supported_capabilities = assist_bridge_supported_business_capabilities()
         else:
             state = "unconfigured"
 
     return AssistBridgeStatus(
-        id=assist_bridge_runtime_id(),
-        kind="assist_bridge",
+        id=runtime_id,
+        kind=kind,
         contract_version=assist_bridge_contract_version(),
-        transport=String(config.effective.assist.transport),
-        endpoint=String(config.effective.assist.endpoint),
+        transport=transport,
+        endpoint=endpoint,
         backend_kind=String(backend_kind),
         provider=String(provider),
         route=String(route),
@@ -301,15 +312,21 @@ def assisted_execution_state_for_capability(
     if capability_id != "query_rewrite":
         return "deferred"
 
+    var unavailable_state = "provider_unavailable"
+    var unconfigured_state = "provider_unconfigured"
+    if bridge_status.kind == "assist_bridge":
+        unavailable_state = "bridge_unavailable"
+        unconfigured_state = "bridge_unconfigured"
+
     if bridge_status.state == "disabled_by_runtime_config":
         return "disabled_by_runtime_config"
     if bridge_status.state == "unconfigured":
-        return "bridge_unconfigured"
+        return unconfigured_state
     if bridge_status.state == "unavailable":
-        return "bridge_unavailable"
+        return unavailable_state
     if bridge_status.reachable:
         return "enabled"
-    return "bridge_unavailable"
+    return unavailable_state
 
 
 def assisted_backend_available_for_capability(
@@ -331,7 +348,8 @@ def serialize_assist_bridge_status_value(
     value.set("kind", Value(String(bridge_status.kind)))
     value.set("contract_version", Value(bridge_status.contract_version))
     value.set("transport", Value(String(bridge_status.transport)))
-    value.set("endpoint", Value(String(bridge_status.endpoint)))
+    if bridge_status.endpoint != "":
+        value.set("endpoint", Value(String(bridge_status.endpoint)))
     value.set("backend_kind", Value(String(bridge_status.backend_kind)))
     if bridge_status.provider != "":
         value.set("provider", Value(String(bridge_status.provider)))

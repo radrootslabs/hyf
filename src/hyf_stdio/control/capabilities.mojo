@@ -89,12 +89,15 @@ def build_capabilities_output_with_runtime_context(
         capabilities.append(value)
 
     output.set("business_capabilities", capabilities)
-    var assisted_backend_capabilities = loads("[]")
-    assisted_backend_capabilities.append(
+    var assisted_runtime_capabilities = loads("[]")
+    assisted_runtime_capabilities.append(
         serialize_assist_bridge_status_value(assist_bridge)
     )
     output.set(
-        "assisted_backend_capabilities", assisted_backend_capabilities
+        "assisted_runtime_capabilities", assisted_runtime_capabilities.copy()
+    )
+    output.set(
+        "assisted_backend_capabilities", assisted_runtime_capabilities
     )
     output.set(
         "request_context_contract",

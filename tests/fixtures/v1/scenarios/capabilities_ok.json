@@ -34,11 +34,12 @@
       "output.business_capabilities.6.id": "explain_result",
       "output.business_capabilities.6.assisted_execution": "deferred",
       "output.business_capabilities.6.implementation_status": "implemented",
-      "output.assisted_backend_capabilities.0.id": "hyf_assistd",
-      "output.assisted_backend_capabilities.0.kind": "assist_bridge",
-      "output.assisted_backend_capabilities.0.contract_version": 1,
-      "output.assisted_backend_capabilities.0.backend_kind": "fake",
-      "output.assisted_backend_capabilities.0.state": "disabled_by_runtime_config",
+      "output.assisted_runtime_capabilities.0.id": "hyf_provider_runtime",
+      "output.assisted_runtime_capabilities.0.kind": "provider_runtime",
+      "output.assisted_runtime_capabilities.0.contract_version": 1,
+      "output.assisted_runtime_capabilities.0.transport": "in_process",
+      "output.assisted_runtime_capabilities.0.backend_kind": "max_local",
+      "output.assisted_runtime_capabilities.0.state": "disabled_by_runtime_config",
       "output.request_context_contract.accepted_features": [
         "consumer",
         "execution_mode_preference",
@@ -59,7 +60,7 @@
       "output.request_context_contract.unsupported_field_behavior": "reject"
     },
     "contains_all": {
-      "output.assisted_backend_capabilities.0.supported_business_capabilities": [
+      "output.assisted_runtime_capabilities.0.supported_business_capabilities": [
         "query_rewrite"
       ]
     },

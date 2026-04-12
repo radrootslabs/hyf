@@ -89,13 +89,19 @@ def build_status_output_with_runtime_context(
 
     var execution_mode_request_behavior = loads("{}")
     execution_mode_request_behavior.set("deterministic", Value("execute"))
-    var assisted_request_behavior = "bridge_unavailable"
+    var assisted_request_behavior = "provider_unavailable"
+    if assist_bridge.kind == "assist_bridge":
+        assisted_request_behavior = "bridge_unavailable"
     if assist_bridge.state == "ready":
         assisted_request_behavior = "execute"
     elif assist_bridge.state == "disabled_by_runtime_config":
         assisted_request_behavior = "disabled_by_runtime_config"
     elif assist_bridge.state == "unconfigured":
-        assisted_request_behavior = "bridge_unconfigured"
+        assisted_request_behavior = (
+            "bridge_unconfigured"
+            if assist_bridge.kind == "assist_bridge"
+            else "provider_unconfigured"
+        )
     execution_mode_request_behavior.set(
         "assisted", Value(String(assisted_request_behavior))
     )
@@ -115,6 +121,10 @@ def build_status_output_with_runtime_context(
     )
     backends.set("assisted_backend", Value(String(assist_bridge.state)))
     output.set("backend_reachability", backends)
+    output.set(
+        "assisted_runtime",
+        serialize_assist_bridge_status_value(assist_bridge),
+    )
     output.set(
         "assist_bridge", serialize_assist_bridge_status_value(assist_bridge)
     )

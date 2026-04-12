@@ -13,7 +13,7 @@ struct MaxLocalProviderConfig(Defaultable, Copyable, Movable):
         self.base_url = "http://127.0.0.1:8000/v1"
         self.health_url = "http://127.0.0.1:8000/health"
         self.model = "max-local-query-rewrite"
-        self.route = "assist_bridge.query_rewrite.max_local"
+        self.route = "provider_runtime.query_rewrite.max_local"
         self.request_timeout_ms = 15_000
 
 

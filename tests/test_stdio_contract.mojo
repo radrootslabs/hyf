@@ -131,7 +131,7 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     False,
                 )
                 assert_equal(
-                    response["output"]["assist_bridge"]["state"]
+                    response["output"]["assisted_runtime"]["state"]
                     .string_value(),
                     "disabled_by_runtime_config",
                 )
@@ -291,12 +291,27 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                     response["output"]["execution_mode_request_behavior"][
                         "assisted"
                     ].string_value(),
-                    "bridge_unavailable",
+                    "provider_unavailable",
                 )
                 assert_equal(
-                    response["output"]["assist_bridge"]["state"]
+                    response["output"]["assisted_runtime"]["state"]
                     .string_value(),
                     "unavailable",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["id"]
+                    .string_value(),
+                    "hyf_provider_runtime",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["kind"]
+                    .string_value(),
+                    "provider_runtime",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["transport"]
+                    .string_value(),
+                    "in_process",
                 )
                 assert_equal(
                     response["output"]["backend_reachability"][
@@ -401,7 +416,7 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                     "disabled_by_runtime_config",
                 )
                 assert_equal(
-                    response["output"]["assist_bridge"]["state"]
+                    response["output"]["assisted_runtime"]["state"]
                     .string_value(),
                     "disabled_by_runtime_config",
                 )
@@ -443,7 +458,7 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                 )
 
 
-def test_capabilities_reports_configured_fake_bridge_truthfully() raises:
+def test_capabilities_reports_configured_provider_truthfully() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
@@ -465,25 +480,31 @@ def test_capabilities_reports_configured_fake_bridge_truthfully() raises:
                     response["output"]["business_capabilities"][0][
                         "assisted_execution"
                     ].string_value(),
-                    "bridge_unavailable",
+                    "provider_unavailable",
                 )
                 assert_equal(
-                    response["output"]["assisted_backend_capabilities"][0][
+                    response["output"]["assisted_runtime_capabilities"][0][
                         "id"
                     ].string_value(),
-                    "hyf_assistd",
+                    "hyf_provider_runtime",
                 )
                 assert_equal(
-                    response["output"]["assisted_backend_capabilities"][0][
+                    response["output"]["assisted_runtime_capabilities"][0][
+                        "kind"
+                    ].string_value(),
+                    "provider_runtime",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
                         "state"
                     ].string_value(),
                     "unavailable",
                 )
                 assert_equal(
-                    response["output"]["assisted_backend_capabilities"][0][
+                    response["output"]["assisted_runtime_capabilities"][0][
                         "backend_kind"
                     ].string_value(),
-                    "fake",
+                    "max_local",
                 )
 
 
@@ -518,11 +539,93 @@ def test_capabilities_reports_ready_fake_bridge_truthfully() raises:
                     True,
                 )
                 assert_equal(
-                    response["output"]["assisted_backend_capabilities"][0][
+                    response["output"]["assisted_runtime_capabilities"][0][
                         "state"
                     ].string_value(),
                     "ready",
                 )
+
+
+def test_capabilities_reports_ready_pure_mojo_provider_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+        )
+        var health_port = reserve_loopback_port()
+        var health_stub = spawn_max_local_stub(health_port, "health_ok")
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                with ScopedEnvVar(
+                    "HYF_MAX_LOCAL_HEALTH_URL",
+                    "http://127.0.0.1:" + String(health_port) + "/health",
+                ):
+                    var response = run_stdio_entrypoint(
+                        "src/main.mojo",
+                        load_scenario_request_json("scenarios/capabilities_ok.json"),
+                        "--config",
+                        startup_config_path.__fspath__(),
+                    )
+
+                    assert_true(response["ok"].bool_value())
+                    assert_equal(
+                        response["output"]["business_capabilities"][0][
+                            "assisted_execution"
+                        ].string_value(),
+                        "enabled",
+                    )
+                    assert_equal(
+                        response["output"]["business_capabilities"][0][
+                            "assisted_backend_available"
+                        ].bool_value(),
+                        True,
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "id"
+                        ].string_value(),
+                        "hyf_provider_runtime",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "kind"
+                        ].string_value(),
+                        "provider_runtime",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "transport"
+                        ].string_value(),
+                        "in_process",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "state"
+                        ].string_value(),
+                        "ready",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "backend_kind"
+                        ].string_value(),
+                        "max_local",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "provider"
+                        ].string_value(),
+                        "max_local",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime_capabilities"][0][
+                            "route"
+                        ].string_value(),
+                        "provider_runtime.query_rewrite.max_local",
+                    )
+
+        health_stub.wait()
 
 
 def test_status_reports_ready_fake_bridge_truthfully() raises:
@@ -556,7 +659,7 @@ def test_status_reports_ready_fake_bridge_truthfully() raises:
                     "execute",
                 )
                 assert_equal(
-                    response["output"]["assist_bridge"]["state"]
+                    response["output"]["assisted_runtime"]["state"]
                     .string_value(),
                     "ready",
                 )
@@ -566,6 +669,87 @@ def test_status_reports_ready_fake_bridge_truthfully() raises:
                     ].string_value(),
                     "ready",
                 )
+
+
+def test_status_reports_ready_pure_mojo_provider_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+        )
+        var health_port = reserve_loopback_port()
+        var health_stub = spawn_max_local_stub(health_port, "health_ok")
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                with ScopedEnvVar(
+                    "HYF_MAX_LOCAL_HEALTH_URL",
+                    "http://127.0.0.1:" + String(health_port) + "/health",
+                ):
+                    var response = run_stdio_entrypoint(
+                        "src/main.mojo",
+                        load_scenario_request_json("scenarios/status_ok.json"),
+                        "--config",
+                        startup_config_path.__fspath__(),
+                    )
+
+                    assert_true(response["ok"].bool_value())
+                    assert_equal(
+                        response["output"]["build_identity"][
+                            "assisted_execution_available"
+                        ].bool_value(),
+                        True,
+                    )
+                    assert_equal(
+                        response["output"]["execution_mode_request_behavior"][
+                            "assisted"
+                        ].string_value(),
+                        "execute",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["id"]
+                        .string_value(),
+                        "hyf_provider_runtime",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["kind"]
+                        .string_value(),
+                        "provider_runtime",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["transport"]
+                        .string_value(),
+                        "in_process",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["state"]
+                        .string_value(),
+                        "ready",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["backend_kind"]
+                        .string_value(),
+                        "max_local",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["provider"]
+                        .string_value(),
+                        "max_local",
+                    )
+                    assert_equal(
+                        response["output"]["assisted_runtime"]["route"]
+                        .string_value(),
+                        "provider_runtime.query_rewrite.max_local",
+                    )
+                    assert_equal(
+                        response["output"]["backend_reachability"][
+                            "assisted_backend"
+                        ].string_value(),
+                        "ready",
+                    )
+
+        health_stub.wait()
 
 
 def test_query_rewrite_uses_fake_assist_bridge_when_requested() raises:
@@ -667,7 +851,7 @@ def test_query_rewrite_uses_pure_mojo_provider_when_requested() raises:
                         )
                         assert_equal(
                             response["meta"]["backend"].string_value(),
-                            "assist_bridge",
+                            "provider_runtime",
                         )
                         assert_equal(
                             response["meta"]["provider"].string_value(),
@@ -675,7 +859,7 @@ def test_query_rewrite_uses_pure_mojo_provider_when_requested() raises:
                         )
                         assert_equal(
                             response["meta"]["route"].string_value(),
-                            "assist_bridge.query_rewrite.max_local",
+                            "provider_runtime.query_rewrite.max_local",
                         )
                         assert_equal(
                             response["meta"]["model"].string_value(),
@@ -752,7 +936,7 @@ def test_query_rewrite_falls_back_deterministically_when_bridge_is_unavailable()
                     response["meta"]["provenance"]["fallback"][
                         "fallback_kind"
                     ].string_value(),
-                    "assist_bridge",
+                    "provider_runtime",
                 )
                 assert_equal(
                     response["meta"]["provenance"]["fallback"]["reason"]

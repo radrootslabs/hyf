@@ -156,13 +156,26 @@ def execute_query_rewrite_with_runtime_config(
         if assisted_execution_requested(context):
             var bridge_status = resolve_assist_bridge_status(runtime_config)
             if bridge_status.reachable:
-                var assisted_result = execute_query_rewrite_via_assist_bridge(
-                    bridge_status, request.text, context
-                )
-                return successful_capability(
-                    _build_output(assisted_result.analysis),
-                    meta=_build_assisted_meta(context, assisted_result),
-                )
+                try:
+                    var assisted_result = execute_query_rewrite_via_assist_bridge(
+                        bridge_status, request.text, context
+                    )
+                    return successful_capability(
+                        _build_output(assisted_result.analysis),
+                        meta=_build_assisted_meta(context, assisted_result),
+                    )
+                except e:
+                    var fallback_analysis = analyze_query_text(
+                        request.text, context
+                    )
+                    return successful_capability(
+                        _build_output(fallback_analysis),
+                        meta=_build_deterministic_fallback_meta(
+                            context,
+                            fallback_analysis,
+                            "bridge_execution_failed",
+                        ),
+                    )
 
             var fallback_analysis = analyze_query_text(request.text, context)
             return successful_capability(

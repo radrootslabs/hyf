@@ -29,6 +29,9 @@ struct AssistBridgeStatus(Copyable, Movable):
     var transport: String
     var endpoint: String
     var backend_kind: String
+    var provider: String
+    var route: String
+    var model: String
     var configured: Bool
     var reachable: Bool
     var state: String

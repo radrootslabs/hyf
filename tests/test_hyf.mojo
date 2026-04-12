@@ -183,7 +183,7 @@ def _array_string_values(value: Value) raises -> List[String]:
 
 def test_decode_request_parses_context_and_input() raises:
     var request = decode_request(
-        '{"version":1,"request_id":"req-1","trace_id":"trace-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","return_provenance":true},"input":{"query":"eggs'
+        '{"version":1,"request_id":"req-1","trace_id":"trace-1","capability":"query_rewrite","context":{"consumer":"radroots-cli","execution_mode_preference":"deterministic","deadline_ms":2500,"time_range":{"start":"2026-04-12","end":"2026-04-13"},"evidence_limit":5,"consistency":"default","return_provenance":true,"explain_plan":true},"input":{"query":"eggs'
         ' near me"}}'
     )
 
@@ -193,7 +193,13 @@ def test_decode_request_parses_context_and_input() raises:
     assert_equal(request.capability, "query_rewrite")
     assert_equal(request.context.consumer, "radroots-cli")
     assert_equal(request.context.execution_mode_preference, "deterministic")
+    assert_equal(request.context.deadline_ms, 2500)
+    assert_equal(request.context.time_range.value().start, "2026-04-12")
+    assert_equal(request.context.time_range.value().end, "2026-04-13")
+    assert_equal(request.context.evidence_limit, 5)
+    assert_equal(request.context.consistency, "default")
     assert_equal(request.context.return_provenance, True)
+    assert_equal(request.context.explain_plan, True)
     assert_equal(request.input["query"].string_value(), "eggs near me")
 
 
@@ -216,10 +222,17 @@ def test_decode_request_requires_input_object() raises:
         )
 
 
-def test_decode_request_rejects_unsupported_context_field() raises:
+def test_decode_request_rejects_unknown_context_field() raises:
     with assert_raises():
         _ = decode_request(
-            '{"version":1,"request_id":"req-ctx-1","capability":"query_rewrite","context":{"deadline_ms":2500},"input":{"query":"eggs"}}'
+            '{"version":1,"request_id":"req-ctx-1","capability":"query_rewrite","context":{"planner":"strict"},"input":{"query":"eggs"}}'
+        )
+
+
+def test_decode_request_rejects_invalid_activated_context_field() raises:
+    with assert_raises():
+        _ = decode_request(
+            '{"version":1,"request_id":"req-ctx-2","capability":"query_rewrite","context":{"deadline_ms":0},"input":{"query":"eggs"}}'
         )
 
 

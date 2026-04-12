@@ -43,8 +43,14 @@
       "output.request_context_contract.accepted_features": [
         "consumer",
         "execution_mode_preference",
+        "deadline_ms",
         "scope.listing_ids",
-        "return_provenance"
+        "time_range.start",
+        "time_range.end",
+        "evidence_limit",
+        "consistency",
+        "return_provenance",
+        "explain_plan"
       ],
       "output.request_context_contract.effective_features": [
         "execution_mode_preference",

@@ -9,7 +9,15 @@
     "trace_id": "trace-rewrite-fixture-1",
     "capability": "query_rewrite",
     "context": {
-      "return_provenance": true
+      "deadline_ms": 2500,
+      "time_range": {
+        "start": "2026-04-12",
+        "end": "2026-04-13"
+      },
+      "evidence_limit": 5,
+      "consistency": "default",
+      "return_provenance": true,
+      "explain_plan": true
     },
     "input": {
       "query": "apples near me with weekend pickup"

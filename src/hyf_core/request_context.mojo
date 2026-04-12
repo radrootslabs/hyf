@@ -1,7 +1,7 @@
 from std.collections import List, Optional
 
 from mojson import Value
-from mojson.deserialize import get_bool, get_string
+from mojson.deserialize import get_bool, get_int, get_string
 
 
 def _has_key(value: Value, key: String) -> Bool:
@@ -32,6 +32,11 @@ def _require_allowed_keys(
 def _require_non_empty(value: String, context: String) raises:
     if value == "":
         raise Error(context + " must not be empty")
+
+
+def _require_positive_int(value: Int, context: String) raises:
+    if value <= 0:
+        raise Error(context + " must be greater than zero")
 
 
 def _parse_string_list(value: Value, context: String) raises -> List[String]:
@@ -85,8 +90,13 @@ def request_context_allowed_keys() -> List[String]:
     var features = List[String]()
     features.append("consumer")
     features.append("execution_mode_preference")
+    features.append("deadline_ms")
     features.append("scope")
+    features.append("time_range")
+    features.append("evidence_limit")
+    features.append("consistency")
     features.append("return_provenance")
+    features.append("explain_plan")
     return features^
 
 
@@ -94,8 +104,14 @@ def accepted_request_context_feature_names() -> List[String]:
     var features = List[String]()
     features.append("consumer")
     features.append("execution_mode_preference")
+    features.append("deadline_ms")
     features.append("scope.listing_ids")
+    features.append("time_range.start")
+    features.append("time_range.end")
+    features.append("evidence_limit")
+    features.append("consistency")
     features.append("return_provenance")
+    features.append("explain_plan")
     return features^
 
 
@@ -191,12 +207,38 @@ def parse_request_context(json: Value) raises -> RequestContext:
                 "request context execution_mode_preference must be 'deterministic' or 'assisted'"
             )
 
+    if _has_key(json, "deadline_ms"):
+        context.deadline_ms = get_int(json, "deadline_ms")
+        _require_positive_int(
+            context.deadline_ms, "request context deadline_ms"
+        )
+
     if _has_key(json, "scope"):
         var scope_json = json["scope"].clone()
         if not scope_json.is_null():
             context.scope = _parse_scope(scope_json)
 
+    if _has_key(json, "time_range"):
+        var time_range_json = json["time_range"].clone()
+        if not time_range_json.is_null():
+            context.time_range = _parse_time_range(time_range_json)
+
+    if _has_key(json, "evidence_limit"):
+        context.evidence_limit = get_int(json, "evidence_limit")
+        _require_positive_int(
+            context.evidence_limit, "request context evidence_limit"
+        )
+
+    if _has_key(json, "consistency"):
+        context.consistency = get_string(json, "consistency")
+        _require_non_empty(
+            context.consistency, "request context consistency"
+        )
+
     if _has_key(json, "return_provenance"):
         context.return_provenance = get_bool(json, "return_provenance")
+
+    if _has_key(json, "explain_plan"):
+        context.explain_plan = get_bool(json, "explain_plan")
 
     return context^

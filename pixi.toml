@@ -13,15 +13,17 @@ preview = ["pixi-build"]
 
 [dependencies]
 mojo = "=0.26.3.0.dev2026040805"
+envo = { path = "../../../../vendor/mojo/envo" }
 mojson = { path = "../../../../vendor/mojo/mojson" }
 morph = { path = "../../../../vendor/mojo/morph" }
+tempo = { path = "../../../../vendor/mojo/tempo" }
 
 [tasks]
-run = "mojo run src/main.mojo"
-test-unit = "mojo -I src tests/test_hyf.mojo"
-test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
-test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
-test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
+run = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo run -I src -I ../../../../vendor/mojo/flare src/main.mojo"
+test-unit = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_hyf.mojo"
+test-runtime = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_runtime_paths.mojo"
+test-repo-local-process = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_repo_local_process_contract.mojo"
+test-stdio = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_stdio_contract.mojo"
 test-runtime-contract = { depends-on = [
   "test-runtime",
   "test-repo-local-process",

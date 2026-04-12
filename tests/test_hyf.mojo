@@ -32,7 +32,17 @@ from hyf_core.backends.selector import (
 )
 from hyf_core.capabilities.registry import canonical_business_capabilities
 from hyf_core.metadata import current_build_identity, current_package_surface
-from hyf_core.request_context import default_request_context
+from hyf_core.request_context import (
+    RequestScope,
+    TimeRange,
+    default_request_context,
+)
+from hyf_provider.config import load_max_local_provider_config
+from hyf_provider.max_local import (
+    execute_query_rewrite_via_max_local_provider,
+    max_local_provider_status,
+)
+from hyf_provider.schema import build_query_rewrite_request_body
 from hyf_stdio.control.capabilities import build_capabilities_output
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.envelope import WireErrorResponse, WireSuccessResponse
@@ -41,6 +51,10 @@ from hyf_runtime.startup import RuntimeStartupInput, resolve_startup_context
 from hyf_stdio.server import (
     handle_request_line_with_runtime_context,
     handle_request_line_with_control_builders,
+)
+from max_local_process_helper import (
+    reserve_loopback_port,
+    spawn_max_local_stub,
 )
 
 
@@ -867,6 +881,143 @@ def test_invalid_request_preserves_request_and_trace_correlation() raises:
     assert_true(
         result["error"]["message"].string_value().find("unsupported") >= 0
     )
+
+
+def test_max_local_provider_status_probes_health_without_sidecar() raises:
+    var port = reserve_loopback_port()
+    var stub = spawn_max_local_stub(port, "health_ok")
+
+    with ScopedEnvVar(
+        "HYF_MAX_LOCAL_BASE_URL",
+        "http://127.0.0.1:" + String(port) + "/v1",
+    ):
+        with ScopedEnvVar(
+            "HYF_MAX_LOCAL_HEALTH_URL",
+            "http://127.0.0.1:" + String(port) + "/health",
+        ):
+            with ScopedEnvVar("HYF_MAX_LOCAL_REQUEST_TIMEOUT_MS", "1000"):
+                var config = load_max_local_provider_config()
+                assert_equal(
+                    config.base_url,
+                    "http://127.0.0.1:" + String(port) + "/v1",
+                )
+                assert_equal(
+                    config.health_url,
+                    "http://127.0.0.1:" + String(port) + "/health",
+                )
+                var status = max_local_provider_status(config)
+                assert_equal(status.backend_kind, "max_local")
+                assert_equal(status.provider, "max_local")
+                assert_equal(
+                    status.route, "assist_bridge.query_rewrite.max_local"
+                )
+                assert_equal(status.model, "max-local-query-rewrite")
+                assert_equal(status.reachable, True)
+                assert_equal(status.state, "ready")
+
+    stub.wait()
+
+
+def test_max_local_query_rewrite_request_is_mojo_owned() raises:
+    var port = reserve_loopback_port()
+    var stub = spawn_max_local_stub(port, "query_rewrite_ok")
+
+    with ScopedEnvVar(
+        "HYF_MAX_LOCAL_BASE_URL",
+        "http://127.0.0.1:" + String(port) + "/v1",
+    ):
+        with ScopedEnvVar(
+            "HYF_MAX_LOCAL_HEALTH_URL",
+            "http://127.0.0.1:" + String(port) + "/health",
+        ):
+            with ScopedEnvVar("HYF_MAX_LOCAL_REQUEST_TIMEOUT_MS", "1000"):
+                var context = default_request_context()
+                var listing_ids = List[String]()
+                listing_ids.append("listing-1")
+                context.scope = RequestScope(
+                    listing_ids=listing_ids^,
+                    farm_ids=List[String](),
+                    account_ids=List[String](),
+                    platform_ids=List[String](),
+                    object_filters=None,
+                )
+                context.time_range = TimeRange(
+                    start="2026-04-12", end="2026-04-13"
+                )
+                context.explain_plan = True
+
+                var config = load_max_local_provider_config()
+                var request_body = build_query_rewrite_request_body(
+                    config,
+                    "local apples pickup weekend",
+                    context,
+                )
+                assert_equal(
+                    request_body["model"].string_value(),
+                    "max-local-query-rewrite",
+                )
+                assert_equal(
+                    request_body["response_format"]["type"].string_value(),
+                    "json_schema",
+                )
+                assert_equal(
+                    request_body["response_format"]["json_schema"]["strict"]
+                    .bool_value(),
+                    True,
+                )
+                assert_equal(
+                    request_body["response_format"]["json_schema"]["name"]
+                    .string_value(),
+                    "query_rewrite",
+                )
+                assert_equal(
+                    request_body["response_format"]["json_schema"]["schema"][
+                        "additionalProperties"
+                    ].bool_value(),
+                    False,
+                )
+                assert_true(
+                    request_body["messages"][1]["content"]
+                    .string_value()
+                    .find("scope_listing_ids: listing-1")
+                    >= 0
+                )
+                assert_true(
+                    request_body["messages"][1]["content"]
+                    .string_value()
+                    .find("time_range: 2026-04-12 -> 2026-04-13")
+                    >= 0
+                )
+                assert_true(
+                    request_body["messages"][1]["content"]
+                    .string_value()
+                    .find("explain_plan: True")
+                    >= 0
+                )
+
+                var result = execute_query_rewrite_via_max_local_provider(
+                    config,
+                    "local apples pickup weekend",
+                    context,
+                )
+                assert_equal(result.provider, "max_local")
+                assert_equal(
+                    result.route, "assist_bridge.query_rewrite.max_local"
+                )
+                assert_equal(result.model, "max-local-query-rewrite")
+                assert_equal(result.schema_version, 1)
+                assert_true(result.latency_ms >= 0)
+                assert_equal(
+                    result.analysis.rewritten_text, "apples pickup weekend"
+                )
+                assert_equal(
+                    result.analysis.extracted_filters.fulfillment, "pickup"
+                )
+                assert_equal(
+                    result.analysis.extracted_filters.time_window, "weekend"
+                )
+
+    stub.wait()
 
 
 def test_internal_error_is_bounded_on_wire() raises:

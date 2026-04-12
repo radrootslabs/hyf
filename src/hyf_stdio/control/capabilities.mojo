@@ -2,7 +2,17 @@ from std.collections import List
 
 from mojson import Value, loads
 
+from hyf_assist.bridge import (
+    assisted_backend_available_for_capability,
+    assisted_execution_state_for_capability,
+    resolve_assist_bridge_status,
+    serialize_assist_bridge_status_value,
+)
 from hyf_core.capabilities.registry import canonical_business_capabilities
+from hyf_runtime.startup import (
+    RuntimeStartupContext,
+    resolve_startup_context_from_process,
+)
 from hyf_stdio.control.request_context_contract import (
     build_request_context_contract_value,
 )
@@ -16,7 +26,16 @@ def _string_array(values: List[String]) raises -> Value:
 
 
 def build_capabilities_output() raises -> Value:
+    return build_capabilities_output_with_runtime_context(
+        resolve_startup_context_from_process()
+    )
+
+
+def build_capabilities_output_with_runtime_context(
+    runtime_context: RuntimeStartupContext,
+) raises -> Value:
     var output = loads("{}")
+    var assist_bridge = resolve_assist_bridge_status(runtime_context.config)
     var control_routes = List[String]()
     control_routes.append("sys.status")
     control_routes.append("sys.capabilities")
@@ -47,9 +66,21 @@ def build_capabilities_output() raises -> Value:
         )
         value.set("callable", Value(capability.callable))
         value.set("implemented", Value(capability.implemented))
-        value.set("assisted_execution", Value("unavailable"))
         value.set(
-            "assisted_backend_available", Value(capability.assisted_available)
+            "assisted_execution",
+            Value(
+                assisted_execution_state_for_capability(
+                    assist_bridge, capability.id
+                )
+            ),
+        )
+        value.set(
+            "assisted_backend_available",
+            Value(
+                assisted_backend_available_for_capability(
+                    assist_bridge, capability.id
+                )
+            ),
         )
         if capability.disabled_reason != "":
             value.set(
@@ -58,7 +89,13 @@ def build_capabilities_output() raises -> Value:
         capabilities.append(value)
 
     output.set("business_capabilities", capabilities)
-    output.set("assisted_backend_capabilities", loads("[]"))
+    var assisted_backend_capabilities = loads("[]")
+    assisted_backend_capabilities.append(
+        serialize_assist_bridge_status_value(assist_bridge)
+    )
+    output.set(
+        "assisted_backend_capabilities", assisted_backend_capabilities
+    )
     output.set(
         "request_context_contract",
         build_request_context_contract_value(),

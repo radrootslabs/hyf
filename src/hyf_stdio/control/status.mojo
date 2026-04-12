@@ -2,6 +2,10 @@ from std.collections import List
 
 from mojson import Value, loads
 
+from hyf_assist.bridge import (
+    resolve_assist_bridge_status,
+    serialize_assist_bridge_status_value,
+)
 from hyf_core.capabilities.registry import (
     all_deterministic_capabilities_implemented,
     bootstrap_capability_count,
@@ -64,6 +68,7 @@ def build_status_output_with_runtime_context(
     var output = loads("{}")
     var build_identity = _build_identity_value()
     var assisted_enabled = assisted_execution_enabled(runtime_context.config)
+    var assist_bridge = resolve_assist_bridge_status(runtime_context.config)
     output.set("build_identity", build_identity.copy())
     output.set("daemon", build_identity["daemon_name"].clone())
     output.set("transport", build_identity["transport"].clone())
@@ -86,9 +91,13 @@ def build_status_output_with_runtime_context(
     execution_mode_request_behavior.set("deterministic", Value("execute"))
     execution_mode_request_behavior.set(
         "assisted",
-        Value("backend_unavailable")
-        if assisted_enabled
-        else Value("disabled_by_runtime_config"),
+        Value("disabled_by_runtime_config")
+        if assist_bridge.state == "disabled_by_runtime_config"
+        else (
+            Value("bridge_unconfigured")
+            if assist_bridge.state == "unconfigured"
+            else Value("bridge_unavailable")
+        ),
     )
     output.set(
         "execution_mode_request_behavior",
@@ -104,8 +113,11 @@ def build_status_output_with_runtime_context(
             "partially_available"
         ),
     )
-    backends.set("assisted_backend", Value("unavailable"))
+    backends.set("assisted_backend", Value(String(assist_bridge.state)))
     output.set("backend_reachability", backends)
+    output.set(
+        "assist_bridge", serialize_assist_bridge_status_value(assist_bridge)
+    )
 
     var counts = loads("{}")
     counts.set(

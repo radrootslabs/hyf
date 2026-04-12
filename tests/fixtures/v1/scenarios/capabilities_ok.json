@@ -22,16 +22,23 @@
       "output.business_capabilities.0.deterministic_execution": "enabled",
       "output.business_capabilities.0.implementation_status": "implemented",
       "output.business_capabilities.0.callable": true,
+      "output.business_capabilities.0.assisted_execution": "disabled_by_runtime_config",
       "output.business_capabilities.1.id": "filter_extraction",
       "output.business_capabilities.1.deterministic_execution": "disabled",
       "output.business_capabilities.1.implementation_status": "disabled",
       "output.business_capabilities.1.callable": false,
       "output.business_capabilities.1.disabled_reason": "deferred_bootstrap_capability",
       "output.business_capabilities.2.id": "semantic_rank",
+      "output.business_capabilities.2.assisted_execution": "deferred",
       "output.business_capabilities.2.implementation_status": "implemented",
       "output.business_capabilities.6.id": "explain_result",
+      "output.business_capabilities.6.assisted_execution": "deferred",
       "output.business_capabilities.6.implementation_status": "implemented",
-      "output.assisted_backend_capabilities": [],
+      "output.assisted_backend_capabilities.0.id": "hyf_assistd",
+      "output.assisted_backend_capabilities.0.kind": "assist_bridge",
+      "output.assisted_backend_capabilities.0.contract_version": 1,
+      "output.assisted_backend_capabilities.0.backend_kind": "fake",
+      "output.assisted_backend_capabilities.0.state": "disabled_by_runtime_config",
       "output.request_context_contract.accepted_features": [
         "consumer",
         "execution_mode_preference",
@@ -50,6 +57,11 @@
         "return_provenance"
       ],
       "output.request_context_contract.unsupported_field_behavior": "reject"
+    },
+    "contains_all": {
+      "output.assisted_backend_capabilities.0.supported_business_capabilities": [
+        "query_rewrite"
+      ]
     },
     "absent_paths": [
       "error",

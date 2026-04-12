@@ -120,6 +120,17 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     False,
                 )
                 assert_equal(
+                    response["output"]["assist_bridge"]["state"]
+                    .string_value(),
+                    "disabled_by_runtime_config",
+                )
+                assert_equal(
+                    response["output"]["backend_reachability"][
+                        "assisted_backend"
+                    ].string_value(),
+                    "disabled_by_runtime_config",
+                )
+                assert_equal(
                     response["output"]["runtime"]["paths"][
                         "diagnostics_dir"
                     ].string_value(),
@@ -269,7 +280,18 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                     response["output"]["execution_mode_request_behavior"][
                         "assisted"
                     ].string_value(),
-                    "backend_unavailable",
+                    "bridge_unavailable",
+                )
+                assert_equal(
+                    response["output"]["assist_bridge"]["state"]
+                    .string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["backend_reachability"][
+                        "assisted_backend"
+                    ].string_value(),
+                    "unavailable",
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"][
@@ -368,6 +390,11 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                     "disabled_by_runtime_config",
                 )
                 assert_equal(
+                    response["output"]["assist_bridge"]["state"]
+                    .string_value(),
+                    "disabled_by_runtime_config",
+                )
+                assert_equal(
                     response["output"]["runtime"]["config"][
                         "artifact_present"
                     ].bool_value(),
@@ -402,6 +429,50 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                         "allow_assisted"
                     ].bool_value(),
                     False,
+                )
+
+
+def test_capabilities_reports_configured_fake_bridge_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_execution"
+                    ].string_value(),
+                    "bridge_unavailable",
+                )
+                assert_equal(
+                    response["output"]["assisted_backend_capabilities"][0][
+                        "id"
+                    ].string_value(),
+                    "hyf_assistd",
+                )
+                assert_equal(
+                    response["output"]["assisted_backend_capabilities"][0][
+                        "state"
+                    ].string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["assisted_backend_capabilities"][0][
+                        "backend_kind"
+                    ].string_value(),
+                    "fake",
                 )
 
 

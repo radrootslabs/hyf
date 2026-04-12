@@ -30,7 +30,10 @@ from hyf_stdio.codec import (
     encode_success,
     extract_request_correlation,
 )
-from hyf_stdio.control.capabilities import build_capabilities_output
+from hyf_stdio.control.capabilities import (
+    build_capabilities_output,
+    build_capabilities_output_with_runtime_context,
+)
 from hyf_stdio.control.status import (
     build_status_output,
     build_status_output_with_runtime_context,
@@ -278,6 +281,18 @@ def handle_request_with_runtime_context(
                 request_id=String(request.request_id),
                 trace_id=request.trace_id,
                 output=build_status_output_with_runtime_context(
+                    runtime_context
+                ),
+                meta=None,
+            )
+        )
+    if request.capability == "sys.capabilities":
+        return encode_success(
+            WireSuccessResponse(
+                version=hyf_protocol_version(),
+                request_id=String(request.request_id),
+                trace_id=request.trace_id,
+                output=build_capabilities_output_with_runtime_context(
                     runtime_context
                 ),
                 meta=None,

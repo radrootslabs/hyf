@@ -447,10 +447,7 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
         assert_equal(entry["id"].string_value(), capability.id)
         assert_equal(entry["implemented"].bool_value(), capability.implemented)
         assert_equal(entry["callable"].bool_value(), capability.callable)
-        assert_equal(
-            entry["assisted_backend_available"].bool_value(),
-            capability.assisted_available,
-        )
+        assert_equal(entry["assisted_backend_available"].bool_value(), False)
         assert_equal(
             entry["deterministic_execution"].string_value(),
             "enabled" if capability.deterministic_enabled else "disabled",
@@ -468,6 +465,20 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
             )
         else:
             assert_true(not _has_key(entry, "disabled_reason"))
+
+    assert_equal(
+        output["assisted_backend_capabilities"][0]["id"].string_value(),
+        "hyf_assistd",
+    )
+    assert_equal(
+        output["assisted_backend_capabilities"][0]["state"].string_value(),
+        "disabled_by_runtime_config",
+    )
+    assert_equal(
+        output["assisted_backend_capabilities"][0]["backend_kind"]
+        .string_value(),
+        "fake",
+    )
 
 
 def test_disabled_capability_returns_capability_disabled() raises:

@@ -546,13 +546,18 @@ def test_capabilities_reports_ready_fake_bridge_truthfully() raises:
                 )
 
 
-def test_capabilities_reports_ready_pure_mojo_provider_truthfully() raises:
+def test_capabilities_reports_ready_pure_mojo_provider_without_sidecar_runtime() raises:
     with TemporaryDirectory() as temp_dir:
+        var missing_sidecar_endpoint = (
+            Path(temp_dir) / "missing-hyf-assistd"
+        ).__fspath__()
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             '[service]\ntransport = "stdio"\n\n'
             '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "'
+            + missing_sidecar_endpoint
+            + '"\n'
         )
         var health_port = reserve_loopback_port()
         var health_stub = spawn_max_local_stub(health_port, "health_ok")
@@ -671,13 +676,18 @@ def test_status_reports_ready_fake_bridge_truthfully() raises:
                 )
 
 
-def test_status_reports_ready_pure_mojo_provider_truthfully() raises:
+def test_status_reports_ready_pure_mojo_provider_without_sidecar_runtime() raises:
     with TemporaryDirectory() as temp_dir:
+        var missing_sidecar_endpoint = (
+            Path(temp_dir) / "missing-hyf-assistd"
+        ).__fspath__()
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             '[service]\ntransport = "stdio"\n\n'
             '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "'
+            + missing_sidecar_endpoint
+            + '"\n'
         )
         var health_port = reserve_loopback_port()
         var health_stub = spawn_max_local_stub(health_port, "health_ok")
@@ -741,6 +751,12 @@ def test_status_reports_ready_pure_mojo_provider_truthfully() raises:
                         response["output"]["assisted_runtime"]["route"]
                         .string_value(),
                         "provider_runtime.query_rewrite.max_local",
+                    )
+                    assert_equal(
+                        response["output"]["runtime"]["config"]["effective"][
+                            "assist_endpoint"
+                        ].string_value(),
+                        missing_sidecar_endpoint,
                     )
                     assert_equal(
                         response["output"]["backend_reachability"][
@@ -813,13 +829,18 @@ def test_query_rewrite_uses_fake_assist_bridge_when_requested() raises:
                 )
 
 
-def test_query_rewrite_uses_pure_mojo_provider_when_requested() raises:
+def test_query_rewrite_uses_pure_mojo_provider_without_sidecar_runtime() raises:
     with TemporaryDirectory() as temp_dir:
+        var missing_sidecar_endpoint = (
+            Path(temp_dir) / "missing-hyf-assistd"
+        ).__fspath__()
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             '[service]\ntransport = "stdio"\n\n'
             '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
+            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "'
+            + missing_sidecar_endpoint
+            + '"\n'
         )
         var health_port = reserve_loopback_port()
         var provider_port = reserve_loopback_port()

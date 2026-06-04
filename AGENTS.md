@@ -1,7 +1,8 @@
 # hyf - code directives
 
 - this repo defines `hyf`, the contextual intelligence layer for Radroots networks; the primary daemon is `hyfd`
-- treat this repo root as the source of truth for runtime, release, validation, and documentation
+- treat this repo root as the source of truth for source, runtime behavior, repo-local release-candidate validation, and documentation
+- official Radroots signed artifact provisioning, builder selection, target matrices, publication, promotion, and deploy transport are not defined by this repo
 - keep docs and manifests honest about current implementation status and documented command surfaces
 - prefer the smallest coherent change that fully addresses the request; do not mix unrelated cleanup, speculative refactors, or roadmap work into the same change
 - read `README.md`, `pixi.toml`, and `flake.nix` before broad edits, and inspect the current implementation before changing behavior

@@ -1,3 +1,5 @@
+from std.time import perf_counter_ns
+
 from hyf_core.capabilities.query_analysis import QueryAnalysis
 from hyf_core.request_context import RequestContext
 from hyf_provider.client import (
@@ -32,10 +34,12 @@ def execute_query_rewrite_via_max_local_provider(
     config: MaxLocalProviderConfig, text: String, context: RequestContext
 ) raises -> MaxLocalQueryRewriteResult:
     with make_max_local_http_client(config) as client:
+        var start_ns = perf_counter_ns()
         var response = client.post(
             max_local_chat_completions_url(config),
             build_query_rewrite_request_body(config, text, context),
         )
+        var latency_ms = Int((perf_counter_ns() - start_ns) // 1_000_000)
         if not response.ok():
             raise Error(
                 "max_local provider returned HTTP "
@@ -49,7 +53,7 @@ def execute_query_rewrite_via_max_local_provider(
             provider="max_local",
             route=String(config.route),
             model=String(config.model),
-            latency_ms=0,
+            latency_ms=latency_ms,
             schema_version=query_rewrite_schema_version(),
             prompt_version=query_rewrite_prompt_version(),
         )

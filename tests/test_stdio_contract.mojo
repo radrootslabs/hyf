@@ -10,6 +10,10 @@ from fixture_assertions import (
     load_scenario_request_json,
     status_request_with_invalid_version_json,
 )
+from max_local_process_helper import (
+    reserve_loopback_port,
+    spawn_max_local_stub,
+)
 from stdio_process_helper import (
     HYF_PATHS_PROFILE_ENV,
     HYF_PATHS_REPO_LOCAL_ROOT_ENV,
@@ -39,17 +43,33 @@ def _array_contains_string(value: Value, expected: String) raises -> Bool:
     return False
 
 
-def _max_local_runtime_config_toml() -> String:
+def _max_local_runtime_config_toml_with_urls(
+    base_url: String, health_url: String, request_timeout_ms: Int
+) -> String:
     return (
         '[service]\ntransport = "stdio"\n\n'
         '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
         '[assisted]\nprovider = "max_local"\n\n'
         '[assisted.max_local]\nenabled = true\n'
-        'base_url = "http://127.0.0.1:8000/v1"\n'
-        'health_url = "http://127.0.0.1:8000/health"\n'
-        'model = "max-local-query-rewrite"\n'
-        'route = "provider_runtime.query_rewrite.max_local"\n'
-        'request_timeout_ms = 15000\n'
+        'base_url = "'
+        + base_url
+        + '"\n'
+        + 'health_url = "'
+        + health_url
+        + '"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = '
+        + String(request_timeout_ms)
+        + "\n"
+    )
+
+
+def _max_local_runtime_config_toml() -> String:
+    return _max_local_runtime_config_toml_with_urls(
+        "http://127.0.0.1:8000/v1",
+        "http://127.0.0.1:8000/health",
+        15000,
     )
 
 
@@ -690,6 +710,87 @@ def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable
                     response["output"]["rewritten_text"].string_value(),
                     "apples",
                 )
+
+
+def test_query_rewrite_uses_max_local_provider_when_ready() raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "query_rewrite_ok", 2
+        )
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                15000,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    '{"version":1,"request_id":"rewrite-assisted-max-local-1","trace_id":"rewrite-assisted-max-local-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"local apples pickup weekend"}}',
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "assisted",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "provider_runtime",
+                )
+                assert_equal(
+                    response["meta"]["provider"].string_value(),
+                    "max_local",
+                )
+                assert_equal(
+                    response["meta"]["route"].string_value(),
+                    "provider_runtime.query_rewrite.max_local",
+                )
+                assert_equal(
+                    response["meta"]["model"].string_value(),
+                    "max-local-query-rewrite",
+                )
+                assert_true(
+                    Int(response["meta"]["latency_ms"].int_value()) >= 0
+                )
+                assert_equal(
+                    Int(response["meta"]["schema_version"].int_value()), 1
+                )
+                assert_equal(
+                    response["meta"]["prompt_version"].string_value(),
+                    "max_local_query_rewrite_v1",
+                )
+                assert_equal(
+                    response["meta"]["provenance"]["kind"].string_value(),
+                    "assisted",
+                )
+                assert_true(
+                    response["meta"]["provenance"]["fallback"].is_null()
+                )
+                assert_equal(
+                    response["output"]["rewritten_text"].string_value(),
+                    "apples pickup weekend",
+                )
+                assert_equal(
+                    response["output"]["query_terms"][0].string_value(),
+                    "apples",
+                )
+                assert_equal(
+                    response["output"]["query_terms"][1].string_value(),
+                    "pickup",
+                )
+                assert_equal(
+                    response["output"]["query_terms"][2].string_value(),
+                    "weekend",
+                )
+
+        provider_stub.wait()
 
 
 def test_status_reports_configured_but_deferred_custody_truthfully() raises:

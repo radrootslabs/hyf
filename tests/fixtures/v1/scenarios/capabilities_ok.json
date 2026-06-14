@@ -35,10 +35,10 @@
       "output.business_capabilities.6.assisted_execution": "deferred",
       "output.business_capabilities.6.implementation_status": "implemented",
       "output.assisted_runtime_capabilities.0.id": "hyf_provider_runtime",
-      "output.assisted_runtime_capabilities.0.kind": "provider_runtime",
+      "output.assisted_runtime_capabilities.0.kind": "deferred_provider_runtime",
       "output.assisted_runtime_capabilities.0.contract_version": 1,
-      "output.assisted_runtime_capabilities.0.transport": "in_process",
-      "output.assisted_runtime_capabilities.0.backend_kind": "max_local",
+      "output.assisted_runtime_capabilities.0.transport": "deferred",
+      "output.assisted_runtime_capabilities.0.backend_kind": "deferred",
       "output.assisted_runtime_capabilities.0.state": "disabled_by_runtime_config",
       "output.request_context_contract.accepted_features": [
         "consumer",

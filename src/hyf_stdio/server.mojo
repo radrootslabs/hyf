@@ -31,11 +31,9 @@ from hyf_stdio.codec import (
     extract_request_correlation,
 )
 from hyf_stdio.control.capabilities import (
-    build_capabilities_output,
     build_capabilities_output_with_runtime_context,
 )
 from hyf_stdio.control.status import (
-    build_status_output,
     build_status_output_with_runtime_context,
 )
 from hyf_stdio.envelope import (
@@ -210,71 +208,6 @@ def _route_business_capability(
     return encode_error(_unavailable_response(request))
 
 
-@parameter
-def handle_request_with_control_builders[
-    status_builder: def() raises -> Value,
-    capabilities_builder: def() raises -> Value,
-](request: WireRequest) raises -> String:
-    return handle_request_with_runtime_context_and_control_builders[
-        status_builder, capabilities_builder
-    ](request, resolve_startup_context_from_process())
-
-
-@parameter
-def handle_request_with_runtime_context_and_control_builders[
-    status_builder: def() raises -> Value,
-    capabilities_builder: def() raises -> Value,
-](
-    request: WireRequest,
-    runtime_context: RuntimeStartupContext,
-) raises -> String:
-    var request_id = String(request.request_id)
-    var trace_id = request.trace_id
-    var diagnostics_dir = effective_diagnostics_dir_for_runtime_paths(
-        runtime_context.paths
-    )
-    try:
-        if request.capability == "sys.status":
-            return encode_success(
-                WireSuccessResponse(
-                    version=hyf_protocol_version(),
-                    request_id=request_id,
-                    trace_id=trace_id,
-                    output=status_builder(),
-                    meta=None,
-                )
-            )
-        elif request.capability == "sys.capabilities":
-            return encode_success(
-                WireSuccessResponse(
-                    version=hyf_protocol_version(),
-                    request_id=request_id,
-                    trace_id=trace_id,
-                    output=capabilities_builder(),
-                    meta=None,
-                )
-            )
-        return _route_business_capability(
-            request.copy(), request_id, runtime_context
-        )
-    except e:
-        _emit_internal_diagnostic(
-            request_id,
-            trace_id,
-            String(request.capability),
-            String(e),
-            diagnostics_dir,
-        )
-        return encode_error(
-            WireErrorResponse(
-                version=hyf_protocol_version(),
-                request_id=request_id,
-                trace_id=trace_id,
-                error=internal_error(),
-            )
-        )
-
-
 def handle_request(request: WireRequest) raises -> String:
     return handle_request_with_runtime_context(
         request, resolve_startup_context_from_process()
@@ -331,50 +264,6 @@ def handle_request_with_runtime_context(
                 request_id=request_id,
                 trace_id=trace_id,
                 error=internal_error(),
-            )
-        )
-
-
-@parameter
-def handle_request_line_with_control_builders[
-    status_builder: def() raises -> Value,
-    capabilities_builder: def() raises -> Value,
-](line: String) raises -> String:
-    try:
-        var request = decode_request(line)
-        return handle_request_with_control_builders[
-            status_builder, capabilities_builder
-        ](request^)
-    except e:
-        var correlation = extract_request_correlation(line)
-        return encode_error(
-            WireErrorResponse(
-                version=hyf_protocol_version(),
-                request_id=correlation.request_id,
-                trace_id=correlation.trace_id,
-                error=invalid_request_error(String(e)),
-            )
-        )
-
-
-@parameter
-def handle_request_line_with_runtime_context_and_control_builders[
-    status_builder: def() raises -> Value,
-    capabilities_builder: def() raises -> Value,
-](line: String, runtime_context: RuntimeStartupContext) raises -> String:
-    try:
-        var request = decode_request(line)
-        return handle_request_with_runtime_context_and_control_builders[
-            status_builder, capabilities_builder
-        ](request^, runtime_context)
-    except e:
-        var correlation = extract_request_correlation(line)
-        return encode_error(
-            WireErrorResponse(
-                version=hyf_protocol_version(),
-                request_id=correlation.request_id,
-                trace_id=correlation.trace_id,
-                error=invalid_request_error(String(e)),
             )
         )
 

@@ -12,18 +12,19 @@ platforms = ["osx-arm64", "linux-64"]
 preview = ["pixi-build"]
 
 [dependencies]
-mojo = "=0.26.3.0.dev2026040805"
-envo = { path = "../../../../vendor/mojo/envo" }
-mojson = { path = "../../../../vendor/mojo/mojson" }
-morph = { path = "../../../../vendor/mojo/morph" }
-tempo = { path = "../../../../vendor/mojo/tempo" }
+mojo = "==1.0.0b1"
+json = { git = "https://github.com/triesap/mojo_json.git", rev = "56025d73631054d7803143fa5e68c5de578e33f5" }
+morph = { git = "https://github.com/triesap/mojo_morph.git", rev = "ea73f909990f3d3f5d12b786fec2f09e1e09f462" }
+envo = { git = "https://github.com/triesap/mojo_envo.git", rev = "50e1a62ef333862427d32e63098e782816475549" }
+tempo = { git = "https://github.com/triesap/mojo_tempo.git", rev = "4a4b9f051286f2ef24cb0c8b0614f7ac7314e4bd" }
+flare = { git = "https://github.com/triesap/mojo_flare.git", rev = "6d4788422f0940ea2ccb3dfe59f16be0330b3f0a" }
 
 [tasks]
-run = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo run -I src -I ../../../../vendor/mojo/flare src/main.mojo"
-test-unit = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_hyf.mojo"
-test-runtime = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_runtime_paths.mojo"
-test-repo-local-process = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_repo_local_process_contract.mojo"
-test-stdio = "FLARE_LIB=../../../../vendor/mojo/flare/build/libflare_tls.so FLARE_ZLIB_LIB=../../../../vendor/mojo/flare/build/libflare_zlib.so mojo -I src -I ../../../../vendor/mojo/flare tests/test_stdio_contract.mojo"
+run = "mojo run -I src src/main.mojo"
+test-unit = "mojo -I src tests/test_hyf.mojo"
+test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
+test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
+test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
 test-runtime-contract = { depends-on = [
   "test-runtime",
   "test-repo-local-process",

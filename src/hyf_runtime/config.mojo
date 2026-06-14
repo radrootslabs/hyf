@@ -23,27 +23,43 @@ struct HyfExecutionRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
-struct HyfAssistBridgeRuntimeConfig(Defaultable, Copyable, Movable):
-    var bridge_enabled: Bool
-    var transport: String
-    var endpoint: String
+struct HyfMaxLocalProviderRuntimeConfig(Defaultable, Copyable, Movable):
+    var enabled: Bool
+    var base_url: String
+    var health_url: String
+    var model: String
+    var route: String
+    var request_timeout_ms: Int
 
     def __init__(out self):
-        self.bridge_enabled = False
-        self.transport = "stdio"
-        self.endpoint = ""
+        self.enabled = False
+        self.base_url = ""
+        self.health_url = ""
+        self.model = ""
+        self.route = ""
+        self.request_timeout_ms = 0
+
+
+@fieldwise_init
+struct HyfAssistedRuntimeConfig(Defaultable, Copyable, Movable):
+    var provider: String
+    var max_local: HyfMaxLocalProviderRuntimeConfig
+
+    def __init__(out self):
+        self.provider = ""
+        self.max_local = HyfMaxLocalProviderRuntimeConfig()
 
 
 @fieldwise_init
 struct HyfRuntimeConfig(Defaultable, Copyable, Movable):
     var service: HyfServiceRuntimeConfig
     var runtime: HyfExecutionRuntimeConfig
-    var assist: HyfAssistBridgeRuntimeConfig
+    var assisted: HyfAssistedRuntimeConfig
 
     def __init__(out self):
         self.service = HyfServiceRuntimeConfig()
         self.runtime = HyfExecutionRuntimeConfig()
-        self.assist = HyfAssistBridgeRuntimeConfig()
+        self.assisted = HyfAssistedRuntimeConfig()
 
 
 @fieldwise_init
@@ -77,9 +93,14 @@ def assisted_execution_enabled(config: HyfLoadedRuntimeConfig) -> Bool:
 
 def assisted_runtime_configured(config: HyfLoadedRuntimeConfig) -> Bool:
     return (
-        config.effective.assist.bridge_enabled
-        and not String(config.effective.assist.endpoint).strip() == ""
+        config.effective.runtime.allow_assisted
+        and config.effective.assisted.provider == "max_local"
+        and config.effective.assisted.max_local.enabled
     )
+
+
+def max_local_provider_configured(config: HyfLoadedRuntimeConfig) -> Bool:
+    return assisted_runtime_configured(config)
 
 
 def load_runtime_config(path: String) -> HyfLoadedRuntimeConfig:
@@ -118,13 +139,46 @@ def _validate_runtime_config(config: HyfRuntimeConfig) raises:
             "runtime.default_execution_mode must be 'deterministic' in the foundation wave"
         )
 
-    if config.assist.transport != "stdio":
-        raise Error("assist.transport must be 'stdio'")
+    if config.runtime.allow_assisted:
+        if config.assisted.provider != "max_local":
+            raise Error(
+                "assisted.provider must be 'max_local' when runtime.allow_assisted is true"
+            )
 
-    if (
-        config.assist.bridge_enabled
-        and String(config.assist.endpoint).strip() == ""
-    ):
-        raise Error(
-            "assist.endpoint must be configured when assist.bridge_enabled is true"
-        )
+    if config.assisted.provider != "" and config.assisted.provider != "max_local":
+        raise Error("assisted.provider must be 'max_local'")
+
+    if config.assisted.max_local.enabled:
+        if not config.runtime.allow_assisted:
+            raise Error(
+                "runtime.allow_assisted must be true when assisted.max_local.enabled is true"
+            )
+        if config.assisted.provider != "max_local":
+            raise Error(
+                "assisted.provider must be 'max_local' when assisted.max_local.enabled is true"
+            )
+        _validate_max_local_provider_config(config.assisted.max_local)
+
+
+def _require_non_empty(value: String, context: String) raises:
+    if String(value).strip() == "":
+        raise Error(context + " must not be empty")
+
+
+def _require_http_url(value: String, context: String) raises:
+    var trimmed = String(value).strip()
+    if not (trimmed.startswith("http://") or trimmed.startswith("https://")):
+        raise Error(context + " must use http or https")
+
+
+def _validate_max_local_provider_config(
+    config: HyfMaxLocalProviderRuntimeConfig
+) raises:
+    _require_non_empty(config.base_url, "assisted.max_local.base_url")
+    _require_http_url(config.base_url, "assisted.max_local.base_url")
+    _require_non_empty(config.health_url, "assisted.max_local.health_url")
+    _require_http_url(config.health_url, "assisted.max_local.health_url")
+    _require_non_empty(config.model, "assisted.max_local.model")
+    _require_non_empty(config.route, "assisted.max_local.route")
+    if config.request_timeout_ms <= 0:
+        raise Error("assisted.max_local.request_timeout_ms must be greater than zero")

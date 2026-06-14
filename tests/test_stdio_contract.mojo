@@ -39,6 +39,54 @@ def _array_contains_string(value: Value, expected: String) raises -> Bool:
     return False
 
 
+def _max_local_runtime_config_toml() -> String:
+    return (
+        '[service]\ntransport = "stdio"\n\n'
+        '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        '[assisted]\nprovider = "max_local"\n\n'
+        '[assisted.max_local]\nenabled = true\n'
+        'base_url = "http://127.0.0.1:8000/v1"\n'
+        'health_url = "http://127.0.0.1:8000/health"\n'
+        'model = "max-local-query-rewrite"\n'
+        'route = "provider_runtime.query_rewrite.max_local"\n'
+        'request_timeout_ms = 15000\n'
+    )
+
+
+def _assert_invalid_runtime_config_load_error(
+    config_text: String, expected_error_fragment: String
+) raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "invalid-hyf-config.toml"
+        startup_config_path.write_text(config_text)
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["runtime"]["config"]["loaded"]
+                    .bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["load_state"]
+                    .string_value(),
+                    "invalid",
+                )
+                assert_true(
+                    response["output"]["runtime"]["config"]["load_error"]
+                    .string_value()
+                    .find(expected_error_fragment)
+                    >= 0
+                )
+
+
 def test_status_success() raises:
     var response = run_hyf_stdio(
         load_scenario_request_json("scenarios/status_ok.json")
@@ -262,11 +310,7 @@ def test_status_reports_repo_local_runtime_truth() raises:
 def test_status_loads_valid_runtime_config_truthfully() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
-        startup_config_path.write_text(
-            '[service]\ntransport = "stdio"\n\n'
-            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
-        )
+        startup_config_path.write_text(_max_local_runtime_config_toml())
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -371,9 +415,35 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"]["effective"][
-                        "assist_endpoint"
+                        "assisted_provider"
                     ].string_value(),
-                    "hyf-assistd://local",
+                    "max_local",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "max_local_enabled"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "max_local_model"
+                    ].string_value(),
+                    "max-local-query-rewrite",
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["effective"][
+                        "max_local_route"
+                    ].string_value(),
+                    "provider_runtime.query_rewrite.max_local",
+                )
+                assert_equal(
+                    Int(
+                        response["output"]["runtime"]["config"]["effective"][
+                            "max_local_request_timeout_ms"
+                        ].int_value()
+                    ),
+                    15000,
                 )
                 assert_true(
                     not _has_key(
@@ -454,14 +524,92 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                 )
 
 
-def test_capabilities_reports_configured_assist_runtime_deferred_truthfully() raises:
+def test_status_rejects_invalid_max_local_runtime_config() raises:
+    var prefix = (
+        '[service]\ntransport = "stdio"\n\n'
+        '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+    )
+    var disabled_prefix = (
+        '[service]\ntransport = "stdio"\n\n'
+        '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = false\n\n'
+    )
+    var provider = '[assisted]\nprovider = "max_local"\n\n'
+    var max_local_header = '[assisted.max_local]\nenabled = true\n'
+    _assert_invalid_runtime_config_load_error(
+        prefix + '[assisted]\nprovider = "unsupported"\n',
+        "assisted.provider",
+    )
+    _assert_invalid_runtime_config_load_error(
+        disabled_prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "runtime.allow_assisted",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.base_url",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "file:///tmp/max"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.base_url",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = ""\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.model",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = ""\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 0\n',
+        "assisted.max_local.request_timeout_ms",
+    )
+
+
+def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
-        startup_config_path.write_text(
-            '[service]\ntransport = "stdio"\n\n'
-            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
-        )
+        startup_config_path.write_text(_max_local_runtime_config_toml())
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -504,14 +652,10 @@ def test_capabilities_reports_configured_assist_runtime_deferred_truthfully() ra
                 )
 
 
-def test_query_rewrite_falls_back_deterministically_when_bridge_is_unavailable() raises:
+def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
-        startup_config_path.write_text(
-            '[service]\ntransport = "stdio"\n\n'
-            '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-            '[assist]\nbridge_enabled = true\ntransport = "stdio"\nendpoint = "hyf-assistd://local"\n'
-        )
+        startup_config_path.write_text(_max_local_runtime_config_toml())
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(

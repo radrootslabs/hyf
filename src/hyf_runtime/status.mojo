@@ -76,19 +76,31 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
     )
     effective.set(
         "assisted_runtime_enabled",
-        Value(context.config.effective.assist.bridge_enabled),
+        Value(context.config.effective.runtime.allow_assisted),
     )
     effective.set(
         "assisted_runtime_configured",
         Value(assisted_runtime_configured(context.config)),
     )
     effective.set(
-        "assist_transport",
-        Value(String(context.config.effective.assist.transport)),
+        "assisted_provider",
+        Value(String(context.config.effective.assisted.provider)),
     )
     effective.set(
-        "assist_endpoint",
-        Value(String(context.config.effective.assist.endpoint)),
+        "max_local_enabled",
+        Value(context.config.effective.assisted.max_local.enabled),
+    )
+    effective.set(
+        "max_local_model",
+        Value(String(context.config.effective.assisted.max_local.model)),
+    )
+    effective.set(
+        "max_local_route",
+        Value(String(context.config.effective.assisted.max_local.route)),
+    )
+    effective.set(
+        "max_local_request_timeout_ms",
+        Value(context.config.effective.assisted.max_local.request_timeout_ms),
     )
     config.set("effective", effective)
     status.set("config", config)

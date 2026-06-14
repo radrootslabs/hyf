@@ -23,16 +23,12 @@ def resolve_assisted_runtime_status(
     if assisted_execution_enabled(config):
         state = "unavailable" if configured else "unconfigured"
 
-    var endpoint = String("")
-    if configured:
-        endpoint = String(config.effective.assist.endpoint)
-
     return AssistedRuntimeStatus(
         id=provider_runtime_id(),
         kind="provider_runtime",
         contract_version=assisted_runtime_contract_version(),
         transport="deferred",
-        endpoint=endpoint,
+        endpoint="",
         backend_kind="deferred",
         provider="",
         route="",

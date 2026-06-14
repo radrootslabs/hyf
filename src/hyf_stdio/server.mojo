@@ -12,9 +12,6 @@ from hyf_runtime.startup import (
     RuntimeStartupContext,
     resolve_startup_context_from_process,
 )
-from hyf_core.backends.selector import (
-    execute_capability as execute_backend_capability,
-)
 from hyf_core.capabilities.registry import (
     canonical_business_capability,
 )
@@ -50,6 +47,9 @@ from hyf_stdio.errors import (
     unsupported_capability_error,
 )
 from hyf_stdio.meta import serialize_core_response_meta
+from hyf_stdio.provider_execution import (
+    execute_runtime_aware_business_capability,
+)
 
 
 def _read_request_line() raises -> String:
@@ -179,10 +179,11 @@ def _dispatch_business_capability(
     request_id: String,
     runtime_context: RuntimeStartupContext,
 ) raises -> String:
-    var result = execute_backend_capability(
+    var result = execute_runtime_aware_business_capability(
         request.capability,
         request.input.clone(),
         request.context.copy(),
+        runtime_context,
     )
     return _dispatch_capability_result(request_id, request.trace_id, result)
 

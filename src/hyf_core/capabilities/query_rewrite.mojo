@@ -27,7 +27,7 @@ from hyf_core.provenance import (
 from hyf_core.request_context import RequestContext, assisted_execution_requested
 
 
-def _build_output(analysis: QueryAnalysis) raises -> Value:
+def build_query_rewrite_output(analysis: QueryAnalysis) raises -> Value:
     var output = loads("{}")
     output.set("original_text", Value(String(analysis.original_text)))
     output.set("normalized_text", Value(String(analysis.normalized_text)))
@@ -65,7 +65,7 @@ def _base_source_refs(
     return source_refs^
 
 
-def _build_deterministic_fallback_meta(
+def build_query_rewrite_deterministic_fallback_meta(
     context: RequestContext,
     analysis: QueryAnalysis,
     fallback_kind: String,
@@ -104,8 +104,8 @@ def execute_query_rewrite(
         var analysis = analyze_query_text(request.text, context)
         if assisted_execution_requested(context):
             return successful_capability(
-                _build_output(analysis),
-                meta=_build_deterministic_fallback_meta(
+                build_query_rewrite_output(analysis),
+                meta=build_query_rewrite_deterministic_fallback_meta(
                     context,
                     analysis,
                     "assisted_execution",
@@ -115,7 +115,7 @@ def execute_query_rewrite(
 
         var source_refs = List[ProvenanceSourceRef]()
         return successful_capability(
-            _build_output(analysis),
+            build_query_rewrite_output(analysis),
             meta=build_deterministic_meta(
                 context=context,
                 capability_name="query_rewrite",

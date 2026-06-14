@@ -61,6 +61,7 @@ environments:
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-compiler-1.0.0b1-release.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.3.0-release.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mojo-python-1.0.0b1-release.conda
+      - conda_source: flare[373ea143] @ git+https://github.com/triesap/mojo_flare?rev=14aa338d8c4f352ebb2d590cddfde0bde5ea1971#14aa338d8c4f352ebb2d590cddfde0bde5ea1971
       - conda_source: json[9dd23c1f] @ git+https://github.com/triesap/mojo_json?rev=56025d73631054d7803143fa5e68c5de578e33f5#56025d73631054d7803143fa5e68c5de578e33f5
       - conda_source: morph[39ce1c7e] @ git+https://github.com/triesap/mojo_morph?rev=ea73f909990f3d3f5d12b786fec2f09e1e09f462#ea73f909990f3d3f5d12b786fec2f09e1e09f462
       osx-arm64:
@@ -109,6 +110,7 @@ environments:
       - conda: https://conda.modular.com/max-nightly/noarch/mojo-python-1.0.0b1-release.conda
       - conda: https://conda.modular.com/max-nightly/osx-arm64/mojo-1.0.0b1-release.conda
       - conda: https://conda.modular.com/max-nightly/osx-arm64/mojo-compiler-1.0.0b1-release.conda
+      - conda_source: flare[c903ec05] @ git+https://github.com/triesap/mojo_flare?rev=14aa338d8c4f352ebb2d590cddfde0bde5ea1971#14aa338d8c4f352ebb2d590cddfde0bde5ea1971
       - conda_source: json[1efb775d] @ git+https://github.com/triesap/mojo_json?rev=56025d73631054d7803143fa5e68c5de578e33f5#56025d73631054d7803143fa5e68c5de578e33f5
       - conda_source: morph[70142729] @ git+https://github.com/triesap/mojo_morph?rev=ea73f909990f3d3f5d12b786fec2f09e1e09f462#ea73f909990f3d3f5d12b786fec2f09e1e09f462
 packages:
@@ -1812,6 +1814,102 @@ packages:
   run_exports: {}
   size: 67503416
   timestamp: 1777596016502
+- conda_source: flare[373ea143] @ git+https://github.com/triesap/mojo_flare?rev=14aa338d8c4f352ebb2d590cddfde0bde5ea1971#14aa338d8c4f352ebb2d590cddfde0bde5ea1971
+  version: 0.8.0
+  build: hb0f4dca_0
+  subdir: linux-64
+  variants:
+    target_platform: linux-64
+  depends:
+  - mojo ==1.0.0b1
+  - json >=0.2.0,<0.3.0
+  - openssl >=3.0,<4
+  - openssl >=3.6.3,<4.0a0
+  - ca-certificates
+  - libstdcxx >=15
+  - libgcc >=15
+  license: MIT
+  build_packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/binutils_impl_linux-64-2.45.1-default_hfdba357_102.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/binutils_linux-64-2.45.1-default_h4852527_102.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/gcc_impl_linux-64-15.2.0-he0086c7_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/gcc_linux-64-15.2.0-h7be306e_27.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx_impl_linux-64-15.2.0-hda75c37_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx_linux-64-15.2.0-hcb00b6d_27.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.45.1-default_hbd61a6d_102.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libsanitizer-15.2.0-h90f66d4_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libstdcxx-15.2.0-h934c35e_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_2.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/kernel-headers_linux-64-4.18.0-he073ed8_9.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/libgcc-devel_linux-64-15.2.0-hcc6f6b0_119.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/libstdcxx-devel_linux-64-15.2.0-hd446a21_119.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-64-2.28-h4ee821c_9.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+  host_packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libstdcxx-15.2.0-h934c35e_19.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.3-h35e630c_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.5.20-hbd8a1cb_0.conda
+- conda_source: flare[c903ec05] @ git+https://github.com/triesap/mojo_flare?rev=14aa338d8c4f352ebb2d590cddfde0bde5ea1971#14aa338d8c4f352ebb2d590cddfde0bde5ea1971
+  version: 0.8.0
+  build: h60d57d3_0
+  subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
+  depends:
+  - mojo ==1.0.0b1
+  - json >=0.2.0,<0.3.0
+  - openssl >=3.0,<4
+  - openssl >=3.6.3,<4.0a0
+  - ca-certificates
+  - libcxx >=22
+  license: MIT
+  build_packages:
+  - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.5.20-hbd8a1cb_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/compiler-rt22_osx-arm64-22.1.7-h7e67a1e_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/compiler-rt_osx-arm64-22.1.7-hce30654_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/libcxx-headers-22.1.7-h707e725_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/noarch/sdkroot_env_osx-arm64-26.0-ha3f98da_7.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cctools_impl_osx-arm64-1030.6.3-llvm22_1_hb5e89dc_4.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cctools_osx-arm64-1030.6.3-llvm22_1_hbe26303_4.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang-22-22.1.7-default_hd632d02_1.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang-scan-deps-22.1.7-default_h8e162e0_1.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_impl_osx-arm64-22.1.7-default_h17d1ed9_1.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_osx-arm64-22.1.7-hf119d2b_32.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_impl_osx-arm64-22.1.7-default_h17d1ed9_1.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_osx-arm64-22.1.7-hf119d2b_32.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/compiler-rt-22.1.7-hce30654_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/compiler-rt22-22.1.7-hd34ed20_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ld64_osx-arm64-956.6-llvm22_1_h692d5aa_4.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libclang-cpp22.1-22.1.7-default_h8e162e0_1.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libclang13-22.1.7-default_h6dd9417_1.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcompiler-rt-22.1.7-hd34ed20_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-22.1.7-h55c6f16_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-devel-22.1.7-h6dc3340_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libiconv-1.18-h23cfdf5_2.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libllvm22-22.1.7-h89af1be_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libsigtool-0.1.3-h98dc951_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libxml2-16-2.15.3-h6967ea9_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libxml2-2.15.3-heed7d32_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/llvm-tools-22-22.1.7-hb545844_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/llvm-tools-22.1.7-hd34ed20_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/sigtool-codesign-0.1.3-h98dc951_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tapi-1600.0.11.8-h997e182_2.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
+  host_packages:
+  - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.5.20-hbd8a1cb_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-22.1.7-h55c6f16_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
 - conda_source: json[1efb775d] @ git+https://github.com/triesap/mojo_json?rev=56025d73631054d7803143fa5e68c5de578e33f5#56025d73631054d7803143fa5e68c5de578e33f5
   version: 0.2.0
   build: h60d57d3_0

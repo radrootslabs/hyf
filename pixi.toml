@@ -15,6 +15,7 @@ preview = ["pixi-build"]
 mojo = "==1.0.0b1"
 json = { git = "https://github.com/triesap/mojo_json.git", rev = "56025d73631054d7803143fa5e68c5de578e33f5" }
 morph = { git = "https://github.com/triesap/mojo_morph.git", rev = "ea73f909990f3d3f5d12b786fec2f09e1e09f462" }
+flare = { git = "https://github.com/triesap/mojo_flare.git", rev = "14aa338d8c4f352ebb2d590cddfde0bde5ea1971" }
 
 [tasks]
 run = "mojo run -I src src/main.mojo"
@@ -22,9 +23,14 @@ test-unit = "mojo -I src tests/test_hyf.mojo"
 test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
 test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
 test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
+test-provider-adapter = "mojo -I src tests/test_provider_adapter.mojo"
 test-runtime-contract = { depends-on = [
   "test-runtime",
   "test-repo-local-process",
   "test-stdio",
 ] }
-test = { depends-on = ["test-unit", "test-runtime-contract"] }
+test = { depends-on = [
+  "test-unit",
+  "test-provider-adapter",
+  "test-runtime-contract",
+] }

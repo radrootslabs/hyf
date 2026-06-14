@@ -29,5 +29,6 @@ struct AssistedRuntimeStatus(Copyable, Movable):
     var configured: Bool
     var reachable: Bool
     var state: String
+    var reason: String
     var fallback_contract: String
     var supported_business_capabilities: List[String]

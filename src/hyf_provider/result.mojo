@@ -53,18 +53,26 @@ def _first_validation_error(value: Value) raises -> String:
 
 def extract_chat_completion_text(response: Value) raises -> String:
     if not response.is_object():
-        raise Error("max_local response must be a JSON object")
+        raise Error("provider_invalid_response")
+    if _has_key(response, "error"):
+        raise Error("provider_error_payload")
     if not _has_key(response, "choices"):
-        raise Error("max_local response must contain choices")
+        raise Error("provider_empty_choices")
     if (
         not response["choices"].is_array()
         or len(response["choices"].array_items()) == 0
     ):
-        raise Error("max_local response choices must be a non-empty array")
+        raise Error("provider_empty_choices")
 
-    var message = response["choices"][0]["message"].clone()
+    var choice = response["choices"][0].clone()
+    if not choice.is_object() or not _has_key(choice, "message"):
+        raise Error("provider_missing_content")
+
+    var message = choice["message"].clone()
     if not message.is_object():
-        raise Error("max_local response choice message must be an object")
+        raise Error("provider_missing_content")
+    if not _has_key(message, "content"):
+        raise Error("provider_missing_content")
 
     var content = message["content"].clone()
     if content.is_string():
@@ -86,36 +94,47 @@ def extract_chat_completion_text(response: Value) raises -> String:
         if collected != "":
             return collected^
 
-    raise Error("max_local response contained no text content")
+    raise Error("provider_missing_content")
 
 
 def parse_query_analysis_json(value: Value) raises -> QueryAnalysis:
     if not value.is_object():
-        raise Error("query_rewrite structured output must be an object")
+        raise Error("provider_schema_invalid")
 
     var validation_error = _first_validation_error(value.clone())
     if validation_error != "":
-        raise Error(validation_error)
+        raise Error("provider_schema_invalid")
 
-    var filters = value["extracted_filters"].clone()
-    return QueryAnalysis(
-        original_text=value["original_text"].string_value(),
-        normalized_text=value["normalized_text"].string_value(),
-        rewritten_text=value["rewritten_text"].string_value(),
-        query_terms=_string_array(value["query_terms"], "query_terms"),
-        normalization_signals=_string_array(
-            value["normalization_signals"], "normalization_signals"
-        ),
-        ranking_hints=_string_array(value["ranking_hints"], "ranking_hints"),
-        extracted_filters=ExtractedFilters(
-            local_intent=filters["local_intent"].bool_value(),
-            fulfillment=filters["fulfillment"].string_value(),
-            time_window=filters["time_window"].string_value(),
-        ),
-    )
+    try:
+        var filters = value["extracted_filters"].clone()
+        return QueryAnalysis(
+            original_text=value["original_text"].string_value(),
+            normalized_text=value["normalized_text"].string_value(),
+            rewritten_text=value["rewritten_text"].string_value(),
+            query_terms=_string_array(value["query_terms"], "query_terms"),
+            normalization_signals=_string_array(
+                value["normalization_signals"], "normalization_signals"
+            ),
+            ranking_hints=_string_array(
+                value["ranking_hints"], "ranking_hints"
+            ),
+            extracted_filters=ExtractedFilters(
+                local_intent=filters["local_intent"].bool_value(),
+                fulfillment=filters["fulfillment"].string_value(),
+                time_window=filters["time_window"].string_value(),
+            ),
+        )
+    except:
+        raise Error("provider_schema_invalid")
 
 
 def parse_query_analysis_from_chat_completion(
     response: Value,
 ) raises -> QueryAnalysis:
-    return parse_query_analysis_json(loads(extract_chat_completion_text(response)))
+    var text = extract_chat_completion_text(response)
+    try:
+        return parse_query_analysis_json(loads(text))
+    except e:
+        if String(e).find("provider_schema_invalid") >= 0:
+            raise Error("provider_schema_invalid")
+        raise Error("provider_invalid_json")

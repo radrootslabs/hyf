@@ -52,7 +52,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("content-type", content_type)
         self.send_header("content-length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            return
 
     def do_GET(self):
         if self.path == "/health":

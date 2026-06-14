@@ -65,12 +65,77 @@ def _max_local_runtime_config_toml_with_urls(
     )
 
 
-def _max_local_runtime_config_toml() -> String:
+def _unavailable_max_local_runtime_config_toml() raises -> String:
+    var provider_port = reserve_loopback_port()
     return _max_local_runtime_config_toml_with_urls(
-        "http://127.0.0.1:8000/v1",
-        "http://127.0.0.1:8000/health",
-        15000,
+        "http://127.0.0.1:" + String(provider_port) + "/v1",
+        "http://127.0.0.1:" + String(provider_port) + "/health",
+        250,
     )
+
+
+def _query_rewrite_assisted_request_json(request_id: String) -> String:
+    return (
+        '{"version":1,"request_id":"'
+        + request_id
+        + '","trace_id":"'
+        + request_id
+        + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup"}}'
+    )
+
+
+def _assert_query_rewrite_provider_fallback(
+    mode: String, expected_reason: String, request_timeout_ms: Int
+) raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(provider_port, mode, 2)
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                request_timeout_ms,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    _query_rewrite_assisted_request_json(
+                        "rewrite-assisted-" + mode
+                    ),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "heuristic",
+                )
+                assert_true(not _has_key(response["meta"], "provider"))
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"][
+                        "fallback_kind"
+                    ].string_value(),
+                    "provider_runtime",
+                )
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"]["reason"]
+                    .string_value(),
+                    expected_reason,
+                )
+                assert_equal(
+                    response["output"]["rewritten_text"].string_value(),
+                    "apples",
+                )
+
+        provider_stub.wait()
 
 
 def _assert_invalid_runtime_config_load_error(
@@ -330,7 +395,9 @@ def test_status_reports_repo_local_runtime_truth() raises:
 def test_status_loads_valid_runtime_config_truthfully() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
-        startup_config_path.write_text(_max_local_runtime_config_toml())
+        startup_config_path.write_text(
+            _unavailable_max_local_runtime_config_toml()
+        )
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -359,6 +426,11 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                     "unavailable",
                 )
                 assert_equal(
+                    response["output"]["assisted_runtime"]["reason"]
+                    .string_value(),
+                    "connection_failed",
+                )
+                assert_equal(
                     response["output"]["assisted_runtime"]["id"]
                     .string_value(),
                     "hyf_provider_runtime",
@@ -371,7 +443,32 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                 assert_equal(
                     response["output"]["assisted_runtime"]["transport"]
                     .string_value(),
-                    "deferred",
+                    "http",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["backend_kind"]
+                    .string_value(),
+                    "max_local",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["provider"]
+                    .string_value(),
+                    "max_local",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["route"]
+                    .string_value(),
+                    "provider_runtime.query_rewrite.max_local",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["model"]
+                    .string_value(),
+                    "max-local-query-rewrite",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reachable"]
+                    .bool_value(),
+                    False,
                 )
                 assert_equal(
                     response["output"]["backend_reachability"][
@@ -499,12 +596,17 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                     response["output"]["execution_mode_request_behavior"][
                         "assisted"
                     ].string_value(),
-                    "disabled_by_runtime_config",
+                    "invalid_config",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime"]["state"]
                     .string_value(),
-                    "disabled_by_runtime_config",
+                    "invalid_config",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reason"]
+                    .string_value(),
+                    "invalid_config",
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"][
@@ -542,6 +644,175 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                     ].bool_value(),
                     False,
                 )
+
+
+def test_status_reports_unconfigured_assisted_runtime_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            '[service]\ntransport = "stdio"\n\n'
+            + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            + '[assisted]\nprovider = "max_local"\n'
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["execution_mode_request_behavior"][
+                        "assisted"
+                    ].string_value(),
+                    "provider_unconfigured",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["state"]
+                    .string_value(),
+                    "unconfigured",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reason"]
+                    .string_value(),
+                    "not_checked",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["transport"]
+                    .string_value(),
+                    "deferred",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["configured"]
+                    .bool_value(),
+                    False,
+                )
+
+
+def test_status_reports_non_2xx_max_local_health_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "health_non_2xx", 1
+        )
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                15000,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["assisted_runtime"]["state"]
+                    .string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reason"]
+                    .string_value(),
+                    "non_2xx",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reachable"]
+                    .bool_value(),
+                    False,
+                )
+
+        provider_stub.wait()
+
+
+def test_status_reports_ready_max_local_provider_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "query_rewrite_ok", 1
+        )
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                15000,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["execution_mode_request_behavior"][
+                        "assisted"
+                    ].string_value(),
+                    "execute",
+                )
+                assert_equal(
+                    response["output"]["backend_reachability"][
+                        "assisted_backend"
+                    ].string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["state"]
+                    .string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reason"]
+                    .string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["transport"]
+                    .string_value(),
+                    "http",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["backend_kind"]
+                    .string_value(),
+                    "max_local",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["provider"]
+                    .string_value(),
+                    "max_local",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["route"]
+                    .string_value(),
+                    "provider_runtime.query_rewrite.max_local",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["model"]
+                    .string_value(),
+                    "max-local-query-rewrite",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reachable"]
+                    .bool_value(),
+                    True,
+                )
+
+        provider_stub.wait()
 
 
 def test_status_rejects_invalid_max_local_runtime_config() raises:
@@ -629,7 +900,9 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
 def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
-        startup_config_path.write_text(_max_local_runtime_config_toml())
+        startup_config_path.write_text(
+            _unavailable_max_local_runtime_config_toml()
+        )
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -645,6 +918,12 @@ def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
                         "assisted_execution"
                     ].string_value(),
                     "unavailable",
+                )
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_backend_available"
+                    ].bool_value(),
+                    False,
                 )
                 assert_equal(
                     response["output"]["assisted_runtime_capabilities"][0][
@@ -666,21 +945,95 @@ def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
                 )
                 assert_equal(
                     response["output"]["assisted_runtime_capabilities"][0][
+                        "reason"
+                    ].string_value(),
+                    "connection_failed",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
                         "backend_kind"
                     ].string_value(),
-                    "deferred",
+                    "max_local",
                 )
+
+
+def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "query_rewrite_ok", 1
+        )
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                15000,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_execution"
+                    ].string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_backend_available"
+                    ].bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["business_capabilities"][2][
+                        "assisted_execution"
+                    ].string_value(),
+                    "unsupported_capability",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
+                        "state"
+                    ].string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
+                        "reason"
+                    ].string_value(),
+                    "ready",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
+                        "backend_kind"
+                    ].string_value(),
+                    "max_local",
+                )
+
+        provider_stub.wait()
 
 
 def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
-        startup_config_path.write_text(_max_local_runtime_config_toml())
+        startup_config_path.write_text(
+            _unavailable_max_local_runtime_config_toml()
+        )
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
-                    '{"version":1,"request_id":"rewrite-assisted-fallback-1","trace_id":"rewrite-assisted-fallback-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup"}}',
+                    _query_rewrite_assisted_request_json(
+                        "rewrite-assisted-fallback-1"
+                    ),
                     "--config",
                     startup_config_path.__fspath__(),
                 )
@@ -699,12 +1052,12 @@ def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable
                     response["meta"]["provenance"]["fallback"][
                         "fallback_kind"
                     ].string_value(),
-                    "assisted_execution",
+                    "provider_runtime",
                 )
                 assert_equal(
                     response["meta"]["provenance"]["fallback"]["reason"]
                     .string_value(),
-                    "deferred_bootstrap_runtime",
+                    "connection_failed",
                 )
                 assert_equal(
                     response["output"]["rewritten_text"].string_value(),
@@ -791,6 +1144,48 @@ def test_query_rewrite_uses_max_local_provider_when_ready() raises:
                 )
 
         provider_stub.wait()
+
+
+def test_query_rewrite_falls_back_on_provider_non_2xx() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_non_2xx", "provider_non_2xx", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_timeout() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_timeout", "timeout", 100
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_invalid_json() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_invalid_json", "provider_invalid_json", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_schema_invalid_json() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_schema_invalid", "provider_schema_invalid", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_empty_choices() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_empty_choices", "provider_empty_choices", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_missing_content() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_missing_content", "provider_missing_content", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_error_payload() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_error_payload", "provider_error_payload", 15000
+    )
 
 
 def test_status_reports_configured_but_deferred_custody_truthfully() raises:

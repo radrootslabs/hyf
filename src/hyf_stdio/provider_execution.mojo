@@ -103,8 +103,24 @@ def _fallback_reason_for_runtime_state(state: String) -> String:
 
 def _provider_execution_error_reason(message: String) -> String:
     var lower = message.lower()
-    if lower.find("http") >= 0:
+    if lower.find("timeout") >= 0 or lower.find("timed out") >= 0:
+        return "timeout"
+    if lower.find("connection") >= 0:
+        return "connection_failed"
+    if lower.find("provider_non_2xx") >= 0 or lower.find("http") >= 0:
         return "provider_non_2xx"
+    if lower.find("provider_error_payload") >= 0:
+        return "provider_error_payload"
+    if lower.find("provider_invalid_json") >= 0:
+        return "provider_invalid_json"
+    if lower.find("provider_schema_invalid") >= 0:
+        return "provider_schema_invalid"
+    if lower.find("provider_empty_choices") >= 0:
+        return "provider_empty_choices"
+    if lower.find("provider_missing_content") >= 0:
+        return "provider_missing_content"
+    if lower.find("provider_invalid_response") >= 0:
+        return "provider_invalid_response"
     if lower.find("choices") >= 0:
         return "provider_empty_choices"
     if lower.find("content") >= 0 or lower.find("message") >= 0:

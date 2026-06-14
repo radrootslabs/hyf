@@ -41,10 +41,7 @@ def execute_query_rewrite_via_max_local_provider(
         )
         var latency_ms = Int((perf_counter_ns() - start_ns) // 1_000_000)
         if not response.ok():
-            raise Error(
-                "max_local provider returned HTTP "
-                + String(response.status)
-            )
+            raise Error("provider_non_2xx")
 
         return MaxLocalQueryRewriteResult(
             analysis=parse_query_analysis_from_chat_completion(

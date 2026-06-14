@@ -1,6 +1,6 @@
 from std.collections import List
 
-from mojson import Value, loads, validate
+from json import Value, loads, validate
 
 from hyf_core.capabilities.query_analysis import (
     ExtractedFilters,

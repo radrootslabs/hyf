@@ -1,6 +1,6 @@
 from std.pathlib import Path, _dir_of_current_file
 
-from mojson import Value, loads
+from json import Value, loads
 
 
 def fixture_root_path() raises -> Path:

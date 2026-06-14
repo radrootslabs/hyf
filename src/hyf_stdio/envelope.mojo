@@ -1,7 +1,7 @@
 from std.collections import Optional
 
-from mojson import Value, loads
-from mojson.deserialize import Deserializable, get_string
+from json import Value, loads
+from json.deserialize import Deserializable, get_string
 
 from hyf_core.metadata import hyf_protocol_version
 from hyf_core.request_context import RequestContext, parse_request_context

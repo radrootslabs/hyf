@@ -1,4 +1,4 @@
-from mojson import Value
+from json import Value
 
 from hyf_core.capabilities.registry import (
     execute_registered_business_capability,

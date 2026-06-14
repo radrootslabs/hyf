@@ -1,7 +1,7 @@
 from std.io.io import _fdopen
 from std.sys import stdin
 
-from mojson import Value, loads
+from json import Value, loads
 
 from hyf_runtime.startup import resolve_startup_context_from_process
 from hyf_stdio.server import (

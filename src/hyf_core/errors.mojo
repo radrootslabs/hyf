@@ -1,6 +1,6 @@
 from std.collections import Optional
 
-from mojson import Value
+from json import Value
 
 from hyf_core.provenance import CoreResponseMeta
 

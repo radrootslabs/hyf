@@ -1,12 +1,9 @@
 from std.collections import List, Optional
 
-from mojson import Value
+from json import Value
 
 from hyf_core.capabilities.explain_result import execute_explain_result
 from hyf_core.capabilities.query_rewrite import execute_query_rewrite
-from hyf_core.capabilities.query_rewrite import (
-    execute_query_rewrite_with_runtime_config,
-)
 from hyf_core.capabilities.semantic_rank import execute_semantic_rank
 from hyf_core.errors import (
     CapabilityResult,
@@ -14,7 +11,6 @@ from hyf_core.errors import (
     failed_capability,
 )
 from hyf_core.request_context import RequestContext
-from hyf_runtime.config import HyfLoadedRuntimeConfig
 
 
 @fieldwise_init
@@ -175,7 +171,6 @@ def _dispatch_heuristic_registered_business_capability(
         return execute_explain_result(input, context)
     return failed_capability(capability_not_implemented_error(capability_id))
 
-
 def execute_registered_business_capability(
     capability_id: String, input: Value, context: RequestContext
 ) raises -> CapabilityResult:
@@ -197,18 +192,3 @@ def execute_registered_business_capability(
         )
 
     return failed_capability(capability_not_implemented_error(capability_id))
-
-
-def execute_registered_business_capability_with_runtime_config(
-    capability_id: String,
-    input: Value,
-    context: RequestContext,
-    runtime_config: HyfLoadedRuntimeConfig,
-) raises -> CapabilityResult:
-    if capability_id == "query_rewrite":
-        return execute_query_rewrite_with_runtime_config(
-            input, context, runtime_config
-        )
-    return execute_registered_business_capability(
-        capability_id, input, context
-    )

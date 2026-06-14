@@ -1,7 +1,7 @@
 from std.collections import List
 
-from mojson import Value
-from mojson.deserialize import get_float, get_int, get_string
+from json import Value
+from json.deserialize import get_float, get_int, get_string
 
 from hyf_core.capabilities.query_analysis import (
     QueryAnalysis,

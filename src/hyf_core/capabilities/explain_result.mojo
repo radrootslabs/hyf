@@ -1,6 +1,6 @@
 from std.collections import List
 
-from mojson import Value, loads
+from json import Value, loads
 
 from hyf_core.capabilities.query_analysis import (
     analyze_query_text,

@@ -1,4 +1,4 @@
-from mojson import Value, loads
+from json import Value, loads
 
 from hyf_core.request_context import RequestContext
 from hyf_provider.config import MaxLocalProviderConfig

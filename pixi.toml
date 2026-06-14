@@ -17,7 +17,6 @@ json = { git = "https://github.com/triesap/mojo_json.git", rev = "56025d73631054
 morph = { git = "https://github.com/triesap/mojo_morph.git", rev = "ea73f909990f3d3f5d12b786fec2f09e1e09f462" }
 envo = { git = "https://github.com/triesap/mojo_envo.git", rev = "50e1a62ef333862427d32e63098e782816475549" }
 tempo = { git = "https://github.com/triesap/mojo_tempo.git", rev = "4a4b9f051286f2ef24cb0c8b0614f7ac7314e4bd" }
-flare = { git = "https://github.com/triesap/mojo_flare.git", rev = "6d4788422f0940ea2ccb3dfe59f16be0330b3f0a" }
 
 [tasks]
 run = "mojo run -I src src/main.mojo"

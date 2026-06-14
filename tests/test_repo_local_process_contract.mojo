@@ -1,7 +1,7 @@
 from std.testing import TestSuite, assert_equal, assert_true
 from std.tempfile import TemporaryDirectory
 
-from mojson import Value
+from json import Value
 from fixture_assertions import load_scenario_request_json
 from stdio_process_helper import (
     HYF_PATHS_PROFILE_ENV,

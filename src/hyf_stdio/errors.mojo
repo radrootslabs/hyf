@@ -1,4 +1,4 @@
-from mojson import Value, loads
+from json import Value, loads
 
 
 @fieldwise_init

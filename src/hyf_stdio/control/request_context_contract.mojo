@@ -1,6 +1,6 @@
 from std.collections import List
 
-from mojson import Value, loads
+from json import Value, loads
 
 from hyf_core.request_context import (
     accepted_request_context_feature_names,

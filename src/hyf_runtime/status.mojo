@@ -1,4 +1,4 @@
-from mojson import Value, loads
+from json import Value, loads
 
 from hyf_runtime.config import assist_bridge_configured
 from hyf_runtime.diagnostics import (

@@ -1,12 +1,12 @@
 from std.collections import List
 
-from mojson import Value, loads
+from json import Value, loads
 
-from hyf_assist.bridge import (
+from hyf_stdio.control.assisted_runtime import (
     assisted_backend_available_for_capability,
     assisted_execution_state_for_capability,
-    resolve_assist_bridge_status,
-    serialize_assist_bridge_status_value,
+    resolve_assisted_runtime_status,
+    serialize_assisted_runtime_status_value,
 )
 from hyf_core.capabilities.registry import canonical_business_capabilities
 from hyf_runtime.startup import (
@@ -35,7 +35,7 @@ def build_capabilities_output_with_runtime_context(
     runtime_context: RuntimeStartupContext,
 ) raises -> Value:
     var output = loads("{}")
-    var assist_bridge = resolve_assist_bridge_status(runtime_context.config)
+    var assist_runtime = resolve_assisted_runtime_status(runtime_context.config)
     var control_routes = List[String]()
     control_routes.append("sys.status")
     control_routes.append("sys.capabilities")
@@ -70,7 +70,7 @@ def build_capabilities_output_with_runtime_context(
             "assisted_execution",
             Value(
                 assisted_execution_state_for_capability(
-                    assist_bridge, capability.id
+                    assist_runtime, capability.id
                 )
             ),
         )
@@ -78,7 +78,7 @@ def build_capabilities_output_with_runtime_context(
             "assisted_backend_available",
             Value(
                 assisted_backend_available_for_capability(
-                    assist_bridge, capability.id
+                    assist_runtime, capability.id
                 )
             ),
         )
@@ -91,7 +91,7 @@ def build_capabilities_output_with_runtime_context(
     output.set("business_capabilities", capabilities)
     var assisted_runtime_capabilities = loads("[]")
     assisted_runtime_capabilities.append(
-        serialize_assist_bridge_status_value(assist_bridge)
+        serialize_assisted_runtime_status_value(assist_runtime)
     )
     output.set(
         "assisted_runtime_capabilities", assisted_runtime_capabilities.copy()

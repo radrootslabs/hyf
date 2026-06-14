@@ -9,7 +9,7 @@ from std.testing import (
 )
 from std.tempfile import TemporaryDirectory
 
-from mojson import Value, loads
+from json import Value, loads
 
 from fixture_assertions import (
     assert_matches_scenario_response,

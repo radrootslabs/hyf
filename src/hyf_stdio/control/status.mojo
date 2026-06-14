@@ -1,10 +1,10 @@
 from std.collections import List
 
-from mojson import Value, loads
+from json import Value, loads
 
-from hyf_assist.bridge import (
-    resolve_assist_bridge_status,
-    serialize_assist_bridge_status_value,
+from hyf_stdio.control.assisted_runtime import (
+    resolve_assisted_runtime_status,
+    serialize_assisted_runtime_status_value,
 )
 from hyf_core.capabilities.registry import (
     all_deterministic_capabilities_implemented,
@@ -68,7 +68,7 @@ def build_status_output_with_runtime_context(
     var output = loads("{}")
     var build_identity = _build_identity_value()
     var assisted_enabled = assisted_execution_enabled(runtime_context.config)
-    var assist_bridge = resolve_assist_bridge_status(runtime_context.config)
+    var assist_runtime = resolve_assisted_runtime_status(runtime_context.config)
     output.set("build_identity", build_identity.copy())
     output.set("daemon", build_identity["daemon_name"].clone())
     output.set("transport", build_identity["transport"].clone())
@@ -90,18 +90,22 @@ def build_status_output_with_runtime_context(
     var execution_mode_request_behavior = loads("{}")
     execution_mode_request_behavior.set("deterministic", Value("execute"))
     var assisted_request_behavior = "provider_unavailable"
-    if assist_bridge.kind == "assist_bridge":
+    if assist_runtime.kind == "assist_bridge":
         assisted_request_behavior = "bridge_unavailable"
-    if assist_bridge.state == "ready":
+    if assist_runtime.state == "ready":
         assisted_request_behavior = "execute"
-    elif assist_bridge.state == "disabled_by_runtime_config":
+    elif assist_runtime.state == "disabled_by_runtime_config":
         assisted_request_behavior = "disabled_by_runtime_config"
-    elif assist_bridge.state == "unconfigured":
+    elif assist_runtime.state == "unconfigured":
         assisted_request_behavior = (
             "bridge_unconfigured"
-            if assist_bridge.kind == "assist_bridge"
+            if assist_runtime.kind == "assist_bridge"
             else "provider_unconfigured"
         )
+    elif assist_runtime.state == "bridge_unavailable":
+        assisted_request_behavior = "bridge_unavailable"
+    elif assist_runtime.state == "bridge_unconfigured":
+        assisted_request_behavior = "bridge_unconfigured"
     execution_mode_request_behavior.set(
         "assisted", Value(String(assisted_request_behavior))
     )
@@ -119,14 +123,14 @@ def build_status_output_with_runtime_context(
             "partially_available"
         ),
     )
-    backends.set("assisted_backend", Value(String(assist_bridge.state)))
+    backends.set("assisted_backend", Value(String(assist_runtime.state)))
     output.set("backend_reachability", backends)
     output.set(
         "assisted_runtime",
-        serialize_assist_bridge_status_value(assist_bridge),
+        serialize_assisted_runtime_status_value(assist_runtime),
     )
     output.set(
-        "assist_bridge", serialize_assist_bridge_status_value(assist_bridge)
+        "assist_bridge", serialize_assisted_runtime_status_value(assist_runtime)
     )
 
     var counts = loads("{}")

@@ -1,6 +1,6 @@
 from std.collections import Optional
 
-from mojson import Value, dumps, loads
+from json import Value, dumps, loads
 
 from hyf_stdio.envelope import (
     WireErrorResponse,

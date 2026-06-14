@@ -4,7 +4,7 @@ from std.ffi import CStringSlice, c_int, external_call
 from std.sys._libc import close
 from std.tempfile import TemporaryDirectory
 
-from mojson import Value, loads
+from json import Value, loads
 
 
 comptime HYF_PATHS_PROFILE_ENV = "HYF_PATHS_PROFILE"

@@ -1,6 +1,6 @@
 from std.collections import List, Optional
 
-from mojson import Value, loads
+from json import Value, loads
 
 from hyf_core.provenance import (
     CoreResponseMeta,

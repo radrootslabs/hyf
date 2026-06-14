@@ -1,7 +1,7 @@
 from std.collections import List, Optional
 
-from mojson import Value
-from mojson.deserialize import get_bool, get_int, get_string
+from json import Value
+from json.deserialize import get_bool, get_int, get_string
 
 
 def _has_key(value: Value, key: String) -> Bool:

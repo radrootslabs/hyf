@@ -3,7 +3,7 @@ from std.ffi import CStringSlice, c_int, external_call
 from std.os import Pipe, Process
 from std.sys._libc import close
 
-from mojson import Value, dumps, loads
+from json import Value, dumps, loads
 
 from hyf_core.capabilities.query_analysis import (
     ExtractedFilters,

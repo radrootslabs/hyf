@@ -5,7 +5,7 @@ from flare.http import Request, Response, Status
 from flare.http.server import _handle_connection
 from flare.net import SocketAddr
 from flare.tcp import TcpListener
-from mojson import Value, dumps, loads
+from json import Value, dumps, loads
 
 
 def _arg_value(flag: String) raises -> String:

@@ -1,6 +1,6 @@
 from std.testing import assert_equal, assert_true
 
-from mojson import Value, dumps, loads
+from json import Value, dumps, loads
 
 from fixture_loader import (
     load_fixture_scenario_expected,

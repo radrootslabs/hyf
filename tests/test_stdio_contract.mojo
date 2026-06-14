@@ -4,7 +4,7 @@ from std.pathlib import Path
 from std.testing import assert_equal, assert_true, TestSuite
 from std.tempfile import TemporaryDirectory
 
-from mojson import Value
+from json import Value
 from fixture_assertions import (
     assert_matches_scenario_response,
     load_scenario_request_json,

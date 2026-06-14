@@ -3,34 +3,34 @@ from std.collections import List
 from json import Value, loads
 
 from hyf_assist.contract import (
-    AssistBridgeStatus,
-    assist_bridge_contract_version,
-    assist_bridge_supported_business_capabilities,
+    AssistedRuntimeStatus,
+    assisted_runtime_contract_version,
+    assisted_runtime_supported_business_capabilities,
     provider_runtime_id,
 )
 from hyf_runtime.config import (
     HyfLoadedRuntimeConfig,
-    assist_bridge_configured,
+    assisted_runtime_configured,
     assisted_execution_enabled,
 )
 
 
 def resolve_assisted_runtime_status(
     config: HyfLoadedRuntimeConfig,
-) -> AssistBridgeStatus:
-    var configured = assist_bridge_configured(config)
+) -> AssistedRuntimeStatus:
+    var configured = assisted_runtime_configured(config)
     var state = "disabled_by_runtime_config"
     if assisted_execution_enabled(config):
-        state = "bridge_unavailable" if configured else "bridge_unconfigured"
+        state = "unavailable" if configured else "unconfigured"
 
     var endpoint = String("")
     if configured:
         endpoint = String(config.effective.assist.endpoint)
 
-    return AssistBridgeStatus(
+    return AssistedRuntimeStatus(
         id=provider_runtime_id(),
-        kind="deferred_provider_runtime",
-        contract_version=assist_bridge_contract_version(),
+        kind="provider_runtime",
+        contract_version=assisted_runtime_contract_version(),
         transport="deferred",
         endpoint=endpoint,
         backend_kind="deferred",
@@ -41,28 +41,28 @@ def resolve_assisted_runtime_status(
         reachable=False,
         state=state,
         fallback_contract="deterministic_baseline_preserved",
-        supported_business_capabilities=assist_bridge_supported_business_capabilities(),
+        supported_business_capabilities=assisted_runtime_supported_business_capabilities(),
     )
 
 
 def assisted_execution_state_for_capability(
-    status: AssistBridgeStatus, capability_id: String
+    status: AssistedRuntimeStatus, capability_id: String
 ) -> String:
     if capability_id != "query_rewrite":
-        return "deferred"
+        return "unsupported_capability"
     if status.state == "disabled_by_runtime_config":
         return "disabled_by_runtime_config"
     return status.state
 
 
 def assisted_backend_available_for_capability(
-    status: AssistBridgeStatus, capability_id: String
+    status: AssistedRuntimeStatus, capability_id: String
 ) -> Bool:
     return False
 
 
 def serialize_assisted_runtime_status_value(
-    status: AssistBridgeStatus,
+    status: AssistedRuntimeStatus,
 ) raises -> Value:
     var value = loads("{}")
     value.set("id", Value(String(status.id)))

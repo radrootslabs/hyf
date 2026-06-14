@@ -465,24 +465,24 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
             assert_true(not _has_key(entry, "disabled_reason"))
 
     assert_equal(
-        output["assisted_backend_capabilities"][0]["id"].string_value(),
+        output["provider_runtime_capabilities"][0]["id"].string_value(),
         "hyf_provider_runtime",
     )
     assert_equal(
-        output["assisted_backend_capabilities"][0]["kind"].string_value(),
-        "deferred_provider_runtime",
+        output["provider_runtime_capabilities"][0]["kind"].string_value(),
+        "provider_runtime",
     )
     assert_equal(
-        output["assisted_backend_capabilities"][0]["transport"]
+        output["provider_runtime_capabilities"][0]["transport"]
         .string_value(),
         "deferred",
     )
     assert_equal(
-        output["assisted_backend_capabilities"][0]["state"].string_value(),
+        output["provider_runtime_capabilities"][0]["state"].string_value(),
         "disabled_by_runtime_config",
     )
     assert_equal(
-        output["assisted_backend_capabilities"][0]["backend_kind"]
+        output["provider_runtime_capabilities"][0]["backend_kind"]
         .string_value(),
         "deferred",
     )

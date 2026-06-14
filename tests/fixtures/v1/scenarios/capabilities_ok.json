@@ -29,17 +29,23 @@
       "output.business_capabilities.1.callable": false,
       "output.business_capabilities.1.disabled_reason": "deferred_bootstrap_capability",
       "output.business_capabilities.2.id": "semantic_rank",
-      "output.business_capabilities.2.assisted_execution": "deferred",
+      "output.business_capabilities.2.assisted_execution": "unsupported_capability",
       "output.business_capabilities.2.implementation_status": "implemented",
       "output.business_capabilities.6.id": "explain_result",
-      "output.business_capabilities.6.assisted_execution": "deferred",
+      "output.business_capabilities.6.assisted_execution": "unsupported_capability",
       "output.business_capabilities.6.implementation_status": "implemented",
       "output.assisted_runtime_capabilities.0.id": "hyf_provider_runtime",
-      "output.assisted_runtime_capabilities.0.kind": "deferred_provider_runtime",
+      "output.assisted_runtime_capabilities.0.kind": "provider_runtime",
       "output.assisted_runtime_capabilities.0.contract_version": 1,
       "output.assisted_runtime_capabilities.0.transport": "deferred",
       "output.assisted_runtime_capabilities.0.backend_kind": "deferred",
       "output.assisted_runtime_capabilities.0.state": "disabled_by_runtime_config",
+      "output.provider_runtime_capabilities.0.id": "hyf_provider_runtime",
+      "output.provider_runtime_capabilities.0.kind": "provider_runtime",
+      "output.provider_runtime_capabilities.0.contract_version": 1,
+      "output.provider_runtime_capabilities.0.transport": "deferred",
+      "output.provider_runtime_capabilities.0.backend_kind": "deferred",
+      "output.provider_runtime_capabilities.0.state": "disabled_by_runtime_config",
       "output.request_context_contract.accepted_features": [
         "consumer",
         "execution_mode_preference",
@@ -61,6 +67,9 @@
     },
     "contains_all": {
       "output.assisted_runtime_capabilities.0.supported_business_capabilities": [
+        "query_rewrite"
+      ],
+      "output.provider_runtime_capabilities.0.supported_business_capabilities": [
         "query_rewrite"
       ]
     },

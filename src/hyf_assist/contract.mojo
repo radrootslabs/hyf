@@ -1,7 +1,7 @@
 from std.collections import List
 
 
-def assist_bridge_contract_version() -> Int:
+def assisted_runtime_contract_version() -> Int:
     return 1
 
 
@@ -9,14 +9,14 @@ def provider_runtime_id() -> String:
     return "hyf_provider_runtime"
 
 
-def assist_bridge_supported_business_capabilities() -> List[String]:
+def assisted_runtime_supported_business_capabilities() -> List[String]:
     var capabilities = List[String]()
     capabilities.append("query_rewrite")
     return capabilities^
 
 
 @fieldwise_init
-struct AssistBridgeStatus(Copyable, Movable):
+struct AssistedRuntimeStatus(Copyable, Movable):
     var id: String
     var kind: String
     var contract_version: Int

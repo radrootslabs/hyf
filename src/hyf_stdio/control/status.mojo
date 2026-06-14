@@ -90,22 +90,16 @@ def build_status_output_with_runtime_context(
     var execution_mode_request_behavior = loads("{}")
     execution_mode_request_behavior.set("deterministic", Value("execute"))
     var assisted_request_behavior = "provider_unavailable"
-    if assist_runtime.kind == "assist_bridge":
-        assisted_request_behavior = "bridge_unavailable"
     if assist_runtime.state == "ready":
         assisted_request_behavior = "execute"
     elif assist_runtime.state == "disabled_by_runtime_config":
         assisted_request_behavior = "disabled_by_runtime_config"
     elif assist_runtime.state == "unconfigured":
-        assisted_request_behavior = (
-            "bridge_unconfigured"
-            if assist_runtime.kind == "assist_bridge"
-            else "provider_unconfigured"
-        )
-    elif assist_runtime.state == "bridge_unavailable":
-        assisted_request_behavior = "bridge_unavailable"
-    elif assist_runtime.state == "bridge_unconfigured":
-        assisted_request_behavior = "bridge_unconfigured"
+        assisted_request_behavior = "provider_unconfigured"
+    elif assist_runtime.state == "invalid_config":
+        assisted_request_behavior = "invalid_config"
+    elif assist_runtime.state == "degraded":
+        assisted_request_behavior = "provider_degraded"
     execution_mode_request_behavior.set(
         "assisted", Value(String(assisted_request_behavior))
     )
@@ -130,7 +124,8 @@ def build_status_output_with_runtime_context(
         serialize_assisted_runtime_status_value(assist_runtime),
     )
     output.set(
-        "assist_bridge", serialize_assisted_runtime_status_value(assist_runtime)
+        "provider_runtime",
+        serialize_assisted_runtime_status_value(assist_runtime),
     )
 
     var counts = loads("{}")

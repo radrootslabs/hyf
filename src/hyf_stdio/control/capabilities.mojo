@@ -97,7 +97,7 @@ def build_capabilities_output_with_runtime_context(
         "assisted_runtime_capabilities", assisted_runtime_capabilities.copy()
     )
     output.set(
-        "assisted_backend_capabilities", assisted_runtime_capabilities
+        "provider_runtime_capabilities", assisted_runtime_capabilities
     )
     output.set(
         "request_context_contract",

@@ -36,11 +36,17 @@
       "output.backend_reachability.deterministic_backend": "available",
       "output.backend_reachability.assisted_backend": "disabled_by_runtime_config",
       "output.assisted_runtime.id": "hyf_provider_runtime",
-      "output.assisted_runtime.kind": "deferred_provider_runtime",
+      "output.assisted_runtime.kind": "provider_runtime",
       "output.assisted_runtime.contract_version": 1,
       "output.assisted_runtime.transport": "deferred",
       "output.assisted_runtime.backend_kind": "deferred",
       "output.assisted_runtime.state": "disabled_by_runtime_config",
+      "output.provider_runtime.id": "hyf_provider_runtime",
+      "output.provider_runtime.kind": "provider_runtime",
+      "output.provider_runtime.contract_version": 1,
+      "output.provider_runtime.transport": "deferred",
+      "output.provider_runtime.backend_kind": "deferred",
+      "output.provider_runtime.state": "disabled_by_runtime_config",
       "output.counts.canonical_business_capabilities": 8,
       "output.counts.deterministic_registered_business_capabilities": 3,
       "output.counts.deterministic_implemented_business_capabilities": 3,
@@ -72,6 +78,9 @@
         "explain_result"
       ],
       "output.assisted_runtime.supported_business_capabilities": [
+        "query_rewrite"
+      ],
+      "output.provider_runtime.supported_business_capabilities": [
         "query_rewrite"
       ],
       "output.disabled_capabilities": [

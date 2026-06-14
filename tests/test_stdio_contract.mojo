@@ -287,12 +287,12 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                     response["output"]["execution_mode_request_behavior"][
                         "assisted"
                     ].string_value(),
-                    "bridge_unavailable",
+                    "provider_unavailable",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime"]["state"]
                     .string_value(),
-                    "bridge_unavailable",
+                    "unavailable",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime"]["id"]
@@ -302,7 +302,7 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                 assert_equal(
                     response["output"]["assisted_runtime"]["kind"]
                     .string_value(),
-                    "deferred_provider_runtime",
+                    "provider_runtime",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime"]["transport"]
@@ -313,7 +313,7 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                     response["output"]["backend_reachability"][
                         "assisted_backend"
                     ].string_value(),
-                    "bridge_unavailable",
+                    "unavailable",
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"][
@@ -359,13 +359,13 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"]["effective"][
-                        "assist_bridge_enabled"
+                        "assisted_runtime_enabled"
                     ].bool_value(),
                     True,
                 )
                 assert_equal(
                     response["output"]["runtime"]["config"]["effective"][
-                        "assist_bridge_configured"
+                        "assisted_runtime_configured"
                     ].bool_value(),
                     True,
                 )
@@ -476,7 +476,7 @@ def test_capabilities_reports_configured_assist_runtime_deferred_truthfully() ra
                     response["output"]["business_capabilities"][0][
                         "assisted_execution"
                     ].string_value(),
-                    "bridge_unavailable",
+                    "unavailable",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime_capabilities"][0][
@@ -488,13 +488,13 @@ def test_capabilities_reports_configured_assist_runtime_deferred_truthfully() ra
                     response["output"]["assisted_runtime_capabilities"][0][
                         "kind"
                     ].string_value(),
-                    "deferred_provider_runtime",
+                    "provider_runtime",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime_capabilities"][0][
                         "state"
                     ].string_value(),
-                    "bridge_unavailable",
+                    "unavailable",
                 )
                 assert_equal(
                     response["output"]["assisted_runtime_capabilities"][0][

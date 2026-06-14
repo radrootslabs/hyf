@@ -75,7 +75,7 @@ def assisted_execution_enabled(config: HyfLoadedRuntimeConfig) -> Bool:
     return config.effective.runtime.allow_assisted
 
 
-def assist_bridge_configured(config: HyfLoadedRuntimeConfig) -> Bool:
+def assisted_runtime_configured(config: HyfLoadedRuntimeConfig) -> Bool:
     return (
         config.effective.assist.bridge_enabled
         and not String(config.effective.assist.endpoint).strip() == ""

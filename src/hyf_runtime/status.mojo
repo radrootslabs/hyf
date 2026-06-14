@@ -1,6 +1,6 @@
 from json import Value, loads
 
-from hyf_runtime.config import assist_bridge_configured
+from hyf_runtime.config import assisted_runtime_configured
 from hyf_runtime.diagnostics import (
     diagnostics_debug_override_dir_from_env,
     effective_diagnostics_dir_for_runtime_paths,
@@ -75,12 +75,12 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
         Value(context.config.effective.runtime.allow_assisted),
     )
     effective.set(
-        "assist_bridge_enabled",
+        "assisted_runtime_enabled",
         Value(context.config.effective.assist.bridge_enabled),
     )
     effective.set(
-        "assist_bridge_configured",
-        Value(assist_bridge_configured(context.config)),
+        "assisted_runtime_configured",
+        Value(assisted_runtime_configured(context.config)),
     )
     effective.set(
         "assist_transport",

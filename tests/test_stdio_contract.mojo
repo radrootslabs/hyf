@@ -84,6 +84,16 @@ def _query_rewrite_assisted_request_json(request_id: String) -> String:
     )
 
 
+def _semantic_rank_assisted_request_json(request_id: String) -> String:
+    return (
+        '{"version":1,"request_id":"'
+        + request_id
+        + '","trace_id":"'
+        + request_id
+        + '","capability":"semantic_rank","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup","candidates":[{"id":"listing_local_1","title":"Organic apples","farm":"Local Orchard","delivery":"pickup","distance_km":4.1,"freshness_minutes":3},{"id":"listing_regional_1","title":"Honeycrisp apples","farm":"Regional Orchard","delivery":"delivery","distance_km":28.0,"freshness_minutes":25}]}}'
+    )
+
+
 def _assert_query_rewrite_provider_fallback(
     mode: String, expected_reason: String, request_timeout_ms: Int
 ) raises:
@@ -1062,6 +1072,50 @@ def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable
                 assert_equal(
                     response["output"]["rewritten_text"].string_value(),
                     "apples",
+                )
+
+
+def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _unavailable_max_local_runtime_config_toml()
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    _semantic_rank_assisted_request_json(
+                        "rank-assisted-unsupported-1"
+                    ),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "heuristic",
+                )
+                assert_true(not _has_key(response["meta"], "provider"))
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"][
+                        "fallback_kind"
+                    ].string_value(),
+                    "provider_runtime",
+                )
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"]["reason"]
+                    .string_value(),
+                    "unsupported_capability",
+                )
+                assert_equal(
+                    response["output"]["ranked_ids"][0].string_value(),
+                    "listing_local_1",
                 )
 
 

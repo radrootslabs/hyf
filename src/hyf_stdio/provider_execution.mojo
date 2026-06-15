@@ -24,6 +24,7 @@ from hyf_core.errors import (
 from hyf_core.provenance import (
     CoreResponseMeta,
     ExecutionProvenance,
+    ProvenanceFallback,
     ProvenanceSourceRef,
 )
 from hyf_core.request_context import (
@@ -168,6 +169,30 @@ def _query_rewrite_fallback(
         return failed_capability(invalid_input_error(String(e)))
 
 
+def _with_deterministic_assisted_fallback_meta(
+    result: CapabilityResult, fallback_kind: String, reason: String
+) -> CapabilityResult:
+    if not result.success:
+        return result.copy()
+
+    var success = result.success.value().copy()
+    if not success.meta:
+        return result.copy()
+
+    var meta = success.meta.value().copy()
+    if not meta.provenance:
+        return result.copy()
+
+    var provenance = meta.provenance.value().copy()
+    provenance.fallback = Optional[ProvenanceFallback](
+        ProvenanceFallback(
+            fallback_kind=String(fallback_kind), reason=String(reason)
+        )
+    )
+    meta.provenance = Optional[ExecutionProvenance](provenance^)
+    return successful_capability(success.output, meta=meta^)
+
+
 def _execute_query_rewrite_with_provider(
     input: Value,
     context: RequestContext,
@@ -230,6 +255,10 @@ def execute_runtime_aware_business_capability(
 
     var deterministic_context = context.copy()
     deterministic_context.execution_mode_preference = "deterministic"
-    return execute_backend_capability(
-        capability_id, input, deterministic_context
+    return _with_deterministic_assisted_fallback_meta(
+        execute_backend_capability(
+            capability_id, input, deterministic_context
+        ),
+        "provider_runtime",
+        "unsupported_capability",
     )

@@ -201,7 +201,11 @@ def _execute_query_rewrite_with_provider(
     var runtime_status = resolve_assisted_runtime_status(
         runtime_context.config
     )
-    if runtime_status.state == "disabled_by_runtime_config":
+    if (
+        runtime_status.state == "disabled_by_runtime_config"
+        or runtime_status.state == "unconfigured"
+        or runtime_status.state == "invalid_config"
+    ):
         return _query_rewrite_fallback(
             input,
             context,

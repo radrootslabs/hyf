@@ -148,6 +148,48 @@ def _assert_query_rewrite_provider_fallback(
         provider_stub.wait()
 
 
+def _assert_query_rewrite_runtime_config_fallback(
+    config_text: String, expected_reason: String, request_id: String
+) raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(config_text)
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    _query_rewrite_assisted_request_json(request_id),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "heuristic",
+                )
+                assert_true(not _has_key(response["meta"], "provider"))
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"][
+                        "fallback_kind"
+                    ].string_value(),
+                    "provider_runtime",
+                )
+                assert_equal(
+                    response["meta"]["provenance"]["fallback"]["reason"]
+                    .string_value(),
+                    expected_reason,
+                )
+                assert_equal(
+                    response["output"]["rewritten_text"].string_value(),
+                    "apples",
+                )
+
+
 def _assert_invalid_runtime_config_load_error(
     config_text: String, expected_error_fragment: String
 ) raises:
@@ -1073,6 +1115,24 @@ def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable
                     response["output"]["rewritten_text"].string_value(),
                     "apples",
                 )
+
+
+def test_query_rewrite_falls_back_on_unconfigured_provider_runtime() raises:
+    _assert_query_rewrite_runtime_config_fallback(
+        '[service]\ntransport = "stdio"\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[assisted]\nprovider = "max_local"\n',
+        "provider_unconfigured",
+        "rewrite-assisted-unconfigured-runtime-1",
+    )
+
+
+def test_query_rewrite_falls_back_on_invalid_provider_runtime_config() raises:
+    _assert_query_rewrite_runtime_config_fallback(
+        '[runtime]\ndefault_execution_mode = "assisted"\n',
+        "invalid_config",
+        "rewrite-assisted-invalid-runtime-1",
+    )
 
 
 def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() raises:

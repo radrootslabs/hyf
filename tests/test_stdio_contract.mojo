@@ -875,6 +875,49 @@ def test_status_reports_ready_max_local_provider_truthfully() raises:
         provider_stub.wait()
 
 
+def test_status_bounds_max_local_health_probe_timeout() raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "health_timeout", 1
+        )
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                15000,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["assisted_runtime"]["state"]
+                    .string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reason"]
+                    .string_value(),
+                    "timeout",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime"]["reachable"]
+                    .bool_value(),
+                    False,
+                )
+
+        provider_stub.wait()
+
+
 def test_status_rejects_invalid_max_local_runtime_config() raises:
     var prefix = (
         '[service]\ntransport = "stdio"\n\n'
@@ -1076,6 +1119,58 @@ def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
                         "backend_kind"
                     ].string_value(),
                     "max_local",
+                )
+
+        provider_stub.wait()
+
+
+def test_capabilities_bounds_max_local_health_probe_timeout() raises:
+    with TemporaryDirectory() as temp_dir:
+        var provider_port = reserve_loopback_port()
+        var provider_stub = spawn_max_local_stub(
+            provider_port, "health_timeout", 1
+        )
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(
+            _max_local_runtime_config_toml_with_urls(
+                "http://127.0.0.1:" + String(provider_port) + "/v1",
+                "http://127.0.0.1:" + String(provider_port) + "/health",
+                15000,
+            )
+        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_execution"
+                    ].string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["business_capabilities"][0][
+                        "assisted_backend_available"
+                    ].bool_value(),
+                    False,
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
+                        "state"
+                    ].string_value(),
+                    "unavailable",
+                )
+                assert_equal(
+                    response["output"]["assisted_runtime_capabilities"][0][
+                        "reason"
+                    ].string_value(),
+                    "timeout",
                 )
 
         provider_stub.wait()

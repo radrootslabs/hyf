@@ -13,8 +13,20 @@ from hyf_runtime.config import (
     assisted_runtime_configured,
     assisted_execution_enabled,
 )
-from hyf_provider.config import max_local_provider_config_from_runtime
+from hyf_provider.config import (
+    MaxLocalProviderConfig,
+    max_local_provider_config_from_runtime,
+)
 from hyf_provider.max_local import max_local_provider_status
+
+
+def _control_route_provider_config(
+    config: MaxLocalProviderConfig,
+) -> MaxLocalProviderConfig:
+    var capped = config.copy()
+    if capped.request_timeout_ms > 500:
+        capped.request_timeout_ms = 500
+    return capped^
 
 
 def _base_status(
@@ -95,7 +107,9 @@ def resolve_assisted_runtime_status(
 
     try:
         var provider_config = max_local_provider_config_from_runtime(config)
-        var status = max_local_provider_status(provider_config)
+        var status = max_local_provider_status(
+            _control_route_provider_config(provider_config)
+        )
         return _base_status(
             configured=True,
             transport="http",

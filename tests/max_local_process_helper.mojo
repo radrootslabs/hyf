@@ -120,6 +120,8 @@ def _send(mut stream: TcpStream, status: Int, body: String) raises:
 def _handle_health(mut stream: TcpStream, mode: String) raises:
     if mode == "health_non_2xx":
         _send(stream, 503, '{"status":"unavailable"}')
+    elif mode == "health_timeout":
+        usleep(1_000_000)
     else:
         _send(stream, 200, '{"status":"ok"}')
 

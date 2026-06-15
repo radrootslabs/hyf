@@ -40,8 +40,12 @@ from hyf_provider.max_local import (
     execute_query_rewrite_via_max_local_provider,
     max_local_provider_status,
 )
+from hyf_runtime.config import (
+    HyfLoadedRuntimeConfig,
+    assisted_execution_enabled,
+    assisted_runtime_configured,
+)
 from hyf_runtime.startup import RuntimeStartupContext
-from hyf_stdio.control.assisted_runtime import resolve_assisted_runtime_status
 
 
 def _source_refs(
@@ -90,16 +94,16 @@ def _provider_meta(
     )
 
 
-def _fallback_reason_for_runtime_state(state: String) -> String:
-    if state == "disabled_by_runtime_config":
-        return "disabled_by_runtime_config"
-    if state == "unconfigured":
-        return "provider_unconfigured"
-    if state == "invalid_config":
-        return "invalid_config"
-    if state == "degraded":
-        return "provider_degraded"
-    return "provider_unavailable"
+def _provider_runtime_config_fallback_reason(
+    config: HyfLoadedRuntimeConfig,
+) -> Optional[String]:
+    if config.load_state == "invalid":
+        return Optional[String]("invalid_config")
+    if not assisted_execution_enabled(config):
+        return Optional[String]("disabled_by_runtime_config")
+    if not assisted_runtime_configured(config):
+        return Optional[String]("provider_unconfigured")
+    return Optional[String](None)
 
 
 def _provider_execution_error_reason(message: String) -> String:
@@ -198,19 +202,15 @@ def _execute_query_rewrite_with_provider(
     context: RequestContext,
     runtime_context: RuntimeStartupContext,
 ) raises -> CapabilityResult:
-    var runtime_status = resolve_assisted_runtime_status(
+    var config_fallback_reason = _provider_runtime_config_fallback_reason(
         runtime_context.config
     )
-    if (
-        runtime_status.state == "disabled_by_runtime_config"
-        or runtime_status.state == "unconfigured"
-        or runtime_status.state == "invalid_config"
-    ):
+    if config_fallback_reason:
         return _query_rewrite_fallback(
             input,
             context,
             "provider_runtime",
-            _fallback_reason_for_runtime_state(runtime_status.state),
+            String(config_fallback_reason.value()),
         )
 
     try:

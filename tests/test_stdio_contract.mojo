@@ -94,12 +94,12 @@ def _semantic_rank_assisted_request_json(request_id: String) -> String:
     )
 
 
-def _assert_query_rewrite_provider_fallback(
-    mode: String, expected_reason: String, request_timeout_ms: Int
+def _assert_query_rewrite_provider_fallback_with_requests(
+    mode: String, expected_reason: String, request_timeout_ms: Int, requests: Int
 ) raises:
     with TemporaryDirectory() as temp_dir:
         var provider_port = reserve_loopback_port()
-        var provider_stub = spawn_max_local_stub(provider_port, mode, 2)
+        var provider_stub = spawn_max_local_stub(provider_port, mode, requests)
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             _max_local_runtime_config_toml_with_urls(
@@ -146,6 +146,14 @@ def _assert_query_rewrite_provider_fallback(
                 )
 
         provider_stub.wait()
+
+
+def _assert_query_rewrite_provider_fallback(
+    mode: String, expected_reason: String, request_timeout_ms: Int
+) raises:
+    _assert_query_rewrite_provider_fallback_with_requests(
+        mode, expected_reason, request_timeout_ms, 2
+    )
 
 
 def _assert_query_rewrite_runtime_config_fallback(
@@ -1269,6 +1277,12 @@ def test_query_rewrite_falls_back_on_provider_non_2xx() raises:
 def test_query_rewrite_falls_back_on_provider_timeout() raises:
     _assert_query_rewrite_provider_fallback(
         "query_rewrite_timeout", "timeout", 100
+    )
+
+
+def test_query_rewrite_falls_back_when_provider_readiness_probe_times_out() raises:
+    _assert_query_rewrite_provider_fallback_with_requests(
+        "health_timeout", "timeout", 100, 1
     )
 
 

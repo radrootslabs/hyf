@@ -139,6 +139,11 @@ def _validate_runtime_config(config: HyfRuntimeConfig) raises:
             "runtime.default_execution_mode must be 'deterministic' in the foundation wave"
         )
 
+    if config.assisted.provider != "":
+        _require_no_boundary_whitespace(
+            config.assisted.provider, "assisted.provider"
+        )
+
     if config.runtime.allow_assisted:
         if config.assisted.provider != "max_local":
             raise Error(
@@ -165,9 +170,13 @@ def _require_non_empty(value: String, context: String) raises:
         raise Error(context + " must not be empty")
 
 
+def _require_no_boundary_whitespace(value: String, context: String) raises:
+    if String(value) != String(value).strip():
+        raise Error(context + " must not include leading or trailing whitespace")
+
+
 def _require_http_url(value: String, context: String) raises:
-    var trimmed = String(value).strip()
-    if not (trimmed.startswith("http://") or trimmed.startswith("https://")):
+    if not (value.startswith("http://") or value.startswith("https://")):
         raise Error(context + " must use http or https")
 
 
@@ -175,10 +184,22 @@ def _validate_max_local_provider_config(
     config: HyfMaxLocalProviderRuntimeConfig
 ) raises:
     _require_non_empty(config.base_url, "assisted.max_local.base_url")
+    _require_no_boundary_whitespace(
+        config.base_url, "assisted.max_local.base_url"
+    )
     _require_http_url(config.base_url, "assisted.max_local.base_url")
     _require_non_empty(config.health_url, "assisted.max_local.health_url")
+    _require_no_boundary_whitespace(
+        config.health_url, "assisted.max_local.health_url"
+    )
     _require_http_url(config.health_url, "assisted.max_local.health_url")
     _require_non_empty(config.model, "assisted.max_local.model")
+    _require_no_boundary_whitespace(
+        config.model, "assisted.max_local.model"
+    )
     _require_non_empty(config.route, "assisted.max_local.route")
+    _require_no_boundary_whitespace(
+        config.route, "assisted.max_local.route"
+    )
     if config.request_timeout_ms <= 0:
         raise Error("assisted.max_local.request_timeout_ms must be greater than zero")

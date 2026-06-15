@@ -934,6 +934,10 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         "assisted.provider",
     )
     _assert_invalid_runtime_config_load_error(
+        prefix + '[assisted]\nprovider = " max_local"\n',
+        "assisted.provider",
+    )
+    _assert_invalid_runtime_config_load_error(
         disabled_prefix
         + provider
         + max_local_header
@@ -958,6 +962,28 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         prefix
         + provider
         + max_local_header
+        + 'base_url = " http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.base_url",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health "\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.health_url",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
         + 'base_url = "file:///tmp/max"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
@@ -971,10 +997,32 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = " max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.model",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = ""\n'
         + 'route = "provider_runtime.query_rewrite.max_local"\n'
         + 'request_timeout_ms = 15000\n',
         "assisted.max_local.model",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local "\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix

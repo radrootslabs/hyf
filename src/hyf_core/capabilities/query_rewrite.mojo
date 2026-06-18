@@ -92,6 +92,8 @@ def build_query_rewrite_deterministic_fallback_meta(
         latency_ms=None,
         schema_version=Optional[Int](1),
         prompt_version=None,
+        fallback_kind=Optional[String](String(fallback_kind)),
+        fallback_reason=Optional[String](String(reason)),
         provenance=provenance^,
     )
 

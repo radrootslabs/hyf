@@ -363,6 +363,8 @@ def build_deterministic_meta(
             latency_ms=None,
             schema_version=Optional[Int](1),
             prompt_version=None,
+            fallback_kind=None,
+            fallback_reason=None,
             provenance=ExecutionProvenance(
                 kind="deterministic",
                 signal_tags=copy_string_list(signal_tags),
@@ -381,5 +383,7 @@ def build_deterministic_meta(
         latency_ms=None,
         schema_version=Optional[Int](1),
         prompt_version=None,
+        fallback_kind=None,
+        fallback_reason=None,
         provenance=None,
     )

@@ -43,6 +43,24 @@ def _array_contains_string(value: Value, expected: String) raises -> Bool:
     return False
 
 
+def _assert_provider_runtime_fallback_meta(
+    response: Value, expected_reason: String
+) raises:
+    assert_equal(
+        response["meta"]["fallback_kind"].string_value(),
+        "provider_runtime",
+    )
+    assert_equal(
+        response["meta"]["fallback_reason"].string_value(),
+        expected_reason,
+    )
+
+
+def _assert_no_top_level_fallback_meta(response: Value) raises:
+    assert_true(not _has_key(response["meta"], "fallback_kind"))
+    assert_true(not _has_key(response["meta"], "fallback_reason"))
+
+
 def _max_local_runtime_config_toml_with_urls(
     base_url: String, health_url: String, request_timeout_ms: Int
 ) -> String:
@@ -90,6 +108,18 @@ def _query_rewrite_assisted_request_json_with_deadline(
         + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true,"deadline_ms":'
         + String(deadline_ms)
         + '},"input":{"query":"apples near me with weekend pickup"}}'
+    )
+
+
+def _query_rewrite_assisted_request_json_without_provenance(
+    request_id: String
+) -> String:
+    return (
+        '{"version":1,"request_id":"'
+        + request_id
+        + '","trace_id":"'
+        + request_id
+        + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":false,"deadline_ms":2500},"input":{"query":"apples near me with weekend pickup"}}'
     )
 
 
@@ -150,6 +180,9 @@ def _assert_query_rewrite_provider_fallback_with_deadline(
                     "heuristic",
                 )
                 assert_true(not _has_key(response["meta"], "provider"))
+                _assert_provider_runtime_fallback_meta(
+                    response, expected_reason
+                )
                 assert_equal(
                     response["meta"]["provenance"]["fallback"][
                         "fallback_kind"
@@ -202,6 +235,9 @@ def _assert_query_rewrite_runtime_config_fallback(
                     "heuristic",
                 )
                 assert_true(not _has_key(response["meta"], "provider"))
+                _assert_provider_runtime_fallback_meta(
+                    response, expected_reason
+                )
                 assert_equal(
                     response["meta"]["provenance"]["fallback"][
                         "fallback_kind"
@@ -212,6 +248,43 @@ def _assert_query_rewrite_runtime_config_fallback(
                     response["meta"]["provenance"]["fallback"]["reason"]
                     .string_value(),
                     expected_reason,
+                )
+                assert_equal(
+                    response["output"]["rewritten_text"].string_value(),
+                    "apples",
+                )
+
+
+def _assert_query_rewrite_runtime_config_fallback_without_provenance(
+    config_text: String, expected_reason: String, request_id: String
+) raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(config_text)
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    _query_rewrite_assisted_request_json_without_provenance(
+                        request_id
+                    ),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["meta"]["execution_mode"].string_value(),
+                    "deterministic",
+                )
+                assert_equal(
+                    response["meta"]["backend"].string_value(),
+                    "heuristic",
+                )
+                assert_true(not _has_key(response["meta"], "provider"))
+                assert_true(not _has_key(response["meta"], "provenance"))
+                _assert_provider_runtime_fallback_meta(
+                    response, expected_reason
                 )
                 assert_equal(
                     response["output"]["rewritten_text"].string_value(),
@@ -1288,6 +1361,16 @@ def test_query_rewrite_falls_back_on_invalid_provider_runtime_config() raises:
     )
 
 
+def test_query_rewrite_fallback_metadata_is_visible_without_provenance() raises:
+    _assert_query_rewrite_runtime_config_fallback_without_provenance(
+        '[service]\ntransport = "stdio"\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[assisted]\nprovider = "max_local"\n',
+        "provider_unconfigured",
+        "rewrite-assisted-no-provenance-1",
+    )
+
+
 def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() raises:
     with TemporaryDirectory() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1315,6 +1398,9 @@ def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() 
                     "heuristic",
                 )
                 assert_true(not _has_key(response["meta"], "provider"))
+                _assert_provider_runtime_fallback_meta(
+                    response, "unsupported_capability"
+                )
                 assert_equal(
                     response["meta"]["provenance"]["fallback"][
                         "fallback_kind"
@@ -1393,6 +1479,7 @@ def test_query_rewrite_uses_max_local_provider_when_ready() raises:
                 assert_true(
                     response["meta"]["provenance"]["fallback"].is_null()
                 )
+                _assert_no_top_level_fallback_meta(response)
                 assert_equal(
                     response["output"]["rewritten_text"].string_value(),
                     "apples pickup weekend",
@@ -1667,6 +1754,7 @@ def test_query_rewrite_success() raises:
     assert_matches_scenario_response(
         response, "scenarios/query_rewrite_local_pickup_weekend.json"
     )
+    _assert_no_top_level_fallback_meta(response)
 
 
 def test_query_rewrite_does_not_create_protected_local_artifacts() raises:

@@ -32,6 +32,8 @@ struct CoreResponseMeta(Copyable, Movable):
     var latency_ms: Optional[Int]
     var schema_version: Optional[Int]
     var prompt_version: Optional[String]
+    var fallback_kind: Optional[String]
+    var fallback_reason: Optional[String]
     var provenance: Optional[ExecutionProvenance]
 
 
@@ -45,5 +47,7 @@ def deterministic_response_meta() -> CoreResponseMeta:
         latency_ms=None,
         schema_version=None,
         prompt_version=None,
+        fallback_kind=None,
+        fallback_reason=None,
         provenance=None,
     )

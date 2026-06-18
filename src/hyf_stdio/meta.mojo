@@ -64,6 +64,14 @@ def serialize_core_response_meta(meta: CoreResponseMeta) raises -> Value:
         value.set(
             "prompt_version", Value(String(meta.prompt_version.value()))
         )
+    if meta.fallback_kind:
+        value.set(
+            "fallback_kind", Value(String(meta.fallback_kind.value()))
+        )
+    if meta.fallback_reason:
+        value.set(
+            "fallback_reason", Value(String(meta.fallback_reason.value()))
+        )
     if meta.provenance:
         value.set("provenance", _serialize_provenance(meta.provenance.value()))
     return value^

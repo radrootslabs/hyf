@@ -22,7 +22,9 @@
       "output.rewritten_text": "apples",
       "meta.execution_mode": "deterministic",
       "meta.backend": "heuristic",
-      "meta.schema_version": 1
+      "meta.schema_version": 1,
+      "meta.fallback_kind": "provider_runtime",
+      "meta.fallback_reason": "disabled_by_runtime_config"
     },
     "absent_paths": [
       "error",

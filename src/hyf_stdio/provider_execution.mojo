@@ -91,6 +91,8 @@ def _provider_meta(
         latency_ms=Optional[Int](result.latency_ms),
         schema_version=Optional[Int](result.schema_version),
         prompt_version=Optional[String](String(result.prompt_version)),
+        fallback_kind=None,
+        fallback_reason=None,
         provenance=provenance^,
     )
 
@@ -165,16 +167,16 @@ def _with_deterministic_assisted_fallback_meta(
         return result.copy()
 
     var meta = success.meta.value().copy()
-    if not meta.provenance:
-        return result.copy()
-
-    var provenance = meta.provenance.value().copy()
-    provenance.fallback = Optional[ProvenanceFallback](
-        ProvenanceFallback(
-            fallback_kind=String(fallback_kind), reason=String(reason)
+    meta.fallback_kind = Optional[String](String(fallback_kind))
+    meta.fallback_reason = Optional[String](String(reason))
+    if meta.provenance:
+        var provenance = meta.provenance.value().copy()
+        provenance.fallback = Optional[ProvenanceFallback](
+            ProvenanceFallback(
+                fallback_kind=String(fallback_kind), reason=String(reason)
+            )
         )
-    )
-    meta.provenance = Optional[ExecutionProvenance](provenance^)
+        meta.provenance = Optional[ExecutionProvenance](provenance^)
     return successful_capability(success.output, meta=meta^)
 
 

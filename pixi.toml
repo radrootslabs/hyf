@@ -24,6 +24,7 @@ test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
 test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
 test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
 test-provider-adapter = "mojo -I src tests/test_provider_adapter.mojo"
+smoke-max-local = "mojo -I src -I tests tests/max_local_operator_smoke.mojo"
 test-runtime-contract = { depends-on = [
   "test-runtime",
   "test-repo-local-process",

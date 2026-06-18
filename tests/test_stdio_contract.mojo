@@ -74,12 +74,22 @@ def _unavailable_max_local_runtime_config_toml() raises -> String:
 
 
 def _query_rewrite_assisted_request_json(request_id: String) -> String:
+    return _query_rewrite_assisted_request_json_with_deadline(
+        request_id, 2500
+    )
+
+
+def _query_rewrite_assisted_request_json_with_deadline(
+    request_id: String, deadline_ms: Int
+) -> String:
     return (
         '{"version":1,"request_id":"'
         + request_id
         + '","trace_id":"'
         + request_id
-        + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup"}}'
+        + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true,"deadline_ms":'
+        + String(deadline_ms)
+        + '},"input":{"query":"apples near me with weekend pickup"}}'
     )
 
 
@@ -96,6 +106,18 @@ def _semantic_rank_assisted_request_json(request_id: String) -> String:
 def _assert_query_rewrite_provider_fallback_with_requests(
     mode: String, expected_reason: String, request_timeout_ms: Int, requests: Int
 ) raises:
+    _assert_query_rewrite_provider_fallback_with_deadline(
+        mode, expected_reason, request_timeout_ms, 2500, requests
+    )
+
+
+def _assert_query_rewrite_provider_fallback_with_deadline(
+    mode: String,
+    expected_reason: String,
+    request_timeout_ms: Int,
+    deadline_ms: Int,
+    requests: Int,
+) raises:
     with TemporaryDirectory() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(provider_port, mode, requests)
@@ -111,8 +133,8 @@ def _assert_query_rewrite_provider_fallback_with_requests(
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
-                    _query_rewrite_assisted_request_json(
-                        "rewrite-assisted-" + mode
+                    _query_rewrite_assisted_request_json_with_deadline(
+                        "rewrite-assisted-" + mode, deadline_ms
                     ),
                     "--config",
                     startup_config_path.__fspath__(),
@@ -1406,6 +1428,16 @@ def test_query_rewrite_falls_back_on_provider_timeout() raises:
 def test_query_rewrite_falls_back_when_provider_readiness_probe_times_out() raises:
     _assert_query_rewrite_provider_fallback_with_requests(
         "health_timeout", "timeout", 100, 1
+    )
+
+
+def test_query_rewrite_completion_uses_remaining_deadline_after_readiness() raises:
+    _assert_query_rewrite_provider_fallback_with_deadline(
+        "query_rewrite_remaining_deadline_timeout",
+        "timeout",
+        1000,
+        500,
+        2,
     )
 
 

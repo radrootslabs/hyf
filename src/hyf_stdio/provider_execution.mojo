@@ -1,4 +1,5 @@
 from std.collections import List, Optional
+from std.time import perf_counter_ns
 
 from json import Value
 
@@ -137,18 +138,29 @@ def _provider_execution_error_reason(message: String) -> String:
     return "provider_error"
 
 
-def _max_local_config_for_request(
-    runtime_context: RuntimeStartupContext, context: RequestContext
-) raises -> MaxLocalProviderConfig:
-    var config = max_local_provider_config_from_runtime(
-        runtime_context.config
-    )
-    if (
-        context.deadline_ms > 0
-        and config.request_timeout_ms > context.deadline_ms
-    ):
-        config.request_timeout_ms = context.deadline_ms
-    return config^
+def _effective_provider_budget_ms(
+    config: MaxLocalProviderConfig, context: RequestContext
+) -> Int:
+    var budget_ms = config.request_timeout_ms
+    if context.deadline_ms > 0 and context.deadline_ms < budget_ms:
+        budget_ms = context.deadline_ms
+    return budget_ms
+
+
+def _provider_config_with_timeout(
+    config: MaxLocalProviderConfig, timeout_ms: Int
+) -> MaxLocalProviderConfig:
+    var capped = config.copy()
+    capped.request_timeout_ms = timeout_ms
+    return capped^
+
+
+def _remaining_provider_budget_ms(start_ns: UInt, budget_ms: Int) -> Int:
+    var elapsed_ms = Int((perf_counter_ns() - start_ns) // 1_000_000)
+    var remaining_ms = budget_ms - elapsed_ms
+    if remaining_ms <= 0:
+        return 0
+    return remaining_ms
 
 
 def _query_rewrite_fallback(
@@ -214,10 +226,16 @@ def _execute_query_rewrite_with_provider(
         )
 
     try:
-        var provider_config = _max_local_config_for_request(
-            runtime_context, context
+        var provider_config = max_local_provider_config_from_runtime(
+            runtime_context.config
         )
-        var provider_status = max_local_provider_status(provider_config)
+        var budget_ms = _effective_provider_budget_ms(
+            provider_config, context
+        )
+        var budget_start_ns = perf_counter_ns()
+        var provider_status = max_local_provider_status(
+            _provider_config_with_timeout(provider_config, budget_ms)
+        )
         if provider_status.state != "ready":
             return _query_rewrite_fallback(
                 input,
@@ -226,7 +244,32 @@ def _execute_query_rewrite_with_provider(
                 String(provider_status.reason),
             )
 
+        var remaining_ms = _remaining_provider_budget_ms(
+            budget_start_ns, budget_ms
+        )
+        if remaining_ms <= 0:
+            return _query_rewrite_fallback(
+                input,
+                context,
+                "provider_runtime",
+                "timeout",
+            )
+
         var request = parse_query_rewrite_request(input)
+        remaining_ms = _remaining_provider_budget_ms(
+            budget_start_ns, budget_ms
+        )
+        if remaining_ms <= 0:
+            return _query_rewrite_fallback(
+                input,
+                context,
+                "provider_runtime",
+                "timeout",
+            )
+
+        provider_config = _provider_config_with_timeout(
+            provider_config, remaining_ms
+        )
         var result = execute_query_rewrite_via_max_local_provider(
             provider_config, request.text, context
         )

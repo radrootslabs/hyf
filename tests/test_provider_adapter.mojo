@@ -2,6 +2,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from json import Value, loads
 
+from hyf_assist.contract import max_local_query_rewrite_route
 from hyf_core.request_context import default_request_context
 from hyf_provider.client import max_local_chat_completions_url
 from hyf_provider.config import (
@@ -41,7 +42,6 @@ def _provider_runtime_config() -> HyfLoadedRuntimeConfig:
                     base_url="http://127.0.0.1:8000/v1/",
                     health_url="http://127.0.0.1:8000/health",
                     model="max-local-query-rewrite",
-                    route="provider_runtime.query_rewrite.max_local",
                     request_timeout_ms=15000,
                 ),
             ),
@@ -54,7 +54,6 @@ def _provider_config() -> MaxLocalProviderConfig:
         base_url="http://127.0.0.1:8000/v1/",
         health_url="http://127.0.0.1:8000/health",
         model="max-local-query-rewrite",
-        route="provider_runtime.query_rewrite.max_local",
         request_timeout_ms=15000,
     )
 
@@ -95,8 +94,14 @@ def test_provider_config_maps_runtime_config() raises:
     assert_equal(config.base_url, "http://127.0.0.1:8000/v1/")
     assert_equal(config.health_url, "http://127.0.0.1:8000/health")
     assert_equal(config.model, "max-local-query-rewrite")
-    assert_equal(config.route, "provider_runtime.query_rewrite.max_local")
     assert_equal(config.request_timeout_ms, 15000)
+
+
+def test_max_local_route_is_derived_from_assisted_contract() raises:
+    assert_equal(
+        max_local_query_rewrite_route(),
+        "provider_runtime.query_rewrite.max_local",
+    )
 
 
 def test_provider_config_rejects_unconfigured_runtime() raises:

@@ -1,5 +1,6 @@
 from std.time import perf_counter_ns
 
+from hyf_assist.contract import max_local_query_rewrite_route
 from hyf_core.capabilities.query_analysis import QueryAnalysis
 from hyf_core.request_context import RequestContext
 from hyf_provider.client import (
@@ -48,7 +49,7 @@ def execute_query_rewrite_via_max_local_provider(
                 response.json()
             ),
             provider="max_local",
-            route=String(config.route),
+            route=max_local_query_rewrite_route(),
             model=String(config.model),
             latency_ms=latency_ms,
             schema_version=query_rewrite_schema_version(),

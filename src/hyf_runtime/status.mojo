@@ -1,5 +1,6 @@
 from json import Value, loads
 
+from hyf_assist.contract import max_local_query_rewrite_route
 from hyf_runtime.config import assisted_runtime_configured
 from hyf_runtime.diagnostics import (
     diagnostics_debug_override_dir_from_env,
@@ -96,7 +97,7 @@ def build_runtime_status_value(context: RuntimeStartupContext) raises -> Value:
     )
     effective.set(
         "max_local_route",
-        Value(String(context.config.effective.assisted.max_local.route)),
+        Value(max_local_query_rewrite_route()),
     )
     effective.set(
         "max_local_request_timeout_ms",

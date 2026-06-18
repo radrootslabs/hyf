@@ -9,6 +9,10 @@ def provider_runtime_id() -> String:
     return "hyf_provider_runtime"
 
 
+def max_local_query_rewrite_route() -> String:
+    return "provider_runtime.query_rewrite.max_local"
+
+
 def assisted_runtime_supported_business_capabilities() -> List[String]:
     var capabilities = List[String]()
     capabilities.append("query_rewrite")

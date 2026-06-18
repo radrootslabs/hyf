@@ -28,7 +28,6 @@ struct HyfMaxLocalProviderRuntimeConfig(Defaultable, Copyable, Movable):
     var base_url: String
     var health_url: String
     var model: String
-    var route: String
     var request_timeout_ms: Int
 
     def __init__(out self):
@@ -36,7 +35,6 @@ struct HyfMaxLocalProviderRuntimeConfig(Defaultable, Copyable, Movable):
         self.base_url = ""
         self.health_url = ""
         self.model = ""
-        self.route = ""
         self.request_timeout_ms = 0
 
 
@@ -109,7 +107,9 @@ def load_runtime_config(path: String) -> HyfLoadedRuntimeConfig:
         return default_loaded_runtime_config()
 
     try:
-        var config = from_toml[HyfRuntimeConfig](Path(path).read_text())
+        var config_text = Path(path).read_text()
+        _reject_removed_max_local_route_config(config_text)
+        var config = from_toml[HyfRuntimeConfig](config_text)
         _validate_runtime_config(config)
         return HyfLoadedRuntimeConfig(
             artifact_present=True,
@@ -180,6 +180,27 @@ def _require_http_url(value: String, context: String) raises:
         raise Error(context + " must use http or https")
 
 
+def _reject_removed_max_local_route_config(config_text: String) raises:
+    var in_max_local = False
+    for raw_line in config_text.splitlines():
+        var line = String(raw_line).strip()
+        if line == "" or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            in_max_local = line == "[assisted.max_local]"
+            continue
+        if not in_max_local:
+            continue
+        var equals_index = line.find("=")
+        if equals_index < 0:
+            continue
+        var key = String(line[byte=0:equals_index]).strip()
+        if key == "route":
+            raise Error(
+                "assisted.max_local.route has been removed; provider route is derived by HYF"
+            )
+
+
 def _validate_max_local_provider_config(
     config: HyfMaxLocalProviderRuntimeConfig
 ) raises:
@@ -196,10 +217,6 @@ def _validate_max_local_provider_config(
     _require_non_empty(config.model, "assisted.max_local.model")
     _require_no_boundary_whitespace(
         config.model, "assisted.max_local.model"
-    )
-    _require_non_empty(config.route, "assisted.max_local.route")
-    _require_no_boundary_whitespace(
-        config.route, "assisted.max_local.route"
     )
     if config.request_timeout_ms <= 0:
         raise Error("assisted.max_local.request_timeout_ms must be greater than zero")

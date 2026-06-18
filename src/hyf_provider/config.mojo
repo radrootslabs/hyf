@@ -9,7 +9,6 @@ struct MaxLocalProviderConfig(Copyable, Movable):
     var base_url: String
     var health_url: String
     var model: String
-    var route: String
     var request_timeout_ms: Int
 
 
@@ -24,6 +23,5 @@ def max_local_provider_config_from_runtime(
         base_url=String(source.base_url),
         health_url=String(source.health_url),
         model=String(source.model),
-        route=String(source.route),
         request_timeout_ms=source.request_timeout_ms,
     )

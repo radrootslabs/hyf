@@ -1,3 +1,4 @@
+from hyf_assist.contract import max_local_query_rewrite_route
 from hyf_provider.client import make_max_local_http_client
 from hyf_provider.config import MaxLocalProviderConfig
 from hyf_provider.result import MaxLocalProviderStatus
@@ -12,7 +13,7 @@ def _provider_status(
     return MaxLocalProviderStatus(
         backend_kind="max_local",
         provider="max_local",
-        route=String(config.route),
+        route=max_local_query_rewrite_route(),
         model=String(config.model),
         reachable=reachable,
         state=String(state),

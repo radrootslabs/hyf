@@ -1,3 +1,4 @@
+from std.collections import Optional
 from std.time import perf_counter_ns
 
 from hyf_assist.contract import max_local_query_rewrite_route
@@ -31,30 +32,150 @@ struct MaxLocalQueryRewriteResult(Copyable, Movable):
     var prompt_version: String
 
 
+@fieldwise_init
+struct MaxLocalQueryRewriteFailure(Copyable, Movable):
+    var kind: String
+    var reason: String
+
+
+@fieldwise_init
+struct MaxLocalQueryRewriteOutcome(Copyable, Movable):
+    var result: Optional[MaxLocalQueryRewriteResult]
+    var failure: Optional[MaxLocalQueryRewriteFailure]
+
+
+def _query_rewrite_success_outcome(
+    result: MaxLocalQueryRewriteResult
+) -> MaxLocalQueryRewriteOutcome:
+    return MaxLocalQueryRewriteOutcome(
+        result=Optional[MaxLocalQueryRewriteResult](result.copy()),
+        failure=Optional[MaxLocalQueryRewriteFailure](None),
+    )
+
+
+def _query_rewrite_failure_outcome(
+    kind: String, reason: String
+) -> MaxLocalQueryRewriteOutcome:
+    return MaxLocalQueryRewriteOutcome(
+        result=Optional[MaxLocalQueryRewriteResult](None),
+        failure=Optional[MaxLocalQueryRewriteFailure](
+            MaxLocalQueryRewriteFailure(
+                kind=String(kind), reason=String(reason)
+            )
+        ),
+    )
+
+
+def _matches_provider_reason(message: String, reason: String) -> Bool:
+    return message == reason or message.find(reason) >= 0
+
+
+def max_local_query_rewrite_failure_from_error(
+    message: String,
+) -> MaxLocalQueryRewriteFailure:
+    if _matches_provider_reason(message, "invalid_url"):
+        return MaxLocalQueryRewriteFailure(
+            kind="transport", reason="invalid_url"
+        )
+    if _matches_provider_reason(message, "provider_non_2xx"):
+        return MaxLocalQueryRewriteFailure(
+            kind="http_status", reason="provider_non_2xx"
+        )
+    if _matches_provider_reason(message, "provider_error_payload"):
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_error_payload"
+        )
+    if _matches_provider_reason(message, "provider_invalid_json"):
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_invalid_json"
+        )
+    if _matches_provider_reason(message, "provider_schema_invalid"):
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_schema_invalid"
+        )
+    if _matches_provider_reason(message, "provider_empty_choices"):
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_empty_choices"
+        )
+    if _matches_provider_reason(message, "provider_missing_content"):
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_missing_content"
+        )
+    if _matches_provider_reason(message, "provider_invalid_response"):
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_invalid_response"
+        )
+
+    var lower = message.lower()
+    if lower.find("url") >= 0 or lower.find("scheme") >= 0:
+        return MaxLocalQueryRewriteFailure(
+            kind="transport", reason="invalid_url"
+        )
+    if lower.find("timeout") >= 0 or lower.find("timed out") >= 0:
+        return MaxLocalQueryRewriteFailure(
+            kind="transport", reason="timeout"
+        )
+    if lower.find("connection") >= 0:
+        return MaxLocalQueryRewriteFailure(
+            kind="transport", reason="connection_failed"
+        )
+    return MaxLocalQueryRewriteFailure(
+        kind="provider", reason="provider_error"
+    )
+
+
 def execute_query_rewrite_via_max_local_provider(
     config: MaxLocalProviderConfig, text: String, context: RequestContext
 ) raises -> MaxLocalQueryRewriteResult:
-    with make_max_local_http_client(config) as client:
-        var start_ns = perf_counter_ns()
-        var response = client.post(
-            max_local_chat_completions_url(config),
-            build_query_rewrite_request_body(config, text, context),
-        )
-        var latency_ms = Int((perf_counter_ns() - start_ns) // 1_000_000)
-        if not response.ok():
-            raise Error("provider_non_2xx")
+    var outcome = try_execute_query_rewrite_via_max_local_provider(
+        config, text, context
+    )
+    if outcome.result:
+        return outcome.result.value().copy()
+    if outcome.failure:
+        raise Error(String(outcome.failure.value().reason))
+    raise Error("provider_error")
 
-        return MaxLocalQueryRewriteResult(
-            analysis=parse_query_analysis_from_chat_completion(
+
+def try_execute_query_rewrite_via_max_local_provider(
+    config: MaxLocalProviderConfig, text: String, context: RequestContext
+) -> MaxLocalQueryRewriteOutcome:
+    with make_max_local_http_client(config) as client:
+        try:
+            var start_ns = perf_counter_ns()
+            var response = client.post(
+                max_local_chat_completions_url(config),
+                build_query_rewrite_request_body(config, text, context),
+            )
+            var latency_ms = Int(
+                (perf_counter_ns() - start_ns) // 1_000_000
+            )
+            if not response.ok():
+                return _query_rewrite_failure_outcome(
+                    "http_status", "provider_non_2xx"
+                )
+
+            var analysis = parse_query_analysis_from_chat_completion(
                 response.json()
-            ),
-            provider="max_local",
-            route=max_local_query_rewrite_route(),
-            model=String(config.model),
-            latency_ms=latency_ms,
-            schema_version=query_rewrite_schema_version(),
-            prompt_version=query_rewrite_prompt_version(),
-        )
+            )
+            return _query_rewrite_success_outcome(
+                MaxLocalQueryRewriteResult(
+                    analysis=analysis^,
+                    provider="max_local",
+                    route=max_local_query_rewrite_route(),
+                    model=String(config.model),
+                    latency_ms=latency_ms,
+                    schema_version=query_rewrite_schema_version(),
+                    prompt_version=query_rewrite_prompt_version(),
+                )
+            )
+        except e:
+            var failure = max_local_query_rewrite_failure_from_error(
+                String(e)
+            )
+            return _query_rewrite_failure_outcome(
+                String(failure.kind), String(failure.reason)
+            )
 
 
 def max_local_provider_status(

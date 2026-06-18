@@ -38,8 +38,8 @@ from hyf_provider.config import (
 )
 from hyf_provider.max_local import (
     MaxLocalQueryRewriteResult,
-    execute_query_rewrite_via_max_local_provider,
     max_local_provider_status,
+    try_execute_query_rewrite_via_max_local_provider,
 )
 from hyf_runtime.config import (
     HyfLoadedRuntimeConfig,
@@ -105,37 +105,6 @@ def _provider_runtime_config_fallback_reason(
     if not assisted_runtime_configured(config):
         return Optional[String]("provider_unconfigured")
     return Optional[String](None)
-
-
-def _provider_execution_error_reason(message: String) -> String:
-    var lower = message.lower()
-    if lower.find("timeout") >= 0 or lower.find("timed out") >= 0:
-        return "timeout"
-    if lower.find("connection") >= 0:
-        return "connection_failed"
-    if lower.find("provider_non_2xx") >= 0 or lower.find("http") >= 0:
-        return "provider_non_2xx"
-    if lower.find("provider_error_payload") >= 0:
-        return "provider_error_payload"
-    if lower.find("provider_invalid_json") >= 0:
-        return "provider_invalid_json"
-    if lower.find("provider_schema_invalid") >= 0:
-        return "provider_schema_invalid"
-    if lower.find("provider_empty_choices") >= 0:
-        return "provider_empty_choices"
-    if lower.find("provider_missing_content") >= 0:
-        return "provider_missing_content"
-    if lower.find("provider_invalid_response") >= 0:
-        return "provider_invalid_response"
-    if lower.find("choices") >= 0:
-        return "provider_empty_choices"
-    if lower.find("content") >= 0 or lower.find("message") >= 0:
-        return "provider_missing_content"
-    if lower.find("json") >= 0 or lower.find("parse") >= 0:
-        return "provider_invalid_json"
-    if lower.find("schema") >= 0 or lower.find("required") >= 0:
-        return "provider_schema_invalid"
-    return "provider_error"
 
 
 def _effective_provider_budget_ms(
@@ -270,9 +239,25 @@ def _execute_query_rewrite_with_provider(
         provider_config = _provider_config_with_timeout(
             provider_config, remaining_ms
         )
-        var result = execute_query_rewrite_via_max_local_provider(
+        var outcome = try_execute_query_rewrite_via_max_local_provider(
             provider_config, request.text, context
         )
+        if outcome.failure:
+            return _query_rewrite_fallback(
+                input,
+                context,
+                "provider_runtime",
+                String(outcome.failure.value().reason),
+            )
+        if not outcome.result:
+            return _query_rewrite_fallback(
+                input,
+                context,
+                "provider_runtime",
+                "provider_error",
+            )
+
+        var result = outcome.result.value().copy()
         return successful_capability(
             build_query_rewrite_output(result.analysis),
             meta=_provider_meta(context, result),
@@ -282,7 +267,7 @@ def _execute_query_rewrite_with_provider(
             input,
             context,
             "provider_runtime",
-            _provider_execution_error_reason(String(e)),
+            "provider_error",
         )
 
 

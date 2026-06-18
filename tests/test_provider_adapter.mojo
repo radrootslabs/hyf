@@ -9,6 +9,8 @@ from hyf_provider.config import (
     MaxLocalProviderConfig,
     max_local_provider_config_from_runtime,
 )
+from hyf_provider.health import max_local_health_failure_from_error
+from hyf_provider.max_local import max_local_query_rewrite_failure_from_error
 from hyf_provider.result import parse_query_analysis_from_chat_completion
 from hyf_provider.schema import build_query_rewrite_request_body
 from hyf_runtime.config import (
@@ -86,6 +88,22 @@ def _chat_completion_response() raises -> Value:
     return response^
 
 
+def _assert_query_rewrite_failure(
+    message: String, expected_kind: String, expected_reason: String
+) raises:
+    var failure = max_local_query_rewrite_failure_from_error(message)
+    assert_equal(failure.kind, expected_kind)
+    assert_equal(failure.reason, expected_reason)
+
+
+def _assert_health_failure(
+    message: String, expected_kind: String, expected_reason: String
+) raises:
+    var failure = max_local_health_failure_from_error(message)
+    assert_equal(failure.kind, expected_kind)
+    assert_equal(failure.reason, expected_reason)
+
+
 def test_provider_config_maps_runtime_config() raises:
     var config = max_local_provider_config_from_runtime(
         _provider_runtime_config()
@@ -101,6 +119,53 @@ def test_max_local_route_is_derived_from_assisted_contract() raises:
     assert_equal(
         max_local_query_rewrite_route(),
         "provider_runtime.query_rewrite.max_local",
+    )
+
+
+def test_max_local_provider_failure_mapping_preserves_reason_tokens() raises:
+    _assert_query_rewrite_failure("timed out", "transport", "timeout")
+    _assert_query_rewrite_failure(
+        "connection refused", "transport", "connection_failed"
+    )
+    _assert_query_rewrite_failure("bad url scheme", "transport", "invalid_url")
+    _assert_query_rewrite_failure(
+        "provider_non_2xx", "http_status", "provider_non_2xx"
+    )
+    _assert_query_rewrite_failure(
+        "provider_error_payload",
+        "provider_payload",
+        "provider_error_payload",
+    )
+    _assert_query_rewrite_failure(
+        "provider_invalid_json",
+        "provider_payload",
+        "provider_invalid_json",
+    )
+    _assert_query_rewrite_failure(
+        "provider_schema_invalid",
+        "provider_payload",
+        "provider_schema_invalid",
+    )
+    _assert_query_rewrite_failure(
+        "provider_empty_choices",
+        "provider_payload",
+        "provider_empty_choices",
+    )
+    _assert_query_rewrite_failure(
+        "provider_missing_content",
+        "provider_payload",
+        "provider_missing_content",
+    )
+    _assert_query_rewrite_failure(
+        "unexpected provider failure", "provider", "provider_error"
+    )
+
+
+def test_max_local_health_failure_mapping_preserves_reason_tokens() raises:
+    _assert_health_failure("timed out", "transport", "timeout")
+    _assert_health_failure("bad url scheme", "transport", "invalid_url")
+    _assert_health_failure(
+        "unexpected health failure", "transport", "connection_failed"
     )
 
 

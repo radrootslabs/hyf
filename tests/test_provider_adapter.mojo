@@ -76,16 +76,20 @@ def _analysis_json_text() -> String:
     )
 
 
-def _chat_completion_response() raises -> Value:
+def _chat_completion_response_with_content(content: String) raises -> Value:
     var response = loads("{}")
     var choices = loads("[]")
     var choice = loads("{}")
     var message = loads("{}")
-    message.set("content", Value(_analysis_json_text()))
+    message.set("content", Value(content))
     choice.set("message", message)
     choices.append(choice)
     response.set("choices", choices)
     return response^
+
+
+def _chat_completion_response() raises -> Value:
+    return _chat_completion_response_with_content(_analysis_json_text())
 
 
 def _assert_query_rewrite_failure(
@@ -102,6 +106,17 @@ def _assert_health_failure(
     var failure = max_local_health_failure_from_error(message)
     assert_equal(failure.kind, expected_kind)
     assert_equal(failure.reason, expected_reason)
+
+
+def _assert_chat_completion_parse_failure(
+    response: Value, expected_error: String
+) raises:
+    try:
+        _ = parse_query_analysis_from_chat_completion(response)
+    except e:
+        assert_equal(String(e), expected_error)
+        return
+    raise Error("expected chat completion parse failure")
 
 
 def test_provider_config_maps_runtime_config() raises:
@@ -241,6 +256,20 @@ def test_chat_completion_response_parses_query_analysis() raises:
     assert_equal(len(analysis.query_terms), 1)
     assert_equal(analysis.query_terms[0], "eggs")
     assert_equal(analysis.extracted_filters.local_intent, True)
+
+
+def test_chat_completion_response_rejects_invalid_json_content() raises:
+    _assert_chat_completion_parse_failure(
+        _chat_completion_response_with_content("not json"),
+        "provider_invalid_json",
+    )
+
+
+def test_chat_completion_response_rejects_schema_invalid_content() raises:
+    _assert_chat_completion_parse_failure(
+        _chat_completion_response_with_content('{"original_text":"eggs"}'),
+        "provider_schema_invalid",
+    )
 
 
 def test_chat_completion_response_rejects_empty_choices() raises:

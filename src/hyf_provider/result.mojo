@@ -128,13 +128,15 @@ def parse_query_analysis_json(value: Value) raises -> QueryAnalysis:
         raise Error("provider_schema_invalid")
 
 
+def _load_query_analysis_content_json(text: String) raises -> Value:
+    try:
+        return loads(text)
+    except:
+        raise Error("provider_invalid_json")
+
+
 def parse_query_analysis_from_chat_completion(
     response: Value,
 ) raises -> QueryAnalysis:
     var text = extract_chat_completion_text(response)
-    try:
-        return parse_query_analysis_json(loads(text))
-    except e:
-        if String(e).find("provider_schema_invalid") >= 0:
-            raise Error("provider_schema_invalid")
-        raise Error("provider_invalid_json")
+    return parse_query_analysis_json(_load_query_analysis_content_json(text))

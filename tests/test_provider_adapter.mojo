@@ -26,6 +26,10 @@ from hyf_runtime.config import (
     HyfServiceRuntimeConfig,
     default_loaded_runtime_config,
 )
+from max_local_process_helper import (
+    reserve_loopback_port,
+    spawn_max_local_stub,
+)
 
 
 def _provider_runtime_config() -> HyfLoadedRuntimeConfig:
@@ -59,6 +63,15 @@ def _provider_config() -> MaxLocalProviderConfig:
     return MaxLocalProviderConfig(
         base_url="http://127.0.0.1:8000/v1/",
         health_url="http://127.0.0.1:8000/health",
+        model="max-local-query-rewrite",
+        request_timeout_ms=15000,
+    )
+
+
+def _provider_config_for_port(port: Int) -> MaxLocalProviderConfig:
+    return MaxLocalProviderConfig(
+        base_url="http://127.0.0.1:" + String(port) + "/v1/",
+        health_url="http://127.0.0.1:" + String(port) + "/health",
         model="max-local-query-rewrite",
         request_timeout_ms=15000,
     )
@@ -245,6 +258,38 @@ def test_max_local_transport_boundary_rejects_invalid_health_url() raises:
     assert_true(not outcome.response)
     assert_equal(outcome.failure.value().kind, "transport")
     assert_equal(outcome.failure.value().reason, "invalid_url")
+
+
+def test_max_local_transport_boundary_reports_unknown_chat_transport() raises:
+    var provider_port = reserve_loopback_port()
+    var provider_stub = spawn_max_local_stub(
+        provider_port, "query_rewrite_malformed_http", 1
+    )
+    var outcome = post_max_local_chat_completion(
+        _provider_config_for_port(provider_port), loads("{}")
+    )
+
+    assert_true(outcome.failure)
+    assert_true(not outcome.response)
+    assert_equal(outcome.failure.value().kind, "transport")
+    assert_equal(outcome.failure.value().reason, "unknown_transport")
+
+    provider_stub.wait()
+
+
+def test_max_local_transport_boundary_reports_unknown_health_transport() raises:
+    var provider_port = reserve_loopback_port()
+    var provider_stub = spawn_max_local_stub(
+        provider_port, "health_malformed_http", 1
+    )
+    var outcome = get_max_local_health(_provider_config_for_port(provider_port))
+
+    assert_true(outcome.failure)
+    assert_true(not outcome.response)
+    assert_equal(outcome.failure.value().kind, "transport")
+    assert_equal(outcome.failure.value().reason, "unknown_transport")
+
+    provider_stub.wait()
 
 
 def test_query_rewrite_request_body_sets_schema_contract() raises:

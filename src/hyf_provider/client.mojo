@@ -73,7 +73,7 @@ def _transport_exception_reason(
 ) -> String:
     if _elapsed_ms_since(start_ns) >= request_timeout_ms:
         return "timeout"
-    return "connection_failed"
+    return "unknown_transport"
 
 
 def make_max_local_http_client(config: MaxLocalProviderConfig) -> HttpClient:

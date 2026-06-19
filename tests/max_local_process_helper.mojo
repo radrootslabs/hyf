@@ -117,11 +117,17 @@ def _send(mut stream: TcpStream, status: Int, body: String) raises:
     stream.write_all(Span[UInt8, _](response.as_bytes()))
 
 
+def _send_raw(mut stream: TcpStream, response: String) raises:
+    stream.write_all(Span[UInt8, _](response.as_bytes()))
+
+
 def _handle_health(mut stream: TcpStream, mode: String) raises:
     if mode == "health_non_2xx":
         _send(stream, 503, '{"status":"unavailable"}')
     elif mode == "health_timeout":
         usleep(1_000_000)
+    elif mode == "health_malformed_http":
+        _send_raw(stream, "not an http response\r\n\r\n")
     elif mode == "query_rewrite_remaining_deadline_timeout":
         usleep(200_000)
         _send(stream, 200, '{"status":"ok"}')
@@ -168,6 +174,8 @@ def _handle_chat_completions(mut stream: TcpStream, mode: String) raises:
     elif mode == "query_rewrite_remaining_deadline_timeout":
         usleep(400_000)
         _send(stream, 200, _chat_completion(_query_rewrite_analysis()))
+    elif mode == "query_rewrite_malformed_http":
+        _send_raw(stream, "not an http response\r\n\r\n")
     else:
         _send(stream, 500, '{"error":"unsupported_mode"}')
 

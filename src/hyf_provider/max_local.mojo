@@ -66,53 +66,48 @@ def _query_rewrite_failure_outcome(
     )
 
 
-def _matches_provider_reason(message: String, reason: String) -> Bool:
-    return message == reason or message.find(reason) >= 0
+def _elapsed_ms_since(start_ns: UInt) -> Int:
+    return Int((perf_counter_ns() - start_ns) // 1_000_000)
 
 
 def max_local_query_rewrite_failure_from_error(
     message: String,
 ) -> MaxLocalQueryRewriteFailure:
-    if _matches_provider_reason(message, "invalid_url"):
+    if message == "invalid_url":
         return MaxLocalQueryRewriteFailure(
             kind="transport", reason="invalid_url"
         )
-    if _matches_provider_reason(message, "provider_non_2xx"):
-        return MaxLocalQueryRewriteFailure(
-            kind="http_status", reason="provider_non_2xx"
-        )
-    if _matches_provider_reason(message, "provider_error_payload"):
-        return MaxLocalQueryRewriteFailure(
-            kind="provider_payload", reason="provider_error_payload"
-        )
-    if _matches_provider_reason(message, "provider_invalid_json"):
-        return MaxLocalQueryRewriteFailure(
-            kind="provider_payload", reason="provider_invalid_json"
-        )
-    if _matches_provider_reason(message, "provider_schema_invalid"):
-        return MaxLocalQueryRewriteFailure(
-            kind="provider_payload", reason="provider_schema_invalid"
-        )
-    if _matches_provider_reason(message, "provider_empty_choices"):
-        return MaxLocalQueryRewriteFailure(
-            kind="provider_payload", reason="provider_empty_choices"
-        )
-    if _matches_provider_reason(message, "provider_missing_content"):
-        return MaxLocalQueryRewriteFailure(
-            kind="provider_payload", reason="provider_missing_content"
-        )
-    var lower = message.lower()
-    if lower.find("url") >= 0 or lower.find("scheme") >= 0:
-        return MaxLocalQueryRewriteFailure(
-            kind="transport", reason="invalid_url"
-        )
-    if lower.find("timeout") >= 0 or lower.find("timed out") >= 0:
+    if message == "timeout":
         return MaxLocalQueryRewriteFailure(
             kind="transport", reason="timeout"
         )
-    if lower.find("connection") >= 0:
+    if message == "connection_failed":
         return MaxLocalQueryRewriteFailure(
             kind="transport", reason="connection_failed"
+        )
+    if message == "provider_non_2xx":
+        return MaxLocalQueryRewriteFailure(
+            kind="http_status", reason="provider_non_2xx"
+        )
+    if message == "provider_error_payload":
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_error_payload"
+        )
+    if message == "provider_invalid_json":
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_invalid_json"
+        )
+    if message == "provider_schema_invalid":
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_schema_invalid"
+        )
+    if message == "provider_empty_choices":
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_empty_choices"
+        )
+    if message == "provider_missing_content":
+        return MaxLocalQueryRewriteFailure(
+            kind="provider_payload", reason="provider_missing_content"
         )
     return MaxLocalQueryRewriteFailure(
         kind="provider", reason="provider_error"
@@ -136,8 +131,8 @@ def try_execute_query_rewrite_via_max_local_provider(
     config: MaxLocalProviderConfig, text: String, context: RequestContext
 ) -> MaxLocalQueryRewriteOutcome:
     with make_max_local_http_client(config) as client:
+        var start_ns = perf_counter_ns()
         try:
-            var start_ns = perf_counter_ns()
             var response = client.post(
                 max_local_chat_completions_url(config),
                 build_query_rewrite_request_body(config, text, context),
@@ -168,6 +163,13 @@ def try_execute_query_rewrite_via_max_local_provider(
             var failure = max_local_query_rewrite_failure_from_error(
                 String(e)
             )
+            if (
+                failure.reason == "provider_error"
+                and _elapsed_ms_since(start_ns) >= config.request_timeout_ms
+            ):
+                failure = MaxLocalQueryRewriteFailure(
+                    kind="transport", reason="timeout"
+                )
             return _query_rewrite_failure_outcome(
                 String(failure.kind), String(failure.reason)
             )

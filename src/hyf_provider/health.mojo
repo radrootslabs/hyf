@@ -1,3 +1,5 @@
+from std.time import perf_counter_ns
+
 from hyf_assist.contract import max_local_query_rewrite_route
 from hyf_provider.client import make_max_local_http_client
 from hyf_provider.config import MaxLocalProviderConfig
@@ -31,27 +33,26 @@ def _provider_status(
     )
 
 
+def _elapsed_ms_since(start_ns: UInt) -> Int:
+    return Int((perf_counter_ns() - start_ns) // 1_000_000)
+
+
 def max_local_health_failure_from_error(
     message: String,
 ) -> MaxLocalHealthFailure:
-    if message == "invalid_url" or message.find("invalid_url") >= 0:
+    if message == "invalid_url":
         return _health_failure("transport", "invalid_url")
-    if message == "timeout" or message.find("timeout") >= 0:
+    if message == "timeout":
         return _health_failure("transport", "timeout")
-    if message == "connection_failed" or message.find("connection_failed") >= 0:
+    if message == "connection_failed":
         return _health_failure("transport", "connection_failed")
-
-    var lower = message.lower()
-    if lower.find("url") >= 0 or lower.find("scheme") >= 0:
-        return _health_failure("transport", "invalid_url")
-    if lower.find("timeout") >= 0 or lower.find("timed out") >= 0:
-        return _health_failure("transport", "timeout")
     return _health_failure("transport", "connection_failed")
 
 
 def resolve_max_local_provider_status(
     config: MaxLocalProviderConfig,
 ) -> MaxLocalProviderStatus:
+    var start_ns = perf_counter_ns()
     try:
         with make_max_local_http_client(config) as client:
             var response = client.get(config.health_url)
@@ -60,6 +61,13 @@ def resolve_max_local_provider_status(
             return _provider_status(config, False, "unavailable", "non_2xx")
     except e:
         var failure = max_local_health_failure_from_error(String(e))
+        if (
+            failure.reason == "connection_failed"
+            and _elapsed_ms_since(start_ns) >= config.request_timeout_ms
+        ):
+            failure = MaxLocalHealthFailure(
+                kind="transport", reason="timeout"
+            )
         return _provider_status(
             config,
             False,

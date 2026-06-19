@@ -123,11 +123,11 @@ def test_max_local_route_is_derived_from_assisted_contract() raises:
 
 
 def test_max_local_provider_failure_mapping_preserves_reason_tokens() raises:
-    _assert_query_rewrite_failure("timed out", "transport", "timeout")
+    _assert_query_rewrite_failure("timeout", "transport", "timeout")
     _assert_query_rewrite_failure(
-        "connection refused", "transport", "connection_failed"
+        "connection_failed", "transport", "connection_failed"
     )
-    _assert_query_rewrite_failure("bad url scheme", "transport", "invalid_url")
+    _assert_query_rewrite_failure("invalid_url", "transport", "invalid_url")
     _assert_query_rewrite_failure(
         "provider_non_2xx", "http_status", "provider_non_2xx"
     )
@@ -159,14 +159,32 @@ def test_max_local_provider_failure_mapping_preserves_reason_tokens() raises:
     _assert_query_rewrite_failure(
         "unexpected provider failure", "provider", "provider_error"
     )
+    _assert_query_rewrite_failure(
+        "timed out", "provider", "provider_error"
+    )
+    _assert_query_rewrite_failure(
+        "connection refused", "provider", "provider_error"
+    )
+    _assert_query_rewrite_failure(
+        "bad url scheme", "provider", "provider_error"
+    )
+    _assert_query_rewrite_failure(
+        "not a timeout", "provider", "provider_error"
+    )
 
 
 def test_max_local_health_failure_mapping_preserves_reason_tokens() raises:
-    _assert_health_failure("timed out", "transport", "timeout")
-    _assert_health_failure("bad url scheme", "transport", "invalid_url")
+    _assert_health_failure("timeout", "transport", "timeout")
+    _assert_health_failure("invalid_url", "transport", "invalid_url")
+    _assert_health_failure(
+        "connection_failed", "transport", "connection_failed"
+    )
     _assert_health_failure(
         "unexpected health failure", "transport", "connection_failed"
     )
+    _assert_health_failure("timed out", "transport", "connection_failed")
+    _assert_health_failure("bad url scheme", "transport", "connection_failed")
+    _assert_health_failure("not a timeout", "transport", "connection_failed")
 
 
 def test_provider_config_rejects_unconfigured_runtime() raises:

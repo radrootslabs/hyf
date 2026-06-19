@@ -4,13 +4,17 @@ from json import Value, loads
 
 from hyf_assist.contract import max_local_query_rewrite_route
 from hyf_core.request_context import default_request_context
-from hyf_provider.client import max_local_chat_completions_url
+from hyf_provider.client import (
+    get_max_local_health,
+    max_local_chat_completions_url,
+    post_max_local_chat_completion,
+)
 from hyf_provider.config import (
     MaxLocalProviderConfig,
     max_local_provider_config_from_runtime,
 )
-from hyf_provider.health import max_local_health_failure_from_error
-from hyf_provider.max_local import max_local_query_rewrite_failure_from_error
+from hyf_provider.health import max_local_health_failure_from_reason
+from hyf_provider.max_local import max_local_query_rewrite_failure_from_reason
 from hyf_provider.result import parse_query_analysis_from_chat_completion
 from hyf_provider.schema import build_query_rewrite_request_body
 from hyf_runtime.config import (
@@ -60,6 +64,24 @@ def _provider_config() -> MaxLocalProviderConfig:
     )
 
 
+def _invalid_base_url_provider_config() -> MaxLocalProviderConfig:
+    return MaxLocalProviderConfig(
+        base_url="ftp://127.0.0.1:8000/v1/",
+        health_url="http://127.0.0.1:8000/health",
+        model="max-local-query-rewrite",
+        request_timeout_ms=15000,
+    )
+
+
+def _invalid_health_url_provider_config() -> MaxLocalProviderConfig:
+    return MaxLocalProviderConfig(
+        base_url="http://127.0.0.1:8000/v1/",
+        health_url="ftp://127.0.0.1:8000/health",
+        model="max-local-query-rewrite",
+        request_timeout_ms=15000,
+    )
+
+
 def _analysis_json_text() -> String:
     return (
         '{"original_text":"eggs near me",'
@@ -93,17 +115,17 @@ def _chat_completion_response() raises -> Value:
 
 
 def _assert_query_rewrite_failure(
-    message: String, expected_kind: String, expected_reason: String
+    reason: String, expected_kind: String, expected_reason: String
 ) raises:
-    var failure = max_local_query_rewrite_failure_from_error(message)
+    var failure = max_local_query_rewrite_failure_from_reason(reason)
     assert_equal(failure.kind, expected_kind)
     assert_equal(failure.reason, expected_reason)
 
 
 def _assert_health_failure(
-    message: String, expected_kind: String, expected_reason: String
+    reason: String, expected_kind: String, expected_reason: String
 ) raises:
-    var failure = max_local_health_failure_from_error(message)
+    var failure = max_local_health_failure_from_reason(reason)
     assert_equal(failure.kind, expected_kind)
     assert_equal(failure.reason, expected_reason)
 
@@ -172,19 +194,10 @@ def test_max_local_provider_failure_mapping_preserves_reason_tokens() raises:
         "provider_missing_content",
     )
     _assert_query_rewrite_failure(
-        "unexpected provider failure", "provider", "provider_error"
+        "unknown_transport", "provider", "provider_error"
     )
     _assert_query_rewrite_failure(
-        "timed out", "provider", "provider_error"
-    )
-    _assert_query_rewrite_failure(
-        "connection refused", "provider", "provider_error"
-    )
-    _assert_query_rewrite_failure(
-        "bad url scheme", "provider", "provider_error"
-    )
-    _assert_query_rewrite_failure(
-        "not a timeout", "provider", "provider_error"
+        "unknown_provider", "provider", "provider_error"
     )
 
 
@@ -194,12 +207,10 @@ def test_max_local_health_failure_mapping_preserves_reason_tokens() raises:
     _assert_health_failure(
         "connection_failed", "transport", "connection_failed"
     )
+    _assert_health_failure("non_2xx", "http_status", "non_2xx")
     _assert_health_failure(
-        "unexpected health failure", "transport", "connection_failed"
+        "unknown_transport", "transport", "connection_failed"
     )
-    _assert_health_failure("timed out", "transport", "connection_failed")
-    _assert_health_failure("bad url scheme", "transport", "connection_failed")
-    _assert_health_failure("not a timeout", "transport", "connection_failed")
 
 
 def test_provider_config_rejects_unconfigured_runtime() raises:
@@ -214,6 +225,26 @@ def test_max_local_chat_completions_url_trims_base_url() raises:
         max_local_chat_completions_url(_provider_config()),
         "http://127.0.0.1:8000/v1/chat/completions",
     )
+
+
+def test_max_local_transport_boundary_rejects_invalid_chat_url() raises:
+    var outcome = post_max_local_chat_completion(
+        _invalid_base_url_provider_config(), loads("{}")
+    )
+
+    assert_true(outcome.failure)
+    assert_true(not outcome.response)
+    assert_equal(outcome.failure.value().kind, "transport")
+    assert_equal(outcome.failure.value().reason, "invalid_url")
+
+
+def test_max_local_transport_boundary_rejects_invalid_health_url() raises:
+    var outcome = get_max_local_health(_invalid_health_url_provider_config())
+
+    assert_true(outcome.failure)
+    assert_true(not outcome.response)
+    assert_equal(outcome.failure.value().kind, "transport")
+    assert_equal(outcome.failure.value().reason, "invalid_url")
 
 
 def test_query_rewrite_request_body_sets_schema_contract() raises:

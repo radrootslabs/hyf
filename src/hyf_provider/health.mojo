@@ -1,7 +1,5 @@
-from std.time import perf_counter_ns
-
 from hyf_assist.contract import max_local_query_rewrite_route
-from hyf_provider.client import make_max_local_http_client
+from hyf_provider.client import get_max_local_health
 from hyf_provider.config import MaxLocalProviderConfig
 from hyf_provider.result import MaxLocalProviderStatus
 
@@ -33,44 +31,41 @@ def _provider_status(
     )
 
 
-def _elapsed_ms_since(start_ns: UInt) -> Int:
-    return Int((perf_counter_ns() - start_ns) // 1_000_000)
-
-
-def max_local_health_failure_from_error(
-    message: String,
+def max_local_health_failure_from_reason(
+    reason: String,
 ) -> MaxLocalHealthFailure:
-    if message == "invalid_url":
+    if reason == "invalid_url":
         return _health_failure("transport", "invalid_url")
-    if message == "timeout":
+    if reason == "timeout":
         return _health_failure("transport", "timeout")
-    if message == "connection_failed":
+    if reason == "connection_failed":
         return _health_failure("transport", "connection_failed")
+    if reason == "non_2xx":
+        return _health_failure("http_status", "non_2xx")
     return _health_failure("transport", "connection_failed")
 
 
 def resolve_max_local_provider_status(
     config: MaxLocalProviderConfig,
 ) -> MaxLocalProviderStatus:
-    var start_ns = perf_counter_ns()
-    try:
-        with make_max_local_http_client(config) as client:
-            var response = client.get(config.health_url)
-            if response.ok():
-                return _provider_status(config, True, "ready", "ready")
-            return _provider_status(config, False, "unavailable", "non_2xx")
-    except e:
-        var failure = max_local_health_failure_from_error(String(e))
-        if (
-            failure.reason == "connection_failed"
-            and _elapsed_ms_since(start_ns) >= config.request_timeout_ms
-        ):
-            failure = MaxLocalHealthFailure(
-                kind="transport", reason="timeout"
-            )
+    var transport = get_max_local_health(config)
+    if transport.response:
+        return _provider_status(config, True, "ready", "ready")
+
+    if transport.failure:
+        var failure = max_local_health_failure_from_reason(
+            transport.failure.value().reason
+        )
         return _provider_status(
             config,
             False,
             "unavailable",
             String(failure.reason),
         )
+
+    return _provider_status(
+        config,
+        False,
+        "unavailable",
+        "connection_failed",
+    )

@@ -369,6 +369,32 @@ def _assert_invalid_runtime_config_load_error(
                 )
 
 
+def _assert_valid_runtime_config_load(config_text: String) raises:
+    with TemporaryDirectory() as temp_dir:
+        var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
+        startup_config_path.write_text(config_text)
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var response = run_stdio_entrypoint(
+                    "src/main.mojo",
+                    load_scenario_request_json("scenarios/status_ok.json"),
+                    "--config",
+                    startup_config_path.__fspath__(),
+                )
+
+                assert_true(response["ok"].bool_value())
+                assert_equal(
+                    response["output"]["runtime"]["config"]["loaded"]
+                    .bool_value(),
+                    True,
+                )
+                assert_equal(
+                    response["output"]["runtime"]["config"]["load_state"]
+                    .string_value(),
+                    "loaded",
+                )
+
+
 def test_business_fallback_reason_taxonomy_declares_provider_io_family() raises:
     _assert_declared_business_fallback_reason("timeout", "provider_io")
     _assert_declared_business_fallback_reason(
@@ -1231,11 +1257,68 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + "'route' = \"provider_runtime.query_rewrite.max_local\"\n"
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
         + 'assisted.max_local.route = "provider_runtime.query_rewrite.max_local"\n'
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + '"assisted"."max_local"."route" = "provider_runtime.query_rewrite.max_local"\n'
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + "'assisted'.'max_local'.'route' = \"provider_runtime.query_rewrite.max_local\"\n"
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + '[assisted."max_local"]\n'
+        + 'enabled = true\n'
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + '["assisted"."max_local"]\n'
+        + 'enabled = true\n'
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
         + 'request_timeout_ms = 15000\n',
         "assisted.max_local.route",
     )
@@ -1253,6 +1336,17 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
+        + 'assisted.max_local = { enabled = true, '
+        + 'base_url = "http://127.0.0.1:8000/v1", '
+        + 'health_url = "http://127.0.0.1:8000/health", '
+        + 'model = "max-local-query-rewrite", '
+        + "'route' = \"provider_runtime.query_rewrite.max_local\", "
+        + 'request_timeout_ms = 15000 }\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
@@ -1260,6 +1354,23 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'request_timeout_ms = 0\n',
         "assisted.max_local.request_timeout_ms",
     )
+
+
+def test_status_allows_non_route_toml_mentions() raises:
+    var config = (
+        '[service]\ntransport = "stdio"\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[assisted]\nprovider = "max_local"\n\n'
+        + '# assisted.max_local.route is intentionally derived by HYF\n'
+        + '[assisted.max_local]\n'
+        + '# route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'enabled = true\n'
+        + 'base_url = "http://127.0.0.1:8000/v1?route=provider_runtime.query_rewrite.max_local"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite-route-token"\n'
+        + 'request_timeout_ms = 15000\n'
+    )
+    _assert_valid_runtime_config_load(config)
 
 
 def test_capabilities_reports_configured_provider_runtime_truthfully() raises:

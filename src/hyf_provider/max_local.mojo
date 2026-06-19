@@ -79,6 +79,10 @@ def max_local_query_rewrite_failure_from_reason(
         return MaxLocalQueryRewriteFailure(
             kind="transport", reason="connection_failed"
         )
+    if reason == "unknown_transport":
+        return MaxLocalQueryRewriteFailure(
+            kind="provider", reason="provider_error"
+        )
     if reason == "provider_non_2xx":
         return MaxLocalQueryRewriteFailure(
             kind="http_status", reason="provider_non_2xx"

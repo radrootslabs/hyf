@@ -451,6 +451,12 @@ def test_business_fallback_reason_taxonomy_excludes_control_health_reason() rais
     )
 
 
+def test_business_fallback_reason_taxonomy_excludes_transport_boundary_reason() raises:
+    assert_equal(
+        _business_fallback_reason_family("unknown_transport"), "undeclared"
+    )
+
+
 def test_status_success() raises:
     var response = run_hyf_stdio(
         load_scenario_request_json("scenarios/status_ok.json")
@@ -1764,6 +1770,12 @@ def test_query_rewrite_falls_back_on_provider_non_2xx() raises:
 def test_query_rewrite_falls_back_on_provider_timeout() raises:
     _assert_query_rewrite_provider_fallback(
         "query_rewrite_timeout", "timeout", 100
+    )
+
+
+def test_query_rewrite_falls_back_on_unknown_transport_as_provider_error() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_malformed_http", "provider_error", 15000
     )
 
 

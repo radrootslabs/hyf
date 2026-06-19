@@ -54,11 +54,54 @@ def _assert_provider_runtime_fallback_meta(
         response["meta"]["fallback_reason"].string_value(),
         expected_reason,
     )
+    assert_true(
+        _business_fallback_reason_family(expected_reason) != "undeclared"
+    )
+    assert_true(expected_reason != "non_2xx")
 
 
 def _assert_no_top_level_fallback_meta(response: Value) raises:
     assert_true(not _has_key(response["meta"], "fallback_kind"))
     assert_true(not _has_key(response["meta"], "fallback_reason"))
+
+
+def _business_fallback_reason_family(reason: String) -> String:
+    if reason == "timeout":
+        return "provider_io"
+    if reason == "connection_failed":
+        return "provider_io"
+    if reason == "invalid_url":
+        return "provider_io"
+    if reason == "provider_non_2xx":
+        return "provider_io"
+    if reason == "provider_error_payload":
+        return "provider_io"
+    if reason == "provider_invalid_json":
+        return "provider_io"
+    if reason == "provider_schema_invalid":
+        return "provider_io"
+    if reason == "provider_empty_choices":
+        return "provider_io"
+    if reason == "provider_missing_content":
+        return "provider_io"
+    if reason == "provider_error":
+        return "provider_io"
+    if reason == "invalid_config":
+        return "runtime_config"
+    if reason == "disabled_by_runtime_config":
+        return "runtime_config"
+    if reason == "provider_unconfigured":
+        return "runtime_config"
+    if reason == "unsupported_capability":
+        return "capability_routing"
+    return "undeclared"
+
+
+def _assert_declared_business_fallback_reason(
+    reason: String, expected_family: String
+) raises:
+    assert_equal(_business_fallback_reason_family(reason), expected_family)
+    assert_true(reason != "non_2xx")
 
 
 def _max_local_runtime_config_toml_with_urls(
@@ -324,6 +367,57 @@ def _assert_invalid_runtime_config_load_error(
                     .find(expected_error_fragment)
                     >= 0
                 )
+
+
+def test_business_fallback_reason_taxonomy_declares_provider_io_family() raises:
+    _assert_declared_business_fallback_reason("timeout", "provider_io")
+    _assert_declared_business_fallback_reason(
+        "connection_failed", "provider_io"
+    )
+    _assert_declared_business_fallback_reason("invalid_url", "provider_io")
+    _assert_declared_business_fallback_reason(
+        "provider_non_2xx", "provider_io"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_error_payload", "provider_io"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_invalid_json", "provider_io"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_schema_invalid", "provider_io"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_empty_choices", "provider_io"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_missing_content", "provider_io"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_error", "provider_io"
+    )
+
+
+def test_business_fallback_reason_taxonomy_declares_runtime_family() raises:
+    _assert_declared_business_fallback_reason(
+        "invalid_config", "runtime_config"
+    )
+    _assert_declared_business_fallback_reason(
+        "disabled_by_runtime_config", "runtime_config"
+    )
+    _assert_declared_business_fallback_reason(
+        "provider_unconfigured", "runtime_config"
+    )
+
+
+def test_business_fallback_reason_taxonomy_declares_capability_family() raises:
+    _assert_declared_business_fallback_reason(
+        "unsupported_capability", "capability_routing"
+    )
+
+
+def test_business_fallback_reason_taxonomy_excludes_control_health_reason() raises:
+    assert_equal(_business_fallback_reason_family("non_2xx"), "undeclared")
 
 
 def test_status_success() raises:

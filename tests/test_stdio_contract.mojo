@@ -443,7 +443,12 @@ def test_business_fallback_reason_taxonomy_declares_capability_family() raises:
 
 
 def test_business_fallback_reason_taxonomy_excludes_control_health_reason() raises:
-    assert_equal(_business_fallback_reason_family("non_2xx"), "undeclared")
+    assert_equal(
+        _business_fallback_reason_family(
+            "non_2xx"
+        ),
+        "undeclared",
+    )
 
 
 def test_status_success() raises:

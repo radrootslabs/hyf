@@ -150,6 +150,12 @@ def _handle_chat_completions(mut stream: TcpStream, mode: String) raises:
             "}}"
         )
         _send(stream, 200, _chat_completion(body))
+    elif mode == "query_rewrite_top_level_string":
+        _send(stream, 200, '"not object"')
+    elif mode == "query_rewrite_top_level_array":
+        _send(stream, 200, "[]")
+    elif mode == "query_rewrite_top_level_null":
+        _send(stream, 200, "null")
     elif mode == "query_rewrite_empty_choices":
         _send(stream, 200, '{"choices":[]}')
     elif mode == "query_rewrite_missing_content":

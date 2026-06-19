@@ -53,7 +53,7 @@ def _first_validation_error(value: Value) raises -> String:
 
 def extract_chat_completion_text(response: Value) raises -> String:
     if not response.is_object():
-        raise Error("provider_invalid_response")
+        raise Error("provider_schema_invalid")
     if _has_key(response, "error"):
         raise Error("provider_error_payload")
     if not _has_key(response, "choices"):

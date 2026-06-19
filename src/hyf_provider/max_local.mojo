@@ -101,11 +101,6 @@ def max_local_query_rewrite_failure_from_error(
         return MaxLocalQueryRewriteFailure(
             kind="provider_payload", reason="provider_missing_content"
         )
-    if _matches_provider_reason(message, "provider_invalid_response"):
-        return MaxLocalQueryRewriteFailure(
-            kind="provider_payload", reason="provider_invalid_response"
-        )
-
     var lower = message.lower()
     if lower.find("url") >= 0 or lower.find("scheme") >= 0:
         return MaxLocalQueryRewriteFailure(

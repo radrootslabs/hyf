@@ -134,6 +134,12 @@ def _remaining_provider_budget_ms(start_ns: UInt, budget_ms: Int) -> Int:
     return remaining_ms
 
 
+def _business_provider_status_reason(reason: String) -> String:
+    if reason == "non_2xx":
+        return "provider_non_2xx"
+    return String(reason)
+
+
 def _query_rewrite_fallback(
     input: Value,
     context: RequestContext,
@@ -212,7 +218,7 @@ def _execute_query_rewrite_with_provider(
                 input,
                 context,
                 "provider_runtime",
-                String(provider_status.reason),
+                _business_provider_status_reason(provider_status.reason),
             )
 
         var remaining_ms = _remaining_provider_budget_ms(

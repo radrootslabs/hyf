@@ -230,5 +230,20 @@ def test_chat_completion_response_rejects_empty_choices() raises:
         _ = parse_query_analysis_from_chat_completion(loads('{"choices":[]}'))
 
 
+def test_chat_completion_response_rejects_top_level_scalar() raises:
+    with assert_raises():
+        _ = parse_query_analysis_from_chat_completion(loads('"not object"'))
+
+
+def test_chat_completion_response_rejects_top_level_array() raises:
+    with assert_raises():
+        _ = parse_query_analysis_from_chat_completion(loads("[]"))
+
+
+def test_chat_completion_response_rejects_top_level_null() raises:
+    with assert_raises():
+        _ = parse_query_analysis_from_chat_completion(loads("null"))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -1518,6 +1518,12 @@ def test_query_rewrite_falls_back_when_provider_readiness_probe_times_out() rais
     )
 
 
+def test_query_rewrite_falls_back_on_health_non_2xx_with_business_reason() raises:
+    _assert_query_rewrite_provider_fallback_with_requests(
+        "health_non_2xx", "provider_non_2xx", 15000, 1
+    )
+
+
 def test_query_rewrite_completion_uses_remaining_deadline_after_readiness() raises:
     _assert_query_rewrite_provider_fallback_with_deadline(
         "query_rewrite_remaining_deadline_timeout",
@@ -1537,6 +1543,24 @@ def test_query_rewrite_falls_back_on_provider_invalid_json() raises:
 def test_query_rewrite_falls_back_on_provider_schema_invalid_json() raises:
     _assert_query_rewrite_provider_fallback(
         "query_rewrite_schema_invalid", "provider_schema_invalid", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_top_level_string() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_top_level_string", "provider_schema_invalid", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_top_level_array() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_top_level_array", "provider_schema_invalid", 15000
+    )
+
+
+def test_query_rewrite_falls_back_on_provider_top_level_null() raises:
+    _assert_query_rewrite_provider_fallback(
+        "query_rewrite_top_level_null", "provider_schema_invalid", 15000
     )
 
 

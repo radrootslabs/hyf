@@ -1350,6 +1350,17 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'assisted.max_local = { enabled = true, '
         + 'base_url = "http://127.0.0.1:8000/v1", '
         + 'health_url = "http://127.0.0.1:8000/health", '
+        + 'model = "max-local-query-rewrite, route = quoted literal", '
+        + 'route = "provider_runtime.query_rewrite.max_local", '
+        + 'request_timeout_ms = 15000 }\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + 'assisted.max_local = { enabled = true, '
+        + 'base_url = "http://127.0.0.1:8000/v1", '
+        + 'health_url = "http://127.0.0.1:8000/health", '
         + 'model = "max-local-query-rewrite", '
         + "'route' = \"provider_runtime.query_rewrite.max_local\", "
         + 'request_timeout_ms = 15000 }\n',
@@ -1380,6 +1391,20 @@ def test_status_allows_non_route_toml_mentions() raises:
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite-route-token"\n'
         + 'request_timeout_ms = 15000\n'
+    )
+    _assert_valid_runtime_config_load(config)
+
+
+def test_status_allows_inline_table_quoted_route_mentions() raises:
+    var config = (
+        '[service]\ntransport = "stdio"\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[assisted]\nprovider = "max_local"\n\n'
+        + 'assisted.max_local = { enabled = true, '
+        + 'base_url = "http://127.0.0.1:8000/v1", '
+        + 'health_url = "http://127.0.0.1:8000/health", '
+        + 'model = "max-local-query-rewrite, route = quoted literal", '
+        + 'request_timeout_ms = 15000 }\n'
     )
     _assert_valid_runtime_config_load(config)
 

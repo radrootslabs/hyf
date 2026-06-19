@@ -213,24 +213,77 @@ def _normalize_toml_key_path(key: String) -> String:
     return normalized^
 
 
+def _toml_delimiter_index_outside_quotes(
+    text: String, delimiter: UInt8, start_index: Int
+) -> Int:
+    var bytes = text.as_bytes()
+    var index = start_index
+    var in_basic_string = False
+    var in_literal_string = False
+    var escaped = False
+    while index < text.byte_length():
+        var byte = bytes[index]
+        if in_basic_string:
+            if escaped:
+                escaped = False
+            elif byte == UInt8(ord("\\")):
+                escaped = True
+            elif byte == UInt8(ord('"')):
+                in_basic_string = False
+        elif in_literal_string:
+            if byte == UInt8(ord("'")):
+                in_literal_string = False
+        else:
+            if byte == UInt8(ord('"')):
+                in_basic_string = True
+            elif byte == UInt8(ord("'")):
+                in_literal_string = True
+            elif byte == delimiter:
+                return index
+        index += 1
+    return -1
+
+
 def _inline_table_contains_route_key(value: String) -> Bool:
     var table = String(String(value).strip())
-    var open_index = table.find("{")
+    var open_index = _toml_delimiter_index_outside_quotes(
+        table, UInt8(ord("{")), 0
+    )
     if open_index < 0:
         return False
-    var close_index = table.find("}")
+    var close_index = _toml_delimiter_index_outside_quotes(
+        table, UInt8(ord("}")), open_index + 1
+    )
     if close_index < 0 or close_index <= open_index:
         close_index = table.byte_length()
 
     var body = String(table[byte=open_index + 1:close_index])
-    for raw_field in body.split(","):
-        var field = String(String(raw_field).strip())
-        var equals_index = field.find("=")
+    var field_start = 0
+    while field_start <= body.byte_length():
+        var comma_index = _toml_delimiter_index_outside_quotes(
+            body, UInt8(ord(",")), field_start
+        )
+        var field_end = comma_index
+        if field_end < 0:
+            field_end = body.byte_length()
+
+        var field = String(String(body[byte=field_start:field_end]).strip())
+        var equals_index = _toml_delimiter_index_outside_quotes(
+            field, UInt8(ord("=")), 0
+        )
         if equals_index < 0:
+            if comma_index < 0:
+                break
+            field_start = comma_index + 1
             continue
-        var key = String(String(field[byte=0:equals_index]).strip())
-        if _normalize_toml_key_path(key) == "route":
-            return True
+        else:
+            var key = String(String(field[byte=0:equals_index]).strip())
+            if _normalize_toml_key_path(key) == "route":
+                return True
+
+        if comma_index < 0:
+            break
+        field_start = comma_index + 1
     return False
 
 

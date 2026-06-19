@@ -180,22 +180,94 @@ def _require_http_url(value: String, context: String) raises:
         raise Error(context + " must use http or https")
 
 
+def _strip_toml_key_quotes(value: String) -> String:
+    var stripped = String(String(value).strip())
+    if stripped.byte_length() < 2:
+        return stripped^
+
+    var bytes = stripped.as_bytes()
+    var last_index = stripped.byte_length() - 1
+    if (
+        bytes[0] == UInt8(ord('"'))
+        and bytes[last_index] == UInt8(ord('"'))
+    ):
+        return String(stripped[byte=1:last_index])
+    if (
+        bytes[0] == UInt8(ord("'"))
+        and bytes[last_index] == UInt8(ord("'"))
+    ):
+        return String(stripped[byte=1:last_index])
+    return stripped^
+
+
+def _normalize_toml_key_path(key: String) -> String:
+    var normalized = String("")
+    for raw_part in key.split("."):
+        var part = _strip_toml_key_quotes(
+            String(String(raw_part).strip())
+        )
+        if normalized == "":
+            normalized = part
+        else:
+            normalized += "." + part
+    return normalized^
+
+
+def _inline_table_contains_route_key(value: String) -> Bool:
+    var table = String(String(value).strip())
+    var open_index = table.find("{")
+    if open_index < 0:
+        return False
+    var close_index = table.find("}")
+    if close_index < 0 or close_index <= open_index:
+        close_index = table.byte_length()
+
+    var body = String(table[byte=open_index + 1:close_index])
+    for raw_field in body.split(","):
+        var field = String(String(raw_field).strip())
+        var equals_index = field.find("=")
+        if equals_index < 0:
+            continue
+        var key = String(String(field[byte=0:equals_index]).strip())
+        if _normalize_toml_key_path(key) == "route":
+            return True
+    return False
+
+
 def _reject_removed_max_local_route_config(config_text: String) raises:
     var in_max_local = False
     for raw_line in config_text.splitlines():
-        var line = String(raw_line).strip()
+        var line = String(String(raw_line).strip())
         if line == "" or line.startswith("#"):
             continue
         if line.startswith("["):
-            in_max_local = line == "[assisted.max_local]"
-            continue
-        if not in_max_local:
+            var close_index = line.find("]")
+            if close_index < 0:
+                in_max_local = False
+                continue
+            var table_name = String(
+                String(line[byte=1:close_index]).strip()
+            )
+            in_max_local = (
+                _normalize_toml_key_path(table_name)
+                == "assisted.max_local"
+            )
             continue
         var equals_index = line.find("=")
         if equals_index < 0:
             continue
-        var key = String(line[byte=0:equals_index]).strip()
-        if key == "route":
+        var key = _normalize_toml_key_path(
+            String(String(line[byte=0:equals_index]).strip())
+        )
+        var value = String(String(line[byte=equals_index + 1:]).strip())
+        if (
+            (in_max_local and key == "route")
+            or key == "assisted.max_local.route"
+            or (
+                key == "assisted.max_local"
+                and _inline_table_contains_route_key(value)
+            )
+        ):
             raise Error(
                 "assisted.max_local.route has been removed; provider route is derived by HYF"
             )

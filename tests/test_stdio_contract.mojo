@@ -1114,6 +1114,51 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
+        + '[assisted.max_local] # provider route is derived\n'
+        + 'enabled = true\n'
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'route = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + '"route" = "provider_runtime.query_rewrite.max_local"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + 'assisted.max_local.route = "provider_runtime.query_rewrite.max_local"\n'
+        + max_local_header
+        + 'base_url = "http://127.0.0.1:8000/v1"\n'
+        + 'health_url = "http://127.0.0.1:8000/health"\n'
+        + 'model = "max-local-query-rewrite"\n'
+        + 'request_timeout_ms = 15000\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
+        + 'assisted.max_local = { enabled = true, '
+        + 'base_url = "http://127.0.0.1:8000/v1", '
+        + 'health_url = "http://127.0.0.1:8000/health", '
+        + 'model = "max-local-query-rewrite", '
+        + 'route = "provider_runtime.query_rewrite.max_local", '
+        + 'request_timeout_ms = 15000 }\n',
+        "assisted.max_local.route",
+    )
+    _assert_invalid_runtime_config_load_error(
+        prefix
+        + provider
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'

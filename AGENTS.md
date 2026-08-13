@@ -7,6 +7,7 @@
 - prefer the smallest coherent change that fully addresses the request; do not mix unrelated cleanup, speculative refactors, or roadmap work into the same change
 - read `README.md`, `pixi.toml`, and `flake.nix` before broad edits, and inspect the current implementation before changing behavior
 - validate from this repo root with documented commands first; the current bootstrap smoke check is `pixi run run`
+- `.github/**` and capsule-local CI workflows are forbidden; keep validation forge-agnostic, and place any required monorepo orchestration exclusively under the parent monorepo's root `.act/**` authority
 - keep the service boundary as stdio rpc; `hyfd` is the canonical local process interface
 - keep the service core in mojo; use the checked-in repo tooling surface for development, validation, and launch workflows
 - if validation cannot run, report the blocker clearly instead of guessing past it

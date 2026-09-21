@@ -279,3 +279,17 @@ def test_offline_environment_isolation() raises:
     assert_true(loopback_only_provider_endpoints())
     assert_true(not credential_required_for_offline_tests())
     assert_true(offline_environment_is_sanitized())
+
+
+from std.pathlib import Path as _JPATH, _dir_of_current_file as _jdir
+from json import dumps as _jdumps
+
+
+def test_single_case_and_seed_replay() raises:
+    var case_path = _jdir() / "fixtures" / "hyf_v1_jev" / "domain" / "DM004_approximation_retained.json"
+    var fixture = _json_loads2(case_path.read_text())
+    var first = _jdumps(fixture)
+    var second = _jdumps(fixture)
+    assert_equal(first, second)
+    assert_equal(fixture["context"]["seed"].int_value(), 101)
+    assert_equal(fixture["required_from_step"].string_value(), "S022")

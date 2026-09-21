@@ -96,3 +96,16 @@ def test_farm_update_operation_is_gated_until_enabled() raises:
         frames.append(request)
         var responses = run_stdio_session(frames, context)
         assert_true(responses[0].find("capability_disabled") >= 0)
+
+
+def test_buyer_match_operation_is_gated_until_enabled() raises:
+    with TemporaryDirectory() as temp_dir:
+        var context = _context(temp_dir)
+        var request = (
+            '{"version":1,"request_id":"match-op-1","capability":"buyer_request.match",'
+            '"input":{"need":{"need_id":"n1"},"snapshots":[]}}'
+        )
+        var frames = List[String]()
+        frames.append(request)
+        var responses = run_stdio_session(frames, context)
+        assert_true(responses[0].find("capability_disabled") >= 0)

@@ -508,3 +508,31 @@ def test_compose_applicable_checks_before_ranking() raises:
     only_unknown.append(constraint_assessment("quantity", "unknown", True, "stock_unknown"))
     assert_equal(compose_applicable_checks(only_unknown), "conditional")
     assert_true(not scores_affect_feasibility())
+
+
+from hyf_application.match_plan import (
+    allocate_single_line,
+    group_lots_by_supplier,
+    multi_supplier_is_supported,
+)
+from hyf_core.domain.plan import LotCapacity, plan_conservation_violations
+
+
+def test_supplier_grouping_and_bounded_allocation() raises:
+    var lots = List[String]()
+    lots.append("lot-1")
+    lots.append("lot-2")
+    var suppliers = List[String]()
+    suppliers.append("farm-1")
+    suppliers.append("farm-1")
+    var grouped = group_lots_by_supplier(lots, suppliers)
+    assert_equal(len(grouped), 1)
+    assert_equal(grouped[0], "farm-1")
+
+    var capacities = List[LotCapacity]()
+    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=30, scale=0))
+    capacities.append(LotCapacity(lot_id="lot-2", revision="l1", value=40, scale=0))
+    var plan = allocate_single_line("p1", "line-1", "farm-1", 50, 0, capacities)
+    assert_equal(len(plan.allocations), 2)
+    assert_equal(len(plan_conservation_violations(plan, capacities)), 0)
+    assert_true(not multi_supplier_is_supported())

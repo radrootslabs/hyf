@@ -467,3 +467,29 @@ def test_supply_snapshot_revisions_and_unknown_unreserved() raises:
     assert_true(snapshot_identity(known) != snapshot_identity(other_revision))
     var unknown = supply_snapshot("lot-2", "l1", "farm-1", tomatoes, "unknown", 0, 0, "kg")
     assert_true(not snapshot_unreserved_known(unknown))
+
+
+from hyf_core.domain.eligibility import (
+    ConstraintAssessment,
+    compose_eligibility,
+    constraint_assessment,
+)
+
+
+def test_eligibility_precedence() raises:
+    var checks = List[ConstraintAssessment]()
+    checks.append(constraint_assessment("product", "pass", True, "product_mismatch"))
+    checks.append(constraint_assessment("quantity", "unknown", True, "stock_unknown"))
+    checks.append(constraint_assessment("preference", "unknown", False, "evidence_insufficient"))
+    assert_equal(compose_eligibility(checks), "conditional")
+
+    var failing = List[ConstraintAssessment]()
+    failing.append(constraint_assessment("quantity", "fail", True, "quantity_insufficient"))
+    failing.append(constraint_assessment("window", "unknown", True, "window_mismatch"))
+    assert_equal(compose_eligibility(failing), "ineligible")
+
+    var optional_only = List[ConstraintAssessment]()
+    optional_only.append(constraint_assessment("preference", "unknown", False, "evidence_insufficient"))
+    assert_equal(compose_eligibility(optional_only), "eligible")
+    with assert_raises():
+        _ = constraint_assessment("product", "maybe", True, "x")

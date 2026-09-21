@@ -1,5 +1,6 @@
 import std.os
 from std.collections import List
+from std.os.path import dirname, isfile
 from std.pathlib import Path, _dir_of_current_file
 from safe_tempdir import SafeTempDir
 from std.testing import TestSuite, assert_equal, assert_true
@@ -13,8 +14,12 @@ from fixture_validator import (
 
 
 def _write(path: Path, text: String) raises:
-    std.os.makedirs(path.__fspath__(), exist_ok=True)
+    _ = std.os.makedirs(dirname(path.__fspath__()), exist_ok=True)
     path.write_text(text)
+    assert_true(
+        isfile(path.__fspath__()),
+        "expected a regular file at " + path.__fspath__(),
+    )
 
 
 def _make_corpus(base: Path, mutation: String) raises:

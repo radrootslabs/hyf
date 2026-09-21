@@ -845,7 +845,7 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                             "max_local_request_timeout_ms"
                         ].int_value()
                     ),
-                    15000,
+                    250,
                 )
                 assert_true(
                     not _has_key(

@@ -8,7 +8,7 @@ from hyf_runtime.startup import (
     RuntimeStartupInput,
     resolve_startup_context,
 )
-from hyf_stdio.server import run_stdio_session
+from hyf_stdio.server import MAX_FRAME_BYTES, run_stdio_session
 
 
 def _context(temp_dir: String) raises -> RuntimeStartupContext:
@@ -71,14 +71,30 @@ def test_session_preserves_order_and_recovers_after_malformed() raises:
 def test_session_rejects_oversized_frame() raises:
     with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
-        var huge = "{\"version\":1,\"request_id\":\"big\","
-        for _ in range(200000):
+        var huge = String("")
+        for _ in range(MAX_FRAME_BYTES + 1):
             huge += "x"
+        assert_true(huge.byte_length() == MAX_FRAME_BYTES + 1)
         var frames = List[String]()
         frames.append(huge)
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
         var responses = run_stdio_session(frames, context)
         assert_true(responses[0].find("size limit") >= 0)
+        assert_true(responses[1].find('"ok":true') >= 0)
+
+
+def test_session_accepts_frame_at_configured_limit() raises:
+    with SafeTempDir() as temp_dir:
+        var context = _context(temp_dir)
+        var at_limit = String("")
+        for _ in range(MAX_FRAME_BYTES):
+            at_limit += "x"
+        assert_true(at_limit.byte_length() == MAX_FRAME_BYTES)
+        var frames = List[String]()
+        frames.append(at_limit)
+        frames.append(load_scenario_request_json("scenarios/status_ok.json"))
+        var responses = run_stdio_session(frames, context)
+        assert_true(responses[0].find("size limit") < 0)
         assert_true(responses[1].find('"ok":true') >= 0)
 
 

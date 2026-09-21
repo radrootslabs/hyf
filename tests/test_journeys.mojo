@@ -128,3 +128,18 @@ def test_secret_and_telemetry_redaction() raises:
     assert_true(redacted.find("\\n") >= 0)
     assert_true(not contains_credential_marker(internal_error_message()))
     assert_true(contains_credential_marker("apikey_abc"))
+
+
+from hyf_application.cache_policy import (
+    cache_key_requires_tenant_source_and_versions,
+    cache_reserves_stock,
+    cache_scope_is_documented,
+    result_cache_used,
+)
+
+
+def test_optional_cache_scope_resolved_explicitly() raises:
+    assert_true(not result_cache_used())
+    assert_true(cache_scope_is_documented())
+    assert_true(cache_key_requires_tenant_source_and_versions())
+    assert_true(not cache_reserves_stock())

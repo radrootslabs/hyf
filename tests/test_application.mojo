@@ -221,3 +221,25 @@ def test_buyer_discovers_multiple_demand_lines() raises:
     assert_equal(lines[0].product_phrase, "tomatoes")
     assert_equal(lines[1].product_phrase, "basil")
     assert_equal(lines[0].line_id, "line-1")
+
+
+from hyf_application.buyer_conditions import (
+    delivery_exclusion_means_pickup,
+    interpret_buyer_condition,
+    interpret_condition_strength,
+    missing_information_is_prohibition,
+)
+from std.collections import Optional
+
+
+def test_buyer_condition_strength_and_negation() raises:
+    assert_equal(interpret_condition_strength("required"), "mandatory")
+    assert_equal(interpret_condition_strength("ideally"), "preferred")
+    assert_equal(interpret_condition_strength("not"), "excluded")
+    assert_equal(interpret_condition_strength("fine"), "permitted")
+    var required = interpret_buyer_condition("fulfillment", "required", Optional[String]("delivery"))
+    assert_equal(required.strength, "mandatory")
+    var excluded = interpret_buyer_condition("fulfillment", "not", Optional[String]("pickup"))
+    assert_equal(excluded.strength, "excluded")
+    assert_true(not delivery_exclusion_means_pickup())
+    assert_true(not missing_information_is_prohibition())

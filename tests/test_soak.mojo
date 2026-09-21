@@ -36,3 +36,17 @@ def test_bounded_process_soak_200_frames() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from hyf_application.resource_envelope import (
+    default_resource_envelope,
+    within_envelope,
+)
+
+
+def test_candidate_and_plan_resource_envelope() raises:
+    var envelope = default_resource_envelope()
+    assert_true(within_envelope(envelope, 10, 2, 100, 5, 1))
+    assert_true(not within_envelope(envelope, 1000, 2, 100, 5, 1))
+    assert_true(not within_envelope(envelope, 10, 100, 100, 5, 1))
+    assert_true(not within_envelope(envelope, 10, 2, 100000, 5, 1))

@@ -197,3 +197,30 @@ def test_normalization_preserves_approximation() raises:
     assert_equal(normalized.unit, "kg")
     var exact = new_quantity(80, 0, "lb", "mass", "exact")
     assert_equal(normalize_quantity_with_rule(exact, rule).qualifier, "exact")
+
+
+from hyf_core.domain.price import (
+    known_price,
+    price_compare,
+    price_is_known,
+    unknown_price,
+)
+
+
+def test_price_unknown_distinct_from_zero_and_no_fx() raises:
+    var unknown = unknown_price()
+    assert_true(not price_is_known(unknown))
+    assert_equal(unknown.amount, 0)
+    var zero = known_price(0, 2, "CAD", "per_unit")
+    assert_true(price_is_known(zero))
+    var five = known_price(500, 2, "CAD", "per_unit")
+    assert_equal(price_compare(five, zero), 1)
+    with assert_raises():
+        _ = price_compare(five, unknown)
+    var usd = known_price(500, 2, "USD", "per_unit")
+    with assert_raises():
+        _ = price_compare(five, usd)
+    with assert_raises():
+        _ = known_price(1, 2, "", "per_unit")
+    with assert_raises():
+        _ = known_price(1, 2, "CAD", "per_kg_approx")

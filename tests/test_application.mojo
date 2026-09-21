@@ -82,3 +82,24 @@ def test_quantity_association_per_product_without_swap() raises:
     assert_true(not reported_quantity_is_unreserved_stock())
     with assert_raises():
         _ = associate_quantity("", 1, 0, "kg", "exact")
+
+
+from hyf_application.farm_changes import (
+    interpret_update_change,
+    interpret_update_operation,
+    operation_is_proposal,
+)
+
+
+def test_supply_update_operation_semantics() raises:
+    assert_equal(interpret_update_operation("another"), "addition")
+    assert_equal(interpret_update_operation("left"), "remaining")
+    assert_equal(interpret_update_operation("total"), "replacement")
+    assert_equal(interpret_update_operation("sold out"), "withdrawal")
+    assert_equal(interpret_update_operation("actually"), "correction")
+    assert_equal(interpret_update_operation("maybe"), "unresolved")
+    var addition = interpret_update_change("another", "listing", Optional[String]("b1"))
+    assert_equal(addition.operation, "addition")
+    var ambiguous = interpret_update_change("sold out", "listing", None)
+    assert_equal(ambiguous.operation, "unresolved")
+    assert_true(operation_is_proposal())

@@ -1,0 +1,8 @@
+{
+  "kind": "relative",
+  "expression": "Friday",
+  "reference_time": "2026-09-21T09:00:00",
+  "timezone": null,
+  "resolution": "unresolved",
+  "ambiguity": "missing_zone"
+}

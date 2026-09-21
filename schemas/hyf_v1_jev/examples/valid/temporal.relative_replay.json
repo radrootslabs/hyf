@@ -1,0 +1,11 @@
+{
+  "kind": "relative",
+  "expression": "Friday",
+  "reference_time": "2026-09-21T09:00:00-07:00",
+  "timezone": "America/Vancouver",
+  "resolution": "resolved",
+  "start": "2026-09-25",
+  "end": "2026-09-25",
+  "boundary": "inclusive",
+  "ambiguity": "none"
+}

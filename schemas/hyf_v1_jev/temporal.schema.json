@@ -1,0 +1,81 @@
+{
+  "$comment": "Source-anchored temporal semantics; byte-offset evidence convention; no model arithmetic",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "timestamp",
+        "date_only",
+        "window",
+        "relative"
+      ]
+    },
+    "expression": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reference_time": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "timezone": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resolution": {
+      "type": "string",
+      "enum": [
+        "resolved",
+        "unresolved"
+      ]
+    },
+    "start": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "end": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "boundary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "inclusive",
+        "exclusive",
+        null
+      ]
+    },
+    "ambiguity": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "none",
+        "ambiguous_local",
+        "missing_zone",
+        "nonexistent_local",
+        null
+      ]
+    }
+  },
+  "required": [
+    "kind",
+    "resolution"
+  ],
+  "additionalProperties": false
+}

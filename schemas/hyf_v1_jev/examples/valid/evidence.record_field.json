@@ -1,0 +1,8 @@
+{
+  "source_id": "s1",
+  "revision": "r1",
+  "kind": "record_field",
+  "record_id": "lot-1",
+  "field": "unreserved_quantity",
+  "method": "trusted_record"
+}

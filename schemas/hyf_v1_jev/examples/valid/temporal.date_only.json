@@ -1,0 +1,10 @@
+{
+  "kind": "date_only",
+  "expression": "2026-09-25",
+  "timezone": "America/Vancouver",
+  "resolution": "resolved",
+  "start": "2026-09-25",
+  "end": "2026-09-25",
+  "boundary": "inclusive",
+  "ambiguity": "none"
+}

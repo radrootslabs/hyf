@@ -1065,8 +1065,8 @@ def test_wire_operation_schemas_accept_valid_and_reject_invalid() raises:
     assert_true(validated >= 6)
 
 
-def test_domain_representation_schemas_accept_valid_and_reject_invalid() raises:
-    var manifest = _wire_schema_json("domain_manifest.json")
+def _assert_manifest_examples(manifest_name: String, expected_valid: Int) raises:
+    var manifest = _wire_schema_json(manifest_name)
     assert_equal(manifest["spec_id"].string_value(), "hyf_v1_jev")
     var valid_count = 0
     for binding in manifest["bindings"].array_items():
@@ -1083,7 +1083,7 @@ def test_domain_representation_schemas_accept_valid_and_reject_invalid() raises:
             )
             assert_true(
                 validate(doc, schema).valid,
-                "valid domain example failed schema: " + rel.string_value(),
+                "valid example failed schema: " + rel.string_value(),
             )
             valid_count += 1
         for rel in binding["invalid"].array_items():
@@ -1098,9 +1098,17 @@ def test_domain_representation_schemas_accept_valid_and_reject_invalid() raises:
             )
             assert_true(
                 not validate(doc, schema).valid,
-                "invalid domain example unexpectedly passed: " + rel.string_value(),
+                "invalid example unexpectedly passed: " + rel.string_value(),
             )
-    assert_equal(valid_count, 5)
+    assert_equal(valid_count, expected_valid)
+
+
+def test_domain_representation_schemas_accept_valid_and_reject_invalid() raises:
+    _assert_manifest_examples("domain_manifest.json", 5)
+
+
+def test_temporal_evidence_schemas_accept_valid_and_reject_invalid() raises:
+    _assert_manifest_examples("temporal_manifest.json", 7)
 
 
 def main() raises:

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec_id": "hyf_v1_jev",
+  "family": "temporal_evidence",
+  "bindings": [
+    {
+      "schema": "temporal.schema.json",
+      "valid": [
+        "examples/valid/temporal.date_only.json",
+        "examples/valid/temporal.relative_replay.json",
+        "examples/valid/temporal.window_exclusive.json",
+        "examples/valid/temporal.missing_zone.json",
+        "examples/valid/temporal.ambiguous_local.json"
+      ],
+      "invalid": [
+        "examples/invalid/temporal.bad_boundary.json",
+        "examples/invalid/temporal.bad_ambiguity.json"
+      ]
+    },
+    {
+      "schema": "evidence.schema.json",
+      "valid": [
+        "examples/valid/evidence.span_unicode.json",
+        "examples/valid/evidence.record_field.json"
+      ],
+      "invalid": [
+        "examples/invalid/evidence.missing_revision.json",
+        "examples/invalid/evidence.bad_kind.json"
+      ]
+    }
+  ]
+}

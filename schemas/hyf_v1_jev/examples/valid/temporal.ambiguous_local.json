@@ -1,0 +1,7 @@
+{
+  "kind": "timestamp",
+  "expression": "2026-11-01T01:30:00",
+  "timezone": "America/Vancouver",
+  "resolution": "unresolved",
+  "ambiguity": "ambiguous_local"
+}

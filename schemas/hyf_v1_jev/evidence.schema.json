@@ -1,0 +1,57 @@
+{
+  "$comment": "Evidence references use exact byte offsets into the immutable source revision, or trusted record fields",
+  "type": "object",
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "span",
+        "record_field"
+      ]
+    },
+    "start": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "end": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "record_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "field": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "method": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "revision",
+    "kind",
+    "method"
+  ],
+  "additionalProperties": false
+}

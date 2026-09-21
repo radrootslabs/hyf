@@ -109,3 +109,27 @@ def allocate_multiple_lines(
 
 def shared_lot_allows_concurrent_over_allocation() -> Bool:
     return False
+
+
+@fieldwise_init
+struct PartialOutcome(Copyable, Movable):
+    var fulfilled: Bool
+    var uncovered_value: Int
+    var permitted: Bool
+
+
+def partial_outcome(
+    required_value: Int, allocated_value: Int, partial_allowed: Bool
+) raises -> PartialOutcome:
+    if required_value < 0 or allocated_value < 0:
+        raise Error("partial outcome requires non-negative quantities")
+    if allocated_value >= required_value:
+        return PartialOutcome(fulfilled=True, uncovered_value=0, permitted=True)
+    var uncovered = required_value - allocated_value
+    return PartialOutcome(
+        fulfilled=False, uncovered_value=uncovered, permitted=partial_allowed
+    )
+
+
+def partial_discloses_deficit() -> Bool:
+    return True

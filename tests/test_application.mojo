@@ -574,3 +574,19 @@ def test_conservation_across_multiple_demand_lines() raises:
     assert_equal(total, 50)
     assert_equal(len(plan_conservation_violations(plan, capacities)), 0)
     assert_true(not shared_lot_allows_concurrent_over_allocation())
+
+
+from hyf_application.match_plan import partial_outcome, partial_discloses_deficit
+
+
+def test_explicit_partial_fulfillment_outcome() raises:
+    var full = partial_outcome(50, 50, False)
+    assert_true(full.fulfilled)
+    assert_equal(full.uncovered_value, 0)
+    var partial = partial_outcome(50, 30, True)
+    assert_true(not partial.fulfilled)
+    assert_equal(partial.uncovered_value, 20)
+    assert_true(partial.permitted)
+    var disallowed = partial_outcome(50, 30, False)
+    assert_true(not disallowed.permitted)
+    assert_true(partial_discloses_deficit())

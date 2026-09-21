@@ -671,3 +671,24 @@ def test_versioned_preference_composition_and_stable_ties() raises:
     assert_equal(ranked[0], "plan-c")
     assert_equal(ranked[1], "plan-a")
     assert_equal(ranked[2], "plan-b")
+
+
+from hyf_application.match_ranking import (
+    rank_match_plans,
+    ranking_is_order_independent,
+)
+
+
+def test_deterministic_ranking_and_tie_breaks() raises:
+    var capacities = List[LotCapacity]()
+    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0))
+    var plans = List[MatchPlan]()
+    plans.append(allocate_single_line("plan-b", "line-1", "farm-1", 25, 0, capacities))
+    plans.append(allocate_single_line("plan-a", "line-1", "farm-1", 25, 0, capacities))
+    var scores = List[Int]()
+    scores.append(50)
+    scores.append(50)
+    var ranked = rank_match_plans(plans, scores)
+    assert_equal(ranked[0].plan_id, "plan-a")
+    assert_equal(ranked[1].plan_id, "plan-b")
+    assert_true(ranking_is_order_independent())

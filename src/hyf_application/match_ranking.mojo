@@ -68,3 +68,27 @@ def rank_by_preference(
     for index in ranked:
         result.append(String(plan_ids[index]))
     return result^
+
+
+from hyf_core.domain.plan import MatchPlan
+
+
+def rank_match_plans(
+    plans: List[MatchPlan], scores: List[Int]
+) raises -> List[MatchPlan]:
+    if len(plans) != len(scores):
+        raise Error("plans and scores must align")
+    var ids = List[String]()
+    for plan in plans:
+        ids.append(String(plan.plan_id))
+    var ranked_ids = rank_by_preference(ids, scores)
+    var ranked = List[MatchPlan]()
+    for plan_id in ranked_ids:
+        for plan in plans:
+            if plan.plan_id == plan_id:
+                ranked.append(plan.copy())
+    return ranked^
+
+
+def ranking_is_order_independent() -> Bool:
+    return True

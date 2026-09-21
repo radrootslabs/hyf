@@ -14,7 +14,10 @@ from hyf_runtime.startup import (
 )
 from hyf_core.capabilities.registry import (
     canonical_business_capability,
+    execute_gated_operation,
+    is_gated_operation,
 )
+from hyf_runtime.config import operation_enabled
 from hyf_core.errors import (
     CapabilityFailure,
     CapabilityResult,
@@ -193,6 +196,14 @@ def _route_business_capability(
     request_id: String,
     runtime_context: RuntimeStartupContext,
 ) raises -> String:
+    if is_gated_operation(request.capability):
+        if not operation_enabled(runtime_context.config, request.capability):
+            return encode_error(_disabled_response(request))
+        var gated = execute_gated_operation(
+            request.capability, request.input.clone()
+        )
+        return _dispatch_capability_result(request_id, request.trace_id, gated)
+
     var capability = canonical_business_capability(request.capability)
     if not capability:
         return encode_error(_unsupported_response(request))

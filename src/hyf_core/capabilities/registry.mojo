@@ -9,8 +9,11 @@ from hyf_core.errors import (
     CapabilityResult,
     capability_not_implemented_error,
     failed_capability,
+    invalid_input_error,
+    successful_capability,
 )
 from hyf_core.request_context import RequestContext
+from hyf_application.farm_operation import execute_farm_update_interpret
 
 
 @fieldwise_init
@@ -170,6 +173,24 @@ def _dispatch_heuristic_registered_business_capability(
     if capability_id == "explain_result":
         return execute_explain_result(input, context)
     return failed_capability(capability_not_implemented_error(capability_id))
+
+def is_gated_operation(capability_id: String) -> Bool:
+    for descriptor in gated_operation_descriptors():
+        if descriptor.id == capability_id:
+            return True
+    return False
+
+
+def execute_gated_operation(
+    capability_id: String, input: Value
+) raises -> CapabilityResult:
+    try:
+        if capability_id == "farm_update.interpret":
+            return successful_capability(execute_farm_update_interpret(input))
+        return failed_capability(capability_not_implemented_error(capability_id))
+    except e:
+        return failed_capability(invalid_input_error(String(e)))
+
 
 def execute_registered_business_capability(
     capability_id: String, input: Value, context: RequestContext

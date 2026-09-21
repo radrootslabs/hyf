@@ -730,3 +730,21 @@ def test_semantic_ranking_failure_preserves_feasibility() raises:
     assert_true(not outage_changes_feasibility())
     with assert_raises():
         _ = ranking_outage("eligible", "")
+
+
+from hyf_application.farm_operation import execute_farm_update_interpret
+from json import loads as _json_loads
+
+
+def test_farm_update_operation_returns_proposal_output() raises:
+    var input = _json_loads(
+        '{"source":{"source_id":"s1","revision":"r1","text":"Got about 80 lb of Roma tomatoes.",'
+        '"source_time":"2026-09-21T09:00:00-07:00","timezone":"America/Vancouver",'
+        '"actor_id":"farm-1","farm_id":"farm-1"}}'
+    )
+    var output = execute_farm_update_interpret(input)
+    assert_true(output["review"]["required"].bool_value())
+    assert_equal(output["execution"]["status"].string_value(), "complete")
+    assert_true(output["original_source_preserved"].bool_value())
+    with assert_raises():
+        _ = execute_farm_update_interpret(_json_loads("{}"))

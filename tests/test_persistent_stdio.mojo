@@ -80,3 +80,19 @@ def test_session_rejects_oversized_frame() raises:
         var responses = run_stdio_session(frames, context)
         assert_true(responses[0].find("size limit") >= 0)
         assert_true(responses[1].find('"ok":true') >= 0)
+
+
+def test_farm_update_operation_is_gated_until_enabled() raises:
+    with TemporaryDirectory() as temp_dir:
+        var context = _context(temp_dir)
+        var request = (
+            '{"version":1,"request_id":"farm-op-1","capability":"farm_update.interpret",'
+            '"input":{"source":{"source_id":"s1","revision":"r1",'
+            '"text":"Got about 80 lb of Roma tomatoes.",'
+            '"source_time":"2026-09-21T09:00:00-07:00","timezone":"America/Vancouver",'
+            '"actor_id":"farm-1","farm_id":"farm-1"}}}'
+        )
+        var frames = List[String]()
+        frames.append(request)
+        var responses = run_stdio_session(frames, context)
+        assert_true(responses[0].find("capability_disabled") >= 0)

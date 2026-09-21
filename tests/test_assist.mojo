@@ -125,3 +125,47 @@ def test_question_bundles_are_versioned_and_validated() raises:
     one.append("only")
     with assert_raises():
         _ = score_question("s", "i", one)
+
+
+from hyf_assist.question_plan import (
+    QuestionStage,
+    independent_questions_share_one_state,
+    question_stage,
+    stages_are_acyclic,
+)
+
+
+def test_question_stage_planning_dependencies() raises:
+    var choices = List[String]()
+    choices.append("offered")
+    choices.append("unclear")
+    var base_questions = List[Question]()
+    base_questions.append(choice_question("supply_status", "status?", choices))
+    var follow_questions = List[Question]()
+    follow_questions.append(noul_question("seconds_ok", "seconds?"))
+    var stages = List[QuestionStage]()
+    stages.append(question_stage("stage-1", List[String](), base_questions))
+    var deps = List[String]()
+    deps.append("stage-1")
+    stages.append(question_stage("stage-2", deps, follow_questions))
+    assert_true(stages_are_acyclic(stages))
+    assert_true(independent_questions_share_one_state())
+
+    var cyclic = List[QuestionStage]()
+    cyclic.append(question_stage("a", List[String](), base_questions))
+    var dep_a = List[String]()
+    dep_a.append("b")
+    cyclic.append(question_stage("b", dep_a, follow_questions))
+    var dep_b = List[String]()
+    dep_b.append("a")
+    # replace first stage's deps to create a cycle: a depends on b, b depends on a
+    var cyclic2 = List[QuestionStage]()
+    var a_deps = List[String]()
+    a_deps.append("b")
+    cyclic2.append(question_stage("a", a_deps, base_questions))
+    var b_deps = List[String]()
+    b_deps.append("a")
+    cyclic2.append(question_stage("b", b_deps, follow_questions))
+    assert_true(not stages_are_acyclic(cyclic2))
+    with assert_raises():
+        _ = question_stage("empty", List[String](), List[Question]())

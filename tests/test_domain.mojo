@@ -99,3 +99,34 @@ def test_field_known_zero_distinct_from_unknown_and_false() raises:
     validate_field_consistency(unknown)
     var approximate = known_approximate_field("80", "span")
     assert_equal(approximate.qualifier, "approximate")
+
+
+from hyf_core.domain.quantity import (
+    new_quantity,
+    quantity_add,
+    quantity_compare,
+    quantity_is_negative,
+    quantity_rescale,
+)
+
+
+def test_quantity_exact_compare_and_scale() raises:
+    var a = new_quantity(8000, 2, "kg", "mass", "exact")
+    var b = new_quantity(80, 0, "kg", "mass", "exact")
+    assert_equal(quantity_compare(a, b), 0)
+    var c = new_quantity(50, 0, "kg", "mass", "exact")
+    assert_equal(quantity_compare(c, b), -1)
+    assert_equal(quantity_rescale(b, 2).value, 8000)
+
+
+def test_quantity_add_overflow_and_approximation() raises:
+    var approx = new_quantity(80, 0, "lb", "mass", "approximate")
+    var exact = new_quantity(5, 0, "lb", "mass", "exact")
+    var total = quantity_add(approx, exact)
+    assert_equal(total.value, 85)
+    assert_equal(total.qualifier, "approximate")
+    var huge = new_quantity(9223372036854775807, 0, "kg", "mass", "exact")
+    with assert_raises():
+        _ = quantity_add(huge, exact)
+    var adjustment = new_quantity(-5, 0, "kg", "mass", "exact")
+    assert_true(quantity_is_negative(adjustment))

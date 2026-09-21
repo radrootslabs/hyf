@@ -242,3 +242,19 @@ def test_circuit_opens_and_recovers() raises:
     state = circuit_record_success(state)
     assert_true(circuit_allows(state))
     assert_true(not process_liveness_is_provider_readiness())
+
+
+from flare.http import HttpClient
+from jev_provider_helper import reserve_jev_port, spawn_jev_stub
+
+
+def test_local_provider_server_serves_scripted_jev() raises:
+    var port = reserve_jev_port()
+    var stub = spawn_jev_stub(port, "ok", 1)
+    var url = "http://127.0.0.1:" + String(port) + "/v1/systemone"
+    with HttpClient(timeout_ms=5000, max_redirects=0) as client:
+        var response = client.post(url, '{"model":"jev-1.13.0","state":"s","questions":{}}')
+        assert_true(response.ok())
+        var body = response.json()
+        assert_equal(body["model"].string_value(), "jev-1.13.0")
+    stub.wait()

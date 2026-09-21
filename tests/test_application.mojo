@@ -329,3 +329,28 @@ def test_buyer_inference_failure_is_not_market_absence() raises:
     var degraded = buyer_inference_degraded("provider_degraded")
     assert_equal(degraded.status, "degraded")
     assert_true(not buyer_failure_means_unavailable_supply())
+
+
+from hyf_application.match_input import (
+    caller_name_is_authentication,
+    validate_match_scope,
+    validate_supplied_lots,
+)
+
+
+def test_match_input_scope_and_lot_validation() raises:
+    validate_match_scope("tenant-1", "tenant-1")
+    with assert_raises():
+        validate_match_scope("tenant-1", "tenant-2")
+    with assert_raises():
+        validate_match_scope("", "tenant-1")
+    var keys = List[String]()
+    keys.append("lot-1@l1")
+    keys.append("lot-2@l1")
+    assert_equal(len(validate_supplied_lots(keys)), 2)
+    var dupes = List[String]()
+    dupes.append("lot-1@l1")
+    dupes.append("lot-1@l1")
+    with assert_raises():
+        _ = validate_supplied_lots(dupes)
+    assert_true(not caller_name_is_authentication())

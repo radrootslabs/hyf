@@ -79,3 +79,32 @@ def check_area(area_required: String, area_known: String) raises -> ConstraintAs
 
 def delivery_mention_verifies_area() -> Bool:
     return False
+
+
+def check_availability(available_state: String) raises -> ConstraintAssessment:
+    if available_state == "known":
+        return constraint_assessment(
+            "availability", "pass", True, "availability_known"
+        )
+    return constraint_assessment(
+        "availability", "unknown", True, "stock_unknown"
+    )
+
+
+def check_window(
+    required_start: String,
+    required_end: String,
+    offered_start: String,
+    offered_end: String,
+) raises -> ConstraintAssessment:
+    if String(required_start).strip().byte_length() == 0:
+        return constraint_assessment("window", "pass", True, "window_optional")
+    if String(offered_start).strip().byte_length() == 0:
+        return constraint_assessment("window", "unknown", True, "window_mismatch")
+    if offered_start <= required_end and required_start <= offered_end:
+        return constraint_assessment("window", "pass", True, "window_overlap")
+    return constraint_assessment("window", "fail", True, "window_mismatch")
+
+
+def weekend_similarity_satisfies_specific_window() -> Bool:
+    return False

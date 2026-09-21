@@ -446,3 +446,20 @@ def test_fulfillment_method_and_area_checks() raises:
     assert_equal(check_area("Vancouver", "").result, "unknown")
     assert_equal(check_area("", "").result, "pass")
     assert_true(not delivery_mention_verifies_area())
+
+
+from hyf_application.match_checks import (
+    check_availability,
+    check_window,
+    weekend_similarity_satisfies_specific_window,
+)
+
+
+def test_availability_and_window_checks() raises:
+    assert_equal(check_availability("known").result, "pass")
+    assert_equal(check_availability("unknown").result, "unknown")
+    assert_equal(check_window("2026-09-25", "2026-09-25", "2026-09-25", "2026-09-25").result, "pass")
+    assert_equal(check_window("2026-09-25", "2026-09-25", "2026-09-27", "2026-09-27").result, "fail")
+    assert_equal(check_window("2026-09-25", "2026-09-25", "", "").result, "unknown")
+    assert_equal(check_window("", "", "", "").result, "pass")
+    assert_true(not weekend_similarity_satisfies_specific_window())

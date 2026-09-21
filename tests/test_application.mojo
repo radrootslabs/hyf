@@ -712,3 +712,21 @@ def test_evidence_backed_match_explanations() raises:
     assert_true(not explanation_reveals_private_source())
     assert_true(not explanation_claims_reservation())
     assert_true(not explanation_claims_global_availability())
+
+
+from hyf_application.match_outage import (
+    RankingOutcome,
+    outage_changes_feasibility,
+    ranking_outage,
+)
+
+
+def test_semantic_ranking_failure_preserves_feasibility() raises:
+    var outcome = ranking_outage("eligible", "provider_degraded")
+    assert_equal(outcome.feasibility, "eligible")
+    assert_equal(outcome.advisory, "degraded")
+    var conditional = ranking_outage("conditional", "provider_unavailable")
+    assert_equal(conditional.feasibility, "conditional")
+    assert_true(not outage_changes_feasibility())
+    with assert_raises():
+        _ = ranking_outage("eligible", "")

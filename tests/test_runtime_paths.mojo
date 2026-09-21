@@ -305,3 +305,20 @@ def test_jev_runtime_composition_reasons() raises:
     assert_true(not composition.usable)
     assert_equal(composition.reason, "missing_credentials")
     assert_equal(composition.model, "jev-1.13.0")
+
+
+def test_new_operation_configuration_matrix() raises:
+    var config = default_loaded_runtime_config()
+    assert_true(not operation_enabled(config, "farm_update.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.match"))
+    config.effective.runtime.enable_farm_update_interpret = True
+    assert_true(operation_enabled(config, "farm_update.interpret"))
+    config.effective.runtime.enable_buyer_request_interpret = True
+    assert_true(operation_enabled(config, "buyer_request.interpret"))
+    config.effective.runtime.enable_buyer_request_match = True
+    assert_true(operation_enabled(config, "buyer_request.match"))
+    config.effective.runtime.disable_provider = True
+    assert_true(not operation_enabled(config, "farm_update.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.match"))

@@ -1,0 +1,83 @@
+{
+  "$comment": "canonical domain Money/PriceCondition; unknown is distinct from zero",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": [
+        "known",
+        "unknown"
+      ]
+    },
+    "amount": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 19
+    },
+    "scale": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 9
+    },
+    "currency": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "basis": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "per_unit",
+        "per_pack",
+        "per_order",
+        "unknown",
+        null
+      ]
+    },
+    "fees": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "maxLength": 19
+          },
+          "scale": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "amount",
+          "scale",
+          "currency"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "state"
+  ],
+  "additionalProperties": false
+}

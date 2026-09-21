@@ -1,0 +1,9 @@
+{
+  "state": "known",
+  "value": "80",
+  "scale": 0,
+  "unit": "lb",
+  "dimension": "mass",
+  "qualifier": "approximate",
+  "original_expression": "about 80 lb"
+}

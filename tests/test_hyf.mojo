@@ -1065,5 +1065,43 @@ def test_wire_operation_schemas_accept_valid_and_reject_invalid() raises:
     assert_true(validated >= 6)
 
 
+def test_domain_representation_schemas_accept_valid_and_reject_invalid() raises:
+    var manifest = _wire_schema_json("domain_manifest.json")
+    assert_equal(manifest["spec_id"].string_value(), "hyf_v1_jev")
+    var valid_count = 0
+    for binding in manifest["bindings"].array_items():
+        var schema = _wire_schema_json(binding["schema"].string_value())
+        for rel in binding["valid"].array_items():
+            var doc = loads(
+                (
+                    _dir_of_current_file()
+                    / ".."
+                    / "schemas"
+                    / "hyf_v1_jev"
+                    / rel.string_value()
+                ).read_text()
+            )
+            assert_true(
+                validate(doc, schema).valid,
+                "valid domain example failed schema: " + rel.string_value(),
+            )
+            valid_count += 1
+        for rel in binding["invalid"].array_items():
+            var doc = loads(
+                (
+                    _dir_of_current_file()
+                    / ".."
+                    / "schemas"
+                    / "hyf_v1_jev"
+                    / rel.string_value()
+                ).read_text()
+            )
+            assert_true(
+                not validate(doc, schema).valid,
+                "invalid domain example unexpectedly passed: " + rel.string_value(),
+            )
+    assert_equal(valid_count, 5)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

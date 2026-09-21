@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec_id": "hyf_v1_jev",
+  "family": "domain_representations",
+  "bindings": [
+    {
+      "schema": "quantity.schema.json",
+      "valid": [
+        "examples/valid/quantity.exact.json",
+        "examples/valid/quantity.approximate.json",
+        "examples/valid/quantity.unknown.json"
+      ],
+      "invalid": [
+        "examples/invalid/quantity.known_without_value.json",
+        "examples/invalid/quantity.overflow.json",
+        "examples/invalid/quantity.bad_dimension.json"
+      ]
+    },
+    {
+      "schema": "money.schema.json",
+      "valid": [
+        "examples/valid/money.known.json",
+        "examples/valid/money.unknown.json"
+      ],
+      "invalid": [
+        "examples/invalid/money.bad_basis.json"
+      ]
+    }
+  ]
+}

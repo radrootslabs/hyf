@@ -1,0 +1,9 @@
+{
+  "state": "known",
+  "value": "8000",
+  "scale": 2,
+  "unit": "kg",
+  "dimension": "mass",
+  "qualifier": "exact",
+  "original_expression": "80 kg"
+}

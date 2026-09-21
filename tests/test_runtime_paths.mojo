@@ -292,3 +292,16 @@ def test_shared_budget_does_not_reset_per_stage() raises:
     assert_true(budget_exhausted(value, 600_000_000))
     var capped = budget_from_clock(5000, 2000, 0)
     assert_equal(capped.cap_ms, 2000)
+
+
+from hyf_runtime.jev_composition import compose_jev
+
+
+def test_jev_runtime_composition_reasons() raises:
+    var disabled = default_loaded_runtime_config()
+    assert_equal(compose_jev(disabled).reason, "disabled_by_runtime_config")
+    var configured = _typesafe_config(True, "https://api.typesafe.ai")
+    var composition = compose_jev(configured)
+    assert_true(not composition.usable)
+    assert_equal(composition.reason, "missing_credentials")
+    assert_equal(composition.model, "jev-1.13.0")

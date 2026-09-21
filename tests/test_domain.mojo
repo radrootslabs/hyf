@@ -130,3 +130,36 @@ def test_quantity_add_overflow_and_approximation() raises:
         _ = quantity_add(huge, exact)
     var adjustment = new_quantity(-5, 0, "kg", "mass", "exact")
     assert_true(quantity_is_negative(adjustment))
+
+
+from hyf_core.domain.units import (
+    apply_conversion,
+    conversion_rule,
+    unit_dimension,
+)
+
+
+def test_unit_dimensions_and_exact_mass_conversion() raises:
+    assert_equal(unit_dimension("lb"), "mass")
+    assert_equal(unit_dimension("ml"), "volume")
+    assert_equal(unit_dimension("widget"), "unknown")
+
+    var pounds = new_quantity(80, 0, "lb", "mass", "exact")
+    var rule = conversion_rule("lb", "kg", 45359237, 100000000, "test-1")
+    var kilograms = apply_conversion(pounds, rule)
+    assert_equal(kilograms.unit, "kg")
+    assert_equal(kilograms.dimension, "mass")
+    assert_equal(kilograms.value, 3628738960)
+    assert_equal(kilograms.scale, 8)
+
+
+def test_unit_conversion_rejects_dimension_mismatch_and_unknown_denominator() raises:
+    with assert_raises():
+        _ = conversion_rule("lb", "l", 1, 1, "v1")
+    with assert_raises():
+        _ = conversion_rule("lb", "kg", 1, 3, "v1")
+    var pounds = new_quantity(1, 0, "lb", "mass", "exact")
+    var kg_rule = conversion_rule("lb", "kg", 45359237, 100000000, "test-1")
+    with assert_raises():
+        _ = apply_conversion(new_quantity(1, 0, "kg", "mass", "exact"), kg_rule)
+    _ = pounds

@@ -135,3 +135,14 @@ def check_quantity(
             "quantity", "pass", True, "partial_permitted"
         )
     return constraint_assessment("quantity", "fail", True, "quantity_insufficient")
+
+
+from hyf_core.domain.eligibility import compose_eligibility
+
+
+def compose_applicable_checks(checks: List[ConstraintAssessment]) -> String:
+    return compose_eligibility(checks)
+
+
+def scores_affect_feasibility() -> Bool:
+    return False

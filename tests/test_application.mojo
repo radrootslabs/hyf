@@ -489,3 +489,22 @@ def test_per_lot_quantity_feasibility() raises:
     assert_equal(check_quantity(required, short, True, False).result, "fail")
     assert_equal(check_quantity(required, short, True, True).result, "pass")
     assert_equal(check_quantity(required, short, False, False).result, "unknown")
+
+
+from hyf_application.match_checks import (
+    compose_applicable_checks,
+    scores_affect_feasibility,
+)
+from hyf_core.domain.eligibility import ConstraintAssessment, constraint_assessment
+
+
+def test_compose_applicable_checks_before_ranking() raises:
+    var checks = List[ConstraintAssessment]()
+    checks.append(constraint_assessment("product", "pass", True, "product_match"))
+    checks.append(constraint_assessment("quantity", "fail", True, "quantity_insufficient"))
+    checks.append(constraint_assessment("window", "unknown", True, "window_mismatch"))
+    assert_equal(compose_applicable_checks(checks), "ineligible")
+    var only_unknown = List[ConstraintAssessment]()
+    only_unknown.append(constraint_assessment("quantity", "unknown", True, "stock_unknown"))
+    assert_equal(compose_applicable_checks(only_unknown), "conditional")
+    assert_true(not scores_affect_feasibility())

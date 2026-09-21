@@ -740,9 +740,11 @@ def test_farm_update_operation_returns_proposal_output() raises:
     var input = _json_loads(
         '{"source":{"source_id":"s1","revision":"r1","text":"Got about 80 lb of Roma tomatoes.",'
         '"source_time":"2026-09-21T09:00:00-07:00","timezone":"America/Vancouver",'
-        '"actor_id":"farm-1","farm_id":"farm-1"}}'
+        '"actor_id":"farm-1","farm_id":"farm-1"},'
+        '"taxonomy":{"products":["roma tomatoes"],"units":["lb"],"dates":[]}}'
     )
     var output = execute_farm_update_interpret(input)
+    assert_equal(len(output["claims"].array_items()), 1)
     assert_true(output["review"]["required"].bool_value())
     assert_equal(output["execution"]["status"].string_value(), "complete")
     assert_true(output["original_source_preserved"].bool_value())

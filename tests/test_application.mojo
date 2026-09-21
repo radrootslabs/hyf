@@ -103,3 +103,19 @@ def test_supply_update_operation_semantics() raises:
     var ambiguous = interpret_update_change("sold out", "listing", None)
     assert_equal(ambiguous.operation, "unresolved")
     assert_true(operation_is_proposal())
+
+
+from hyf_application.farm_targets import resolve_change_target
+
+
+def test_authorized_change_target_resolution() raises:
+    var authorized = List[String]()
+    authorized.append("b1")
+    var resolved = resolve_change_target("withdrawal", Optional[String]("b1"), authorized)
+    assert_equal(resolved.operation, "withdrawal")
+    assert_equal(resolved.target_id.value(), "b1")
+    var unauthorized = resolve_change_target("withdrawal", Optional[String]("b9"), authorized)
+    assert_equal(unauthorized.operation, "unresolved")
+    assert_true(unauthorized.unresolved)
+    var ambiguous = resolve_change_target("withdrawal", None, authorized)
+    assert_equal(ambiguous.operation, "unresolved")

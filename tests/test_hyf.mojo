@@ -1350,3 +1350,19 @@ def test_capability_exposure_separates_support_permission_readiness() raises:
     assert_true(fully_ready.exposed)
     var permission_denied = capability_exposure("query_rewrite", True, False, True)
     assert_true(not permission_denied.exposed)
+
+
+from hyf_core.capabilities.registry import (
+    gated_operation_descriptors,
+    gated_operation_is_exposed,
+)
+
+
+def test_gated_operation_descriptors_are_prepared_not_exposed() raises:
+    var descriptors = gated_operation_descriptors()
+    assert_equal(len(descriptors), 3)
+    for descriptor in descriptors:
+        assert_true(not descriptor.exposed)
+    assert_true(not gated_operation_is_exposed("farm_update.interpret", False))
+    assert_true(gated_operation_is_exposed("buyer_request.match", True))
+    assert_true(not gated_operation_is_exposed("query_rewrite", True))

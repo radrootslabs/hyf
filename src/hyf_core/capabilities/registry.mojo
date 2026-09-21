@@ -228,3 +228,37 @@ def capability_exposure(
             and provider_ready
         ),
     )
+
+
+@fieldwise_init
+struct GatedOperationDescriptor(Copyable, Movable):
+    var id: String
+    var requires_assistance: Bool
+    var exposed: Bool
+
+
+def gated_operation_descriptors() -> List[GatedOperationDescriptor]:
+    var descriptors = List[GatedOperationDescriptor]()
+    descriptors.append(
+        GatedOperationDescriptor(
+            id="farm_update.interpret", requires_assistance=False, exposed=False
+        )
+    )
+    descriptors.append(
+        GatedOperationDescriptor(
+            id="buyer_request.interpret", requires_assistance=False, exposed=False
+        )
+    )
+    descriptors.append(
+        GatedOperationDescriptor(
+            id="buyer_request.match", requires_assistance=False, exposed=False
+        )
+    )
+    return descriptors^
+
+
+def gated_operation_is_exposed(operation: String, exposure_enabled: Bool) -> Bool:
+    for descriptor in gated_operation_descriptors():
+        if descriptor.id == operation:
+            return exposure_enabled
+    return False

@@ -412,3 +412,20 @@ def test_product_and_substitution_check() raises:
     var unknown = check_product(unresolved_product("mystery"), roma, False)
     assert_equal(unknown.result, "unknown")
     assert_true(not semantic_score_can_rescue_product())
+
+
+from hyf_application.match_checks import (
+    check_required_attributes,
+    model_confidence_verifies_certification,
+)
+
+
+def test_grade_and_required_attribute_checks() raises:
+    var required = List[String]()
+    required.append("organic")
+    var verified = List[String]()
+    verified.append("organic")
+    assert_equal(check_required_attributes(required, verified).result, "pass")
+    assert_equal(check_required_attributes(required, List[String]()).result, "unknown")
+    assert_equal(check_required_attributes(List[String](), verified).result, "pass")
+    assert_true(not model_confidence_verifies_certification())

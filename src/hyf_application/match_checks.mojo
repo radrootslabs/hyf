@@ -24,3 +24,26 @@ def check_product(
 
 def semantic_score_can_rescue_product() -> Bool:
     return False
+
+
+def check_required_attributes(
+    required: List[String], verified: List[String]
+) raises -> ConstraintAssessment:
+    if len(required) == 0:
+        return constraint_assessment(
+            "attribute", "pass", True, "attribute_optional"
+        )
+    for attribute in required:
+        var found = False
+        for known in verified:
+            if known == attribute:
+                found = True
+        if not found:
+            return constraint_assessment(
+                "attribute", "unknown", True, "attribute_unverified"
+            )
+    return constraint_assessment("attribute", "pass", True, "attribute_verified")
+
+
+def model_confidence_verifies_certification() -> Bool:
+    return False

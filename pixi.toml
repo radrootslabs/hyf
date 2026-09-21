@@ -27,6 +27,7 @@ test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
 test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
 test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
 test-provider-adapter = "mojo -I src -I tests tests/test_provider_adapter.mojo"
+test-provider-helpers = "mojo -I src -I tests tests/test_provider_helpers.mojo"
 test-domain = "mojo -I src -I tests tests/test_domain.mojo"
 test-assist = "mojo -I src -I tests tests/test_assist.mojo"
 test-jev = "mojo -I src -I tests tests/test_jev.mojo"
@@ -62,6 +63,7 @@ test = { depends-on = [
   "test-stdio-session",
   "test-journeys",
   "test-provider-adapter",
+  "test-provider-helpers",
   "test-spec",
   "test-architecture",
   "test-runtime-contract",

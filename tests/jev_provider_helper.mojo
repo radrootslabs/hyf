@@ -90,6 +90,21 @@ def _request_path(request: String) -> String:
     return String(rest[byte=0:second_space])
 
 
+def _header_value(request: String, name: String) -> String:
+    var header_end = request.find("\r\n\r\n")
+    var header_block = request if header_end < 0 else String(
+        request[byte=0:header_end]
+    )
+    var lowered = header_block.lower()
+    var marker = lowered.find(name.lower() + ":")
+    if marker < 0:
+        return ""
+    var rest = String(header_block[byte = marker + name.byte_length() + 1 :])
+    var line_end = rest.find("\r\n")
+    var value = rest if line_end < 0 else String(rest[byte=0:line_end])
+    return String(String(value).strip())
+
+
 def _json_string(value: String) -> String:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -135,6 +150,16 @@ def _send_raw(mut stream: TcpStream, response: String) raises:
 def _handle(mut stream: TcpStream, mode: String) raises:
     var request = _read_request(stream)
     var path = _request_path(request)
+    if mode == "echo_authorization":
+        _send(
+            stream,
+            200,
+            '{"authorization":"'
+            + _header_value(request, "authorization")
+            + '"}',
+        )
+        stream.close()
+        return
     if path != "/v1/systemone":
         _send(stream, 404, '{"error":{"message":"not found"}}')
         stream.close()

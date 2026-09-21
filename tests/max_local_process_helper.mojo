@@ -44,13 +44,47 @@ def _read_pipe_line(mut pipe: Pipe) raises -> String:
     return output^
 
 
+comptime MAX_TEST_REQUEST_BYTES = 1048576
+
+
 def _read_request(mut stream: TcpStream) raises -> String:
-    var buffer = List[UInt8]()
-    buffer.resize(8192, 0)
-    var n = stream.read(buffer.unsafe_ptr(), len(buffer))
-    if n <= 0:
+    var bytes = List[UInt8]()
+    var chunk = InlineArray[Byte, 4096](fill=0)
+    var expected_total = -1
+    while True:
+        var n = stream.read(chunk.unsafe_ptr(), 4096)
+        if n <= 0:
+            break
+        for index in range(Int(n)):
+            bytes.append(chunk[index])
+        if len(bytes) > MAX_TEST_REQUEST_BYTES:
+            break
+        var text = String(unsafe_from_utf8=bytes[:])
+        var header_end = text.find("\r\n\r\n")
+        if header_end >= 0 and expected_total < 0:
+            var lowered = text.lower()
+            var marker = lowered.find("content-length:")
+            var content_length = 0
+            if marker >= 0:
+                var rest = String(text[byte = marker + 15 :])
+                var line_end = rest.find("\r\n")
+                var value = rest if line_end < 0 else String(
+                    rest[byte=0:line_end]
+                )
+                content_length = Int(String(String(value).strip()))
+            expected_total = header_end + 4 + content_length
+        if expected_total >= 0 and len(bytes) >= expected_total:
+            break
+    if len(bytes) == 0:
         return ""
-    return String(unsafe_from_utf8=buffer[:n])
+    return String(unsafe_from_utf8=bytes[:])
+
+
+def _request_body(request: String) -> String:
+    var header_end = request.find("\r\n\r\n")
+    if header_end < 0:
+        return ""
+    return String(request[byte = header_end + 4 :])
 
 
 def _request_path(request: String) -> String:
@@ -180,10 +214,20 @@ def _handle_chat_completions(mut stream: TcpStream, mode: String) raises:
         _send(stream, 500, '{"error":"unsupported_mode"}')
 
 
-def _handle_request(mut stream: TcpStream, mode: String) raises:
+def _handle_request(mut stream: TcpStream, mode: String, index: Int) raises:
     var request = _read_request(stream)
     var path = _request_path(request)
-    if path == "/health":
+    if mode == "echo_body_bytes":
+        _send(
+            stream,
+            200,
+            '{"received_bytes":'
+            + String(_request_body(request).byte_length())
+            + "}",
+        )
+    elif mode == "count_requests":
+        _send(stream, 200, '{"request_index":' + String(index + 1) + "}")
+    elif path == "/health":
         _handle_health(stream, mode)
     elif path == "/v1/chat/completions":
         _handle_chat_completions(stream, mode)
@@ -194,18 +238,21 @@ def _handle_request(mut stream: TcpStream, mode: String) raises:
 
 def _serve_max_local_stub(port: Int, mode: String, requests: Int) raises:
     var listener = TcpListener.bind(SocketAddr.localhost(UInt16(port)))
-    _write(1, "ready\n")
-    for _ in range(requests):
+    var actual_port = Int(listener.local_addr().port)
+    _write(1, "ready " + String(actual_port) + "\n")
+    for request_index in range(requests):
         var stream = listener.accept()
-        _handle_request(stream, mode)
+        _handle_request(stream, mode, request_index)
     listener.close()
 
 
 struct SpawnedMaxLocalStub(Movable):
     var pid: Int
+    var port: Int
 
-    def __init__(out self, pid: Int):
+    def __init__(out self, pid: Int, port: Int):
         self.pid = pid
+        self.port = port
 
     def wait(mut self) raises:
         var process = Process(self.pid)
@@ -245,11 +292,16 @@ def spawn_max_local_stub(
 
     stdout_pipe.set_input_only()
     var ready_line = _read_pipe_line(stdout_pipe)
-    if ready_line != "ready":
+    if not ready_line.startswith("ready"):
         stdout_pipe.set_output_only()
         var process = Process(Int(pid))
         _ = process.wait()
         raise Error("max_local stub failed to report ready")
 
+    var reported_port = port
+    var space = ready_line.find(" ")
+    if space >= 0:
+        reported_port = Int(String(ready_line[byte = space + 1 :]))
+
     stdout_pipe.set_output_only()
-    return SpawnedMaxLocalStub(Int(pid))
+    return SpawnedMaxLocalStub(Int(pid), reported_port)

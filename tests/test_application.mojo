@@ -642,3 +642,32 @@ def test_culinary_use_semantic_scoring_gated() raises:
     with assert_raises():
         _ = culinary_use_score(answer, 3, 0, 1)
     assert_true(not culinary_score_affects_feasibility())
+
+
+from hyf_application.match_ranking import (
+    PreferenceComponent,
+    compose_preference,
+    preference_component,
+    preference_is_success_probability,
+    rank_by_preference,
+)
+
+
+def test_versioned_preference_composition_and_stable_ties() raises:
+    var components = List[PreferenceComponent]()
+    components.append(preference_component("culinary", 1.0, 1.0))
+    components.append(preference_component("distance", 0.5, 1.0))
+    assert_equal(compose_preference(components), 75)
+    assert_true(not preference_is_success_probability())
+    var ids = List[String]()
+    ids.append("plan-b")
+    ids.append("plan-a")
+    ids.append("plan-c")
+    var scores = List[Int]()
+    scores.append(50)
+    scores.append(50)
+    scores.append(70)
+    var ranked = rank_by_preference(ids, scores)
+    assert_equal(ranked[0], "plan-c")
+    assert_equal(ranked[1], "plan-a")
+    assert_equal(ranked[2], "plan-b")

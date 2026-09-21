@@ -66,3 +66,25 @@ def test_clock_ports_are_injectable_and_monotonic() raises:
     assert_equal(monotonic_elapsed_ns(start, end), 5000)
     assert_true(system_wall_epoch_seconds() > 1600000000)
     assert_true(system_monotonic_ns() > 0)
+
+
+from hyf_assist.scripted import scripted_evaluate, scripted_evaluator
+
+
+def test_scripted_evaluator_is_strict_and_bounded() raises:
+    var answers = List[TypedAnswer]()
+    answers.append(typed_choice("supply_status", "offered", 1.0))
+    var evaluator = scripted_evaluator("jev-1.13.0", answers, 1)
+    var response = scripted_evaluate(
+        evaluator, SemanticEvaluatorRequest(state="s", question_bundle="qb1")
+    )
+    assert_equal(response.answers[0].choice, "offered")
+    assert_equal(evaluator.call_count, 1)
+    with assert_raises():
+        _ = scripted_evaluate(
+            evaluator, SemanticEvaluatorRequest(state="s", question_bundle="qb1")
+        )
+    with assert_raises():
+        _ = scripted_evaluate(
+            evaluator, SemanticEvaluatorRequest(state="", question_bundle="qb1")
+        )

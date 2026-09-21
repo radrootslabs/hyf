@@ -343,3 +343,25 @@ def test_product_reference_resolution_and_unknown() raises:
     assert_true(not product_matches(tomato, unknown))
     with assert_raises():
         _ = resolved_product("x", "")
+
+
+from hyf_core.domain.supply_claim import (
+    claim_confirms_inventory,
+    claim_is_forecast,
+    supply_claim,
+)
+
+
+def test_supply_claims_are_per_product_and_not_inventory() raises:
+    var tomatoes = resolved_product("Roma tomatoes", "tomato.roma")
+    var basil = resolved_product("Basil", "basil")
+    var tomato_claim = supply_claim("c1", tomatoes, "offered", "known", 80, 0, "lb", "approximate")
+    var basil_claim = supply_claim("c2", basil, "unavailable", "unknown", 0, 0, "", "unknown")
+    assert_equal(tomato_claim.status, "offered")
+    assert_equal(basil_claim.status, "unavailable")
+    assert_true(not claim_confirms_inventory(tomato_claim))
+    var forecast = supply_claim("c3", basil, "forecast", "unknown", 0, 0, "", "unknown")
+    assert_true(claim_is_forecast(forecast))
+    assert_true(not claim_is_forecast(tomato_claim))
+    with assert_raises():
+        _ = supply_claim("c4", tomatoes, "probably", "known", 1, 0, "kg", "exact")

@@ -37,3 +37,26 @@ def test_farm_review_confirmation_journey_keeps_mutation_outside_hyf() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from hyf_application.buyer_operation import (
+    execute_buyer_request_interpret,
+    execute_buyer_request_match,
+)
+
+
+def test_buyer_interpretation_match_journey_is_not_a_reservation() raises:
+    var source = _loads(
+        '{"source":{"source_id":"b1","revision":"r1","text":"Need 25 kg of tomatoes.",'
+        '"source_time":"2026-09-21T09:05:00-07:00","timezone":"America/Vancouver",'
+        '"actor_id":"buyer-1","farm_id":"buyer-1"}}'
+    )
+    var interpreted = execute_buyer_request_interpret(source)
+    assert_true(interpreted["review"]["required"].bool_value())
+    var match_input = _loads(
+        '{"need":{"need_id":"n1"},"snapshots":[{"lot_id":"lot-1","revision":"l1"}]}'
+    )
+    var matched = execute_buyer_request_match(match_input)
+    assert_equal(matched["limitations"]["scope"].string_value(), "supplied_only")
+    assert_equal(matched["limitations"]["supported_mode"].string_value(), "single_supplier_compatible_lots")
+    assert_true(matched["limitations"]["truncated"].bool_value() == False)

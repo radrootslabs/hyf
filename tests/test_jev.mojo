@@ -80,3 +80,31 @@ def test_parse_choice_and_noul_answers() raises:
         _ = parse_choice_answer(
             "q", loads('{"type":"noul","noul":0.5}'), choices
         )
+
+
+from hyf_provider.jev_answers import parse_score_answer
+
+
+def test_parse_score_answer_validates_rubric_and_levels() raises:
+    var rubric = List[String]()
+    rubric.append("unsuitable")
+    rubric.append("limited")
+    rubric.append("suitable")
+    var answer = parse_score_answer(
+        "culinary_fit",
+        loads('{"type":"score","score":2,"legend":{"0":"unsuitable","1":"limited","2":"suitable"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0}'),
+        rubric,
+    )
+    assert_equal(answer.score, 2)
+    with assert_raises():
+        _ = parse_score_answer(
+            "q",
+            loads('{"type":"score","score":5,"legend":{"0":"a","1":"b","2":"c"},"confidence":1.0}'),
+            rubric,
+        )
+    with assert_raises():
+        _ = parse_score_answer(
+            "q",
+            loads('{"type":"score","score":1,"legend":{"0":"a"},"confidence":1.0}'),
+            rubric,
+        )

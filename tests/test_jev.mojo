@@ -144,3 +144,21 @@ def test_parse_jev_response_validates_answer_set() raises:
     var missing = loads('{"model":"jev-1.13.0","answers":{"supply_status":{"type":"choice","choice":"offered","confidence":1.0}}}')
     with assert_raises():
         _ = parse_jev_response(missing, _bundle())
+
+
+from hyf_provider.jev_failures import map_jev_failure
+
+
+def test_jev_failure_mapping_permanent_vs_transient() raises:
+    assert_equal(map_jev_failure("authentication").family, "provider_auth")
+    assert_true(not map_jev_failure("authentication").retryable)
+    assert_equal(map_jev_failure("validation").family, "provider_validation")
+    assert_true(not map_jev_failure("validation").retryable)
+    assert_equal(map_jev_failure("rate_limit").family, "provider_capacity")
+    assert_true(map_jev_failure("rate_limit").retryable)
+    assert_true(map_jev_failure("overloaded").retryable)
+    assert_true(map_jev_failure("internal_server").retryable)
+    assert_equal(map_jev_failure("response_validation").family, "provider_response_contract")
+    assert_true(not map_jev_failure("response_validation").retryable)
+    with assert_raises():
+        _ = map_jev_failure("mystery")

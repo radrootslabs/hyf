@@ -27,6 +27,7 @@ test-provider-adapter = "mojo -I src -I tests tests/test_provider_adapter.mojo"
 test-spec = "mojo -I src -I tests tests/test_traceability.mojo"
 check-build = "mkdir -p .pixi/build && mojo build -I src src/main.mojo -o .pixi/build/hyfd"
 check-format = "sh tools/check_format.sh"
+test-architecture = "sh tools/check_architecture.sh --self-test"
 smoke-max-local = "mojo -I src -I tests tests/max_local_operator_smoke.mojo"
 test-runtime-contract = { depends-on = [
   "test-runtime",
@@ -37,5 +38,6 @@ test = { depends-on = [
   "test-unit",
   "test-provider-adapter",
   "test-spec",
+  "test-architecture",
   "test-runtime-contract",
 ] }

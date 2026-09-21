@@ -1,5 +1,5 @@
 from std.testing import TestSuite, assert_equal, assert_true
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 
 from json import Value
 from fixture_assertions import load_scenario_request_json
@@ -25,7 +25,7 @@ def _assert_runtime_status_path_under_repo_local_root(
 
 
 def test_src_main_consumes_repo_local_env_without_outer_wrapper() raises:
-    with TemporaryDirectory() as repo_local_root:
+    with SafeTempDir() as repo_local_root:
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, repo_local_root):
                 var response = run_stdio_entrypoint(

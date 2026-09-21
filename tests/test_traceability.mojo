@@ -1,7 +1,7 @@
 import std.os
 from std.collections import List
 from std.pathlib import Path, _dir_of_current_file
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 from std.testing import TestSuite, assert_equal, assert_true
 from json import loads
 
@@ -84,7 +84,7 @@ def test_requirement_traceability_accepts_registry_and_rejects_dangling() raises
     mutations.append("dangling_dependency")
     mutations.append("duplicate_step")
     for mutation in mutations:
-        with TemporaryDirectory() as temp_dir:
+        with SafeTempDir() as temp_dir:
             var base = Path(temp_dir)
             _make_corpus(base, mutation)
             assert_true(
@@ -97,7 +97,7 @@ def test_step_state_contract_is_valid_and_rejects_corruption() raises:
     var path = _dir_of_current_file() / "requirements" / "hyf_v1_jev.step_states.json"
     assert_equal(len(validate_step_states(path.__fspath__())), 0)
 
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var base = Path(temp_dir)
         _write(
             base / "states.json",
@@ -105,7 +105,7 @@ def test_step_state_contract_is_valid_and_rejects_corruption() raises:
             '"passed_requires_executed_evidence":true,"rules":["x"]}',
         )
         assert_true(len(validate_step_states((base / "states.json").__fspath__())) > 0)
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var base = Path(temp_dir)
         _write(
             base / "states.json",

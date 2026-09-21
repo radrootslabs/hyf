@@ -2,7 +2,7 @@ import std.os
 from std.os.path import exists
 from std.pathlib import Path
 from std.testing import assert_equal, assert_true, TestSuite
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 
 from json import Value
 from fixture_assertions import (
@@ -191,7 +191,7 @@ def _assert_query_rewrite_provider_fallback_with_deadline(
     deadline_ms: Int,
     requests: Int,
 ) raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(provider_port, mode, requests)
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
@@ -256,7 +256,7 @@ def _assert_query_rewrite_provider_fallback(
 def _assert_query_rewrite_runtime_config_fallback(
     config_text: String, expected_reason: String, request_id: String
 ) raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(config_text)
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
@@ -301,7 +301,7 @@ def _assert_query_rewrite_runtime_config_fallback(
 def _assert_query_rewrite_runtime_config_fallback_without_provenance(
     config_text: String, expected_reason: String, request_id: String
 ) raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(config_text)
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
@@ -338,7 +338,7 @@ def _assert_query_rewrite_runtime_config_fallback_without_provenance(
 def _assert_invalid_runtime_config_load_error(
     config_text: String, expected_error_fragment: String
 ) raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "invalid-hyf-config.toml"
         startup_config_path.write_text(config_text)
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
@@ -370,7 +370,7 @@ def _assert_invalid_runtime_config_load_error(
 
 
 def _assert_valid_runtime_config_load(config_text: String) raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(config_text)
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
@@ -465,7 +465,7 @@ def test_status_success() raises:
 
 
 def test_status_reports_repo_local_runtime_truth() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
@@ -678,7 +678,7 @@ def test_status_reports_repo_local_runtime_truth() raises:
 
 
 def test_status_loads_valid_runtime_config_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             _unavailable_max_local_runtime_config_toml()
@@ -856,7 +856,7 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
 
 
 def test_status_reports_invalid_runtime_config_without_crashing() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "invalid-hyf-config.toml"
         startup_config_path.write_text(
             '[runtime]\ndefault_execution_mode = "assisted"\n'
@@ -932,7 +932,7 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
 
 
 def test_status_reports_unconfigured_assisted_runtime_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             '[service]\ntransport = "stdio"\n\n'
@@ -978,7 +978,7 @@ def test_status_reports_unconfigured_assisted_runtime_truthfully() raises:
 
 
 def test_status_reports_non_2xx_max_local_health_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(
             provider_port, "health_non_2xx", 1
@@ -1021,7 +1021,7 @@ def test_status_reports_non_2xx_max_local_health_truthfully() raises:
 
 
 def test_status_reports_ready_max_local_provider_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(
             provider_port, "query_rewrite_ok", 1
@@ -1101,7 +1101,7 @@ def test_status_reports_ready_max_local_provider_truthfully() raises:
 
 
 def test_status_bounds_max_local_health_probe_timeout() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(
             provider_port, "health_timeout", 1
@@ -1410,7 +1410,7 @@ def test_status_allows_inline_table_quoted_route_mentions() raises:
 
 
 def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             _unavailable_max_local_runtime_config_toml()
@@ -1470,7 +1470,7 @@ def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
 
 
 def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(
             provider_port, "query_rewrite_ok", 1
@@ -1534,7 +1534,7 @@ def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
 
 
 def test_capabilities_bounds_max_local_health_probe_timeout() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(
             provider_port, "health_timeout", 1
@@ -1586,7 +1586,7 @@ def test_capabilities_bounds_max_local_health_probe_timeout() raises:
 
 
 def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             _unavailable_max_local_runtime_config_toml()
@@ -1658,7 +1658,7 @@ def test_query_rewrite_fallback_metadata_is_visible_without_provenance() raises:
 
 
 def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             _unavailable_max_local_runtime_config_toml()
@@ -1705,7 +1705,7 @@ def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() 
 
 
 def test_query_rewrite_uses_max_local_provider_when_ready() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var provider_port = reserve_loopback_port()
         var provider_stub = spawn_max_local_stub(
             provider_port, "query_rewrite_ok", 2
@@ -1875,7 +1875,7 @@ def test_query_rewrite_falls_back_on_provider_error_payload() raises:
 
 
 def test_status_reports_configured_but_deferred_custody_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var identity_dir = Path(temp_dir) / "secrets" / "services" / "hyf"
         _ = std.os.makedirs(identity_dir.__fspath__(), exist_ok=True)
         (identity_dir / "identity.secret.json").write_text(
@@ -1952,7 +1952,7 @@ def test_status_reports_configured_but_deferred_custody_truthfully() raises:
 
 
 def test_status_clears_repo_local_root_outside_repo_local_profile() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "interactive_user"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -1981,7 +1981,7 @@ def test_status_clears_repo_local_root_outside_repo_local_profile() raises:
 
 
 def test_status_reports_effective_diagnostics_override_truthfully() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var diagnostics_override_dir = (
             Path(temp_dir) / "debug-diagnostics-override"
         )
@@ -2074,7 +2074,7 @@ def test_query_rewrite_success() raises:
 
 
 def test_query_rewrite_does_not_create_protected_local_artifacts() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -2189,7 +2189,7 @@ def test_missing_input_fails_explicitly() raises:
 
 
 def test_internal_error_is_bounded_on_wire() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
@@ -2223,7 +2223,7 @@ def test_internal_error_is_bounded_on_wire() raises:
 
 
 def test_internal_error_records_detail_in_canonical_runtime_diagnostics_dir() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var diagnostics_dir = (
             Path(temp_dir) / "logs" / "services" / "hyf" / "diagnostics"
         )

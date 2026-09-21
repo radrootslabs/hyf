@@ -1,5 +1,5 @@
 from std.collections import List
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 from std.testing import TestSuite, assert_equal, assert_true
 
 from fixture_assertions import load_scenario_request_json
@@ -23,7 +23,7 @@ def _context(temp_dir: String) raises -> RuntimeStartupContext:
 
 
 def test_persistent_session_processes_multiple_frames() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var frames = List[String]()
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
@@ -36,7 +36,7 @@ def test_persistent_session_processes_multiple_frames() raises:
 
 
 def test_session_recovers_from_malformed_frame() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var frames = List[String]()
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
@@ -54,7 +54,7 @@ def main() raises:
 
 
 def test_session_preserves_order_and_recovers_after_malformed() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var frames = List[String]()
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
@@ -69,7 +69,7 @@ def test_session_preserves_order_and_recovers_after_malformed() raises:
 
 
 def test_session_rejects_oversized_frame() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var huge = "{\"version\":1,\"request_id\":\"big\","
         for _ in range(200000):
@@ -83,7 +83,7 @@ def test_session_rejects_oversized_frame() raises:
 
 
 def test_farm_update_operation_is_gated_until_enabled() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var request = (
             '{"version":1,"request_id":"farm-op-1","capability":"farm_update.interpret",'
@@ -99,7 +99,7 @@ def test_farm_update_operation_is_gated_until_enabled() raises:
 
 
 def test_buyer_match_operation_is_gated_until_enabled() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var request = (
             '{"version":1,"request_id":"match-op-1","capability":"buyer_request.match",'
@@ -119,7 +119,7 @@ def test_new_operation_wire_frames_are_gated() raises:
     var wire_dir = _dir_of() / "fixtures" / "hyf_v1_jev" / "wire"
     var manifest = _load_fixture_json(wire_dir / "manifest.json")
     assert_equal(manifest["spec_id"].string_value(), "hyf_v1_jev")
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         for name in manifest["scenarios"].array_items():
             var scenario = _load_fixture_json(wire_dir / name.string_value())
@@ -132,7 +132,7 @@ def test_new_operation_wire_frames_are_gated() raises:
 
 
 def test_long_session_processes_many_frames_in_order() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var frames = List[String]()
         for index in range(50):

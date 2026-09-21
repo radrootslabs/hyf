@@ -20,6 +20,8 @@ flare = { git = "https://github.com/triesap/mojo_flare.git", rev = "14aa338d8c4f
 [tasks]
 run = "mojo run -I src src/main.mojo"
 test-unit = "mojo -I src tests/test_hyf.mojo"
+test-harness = "mojo -I src -I tests tests/test_harness_self_test.mojo"
+test-harness-runner-exit = "sh tools/check_harness_runner_exit.sh"
 test-runtime = "mojo -I src tests/test_runtime_paths.mojo"
 test-repo-local-process = "mojo -I src tests/test_repo_local_process_contract.mojo"
 test-stdio = "mojo -I src tests/test_stdio_contract.mojo"
@@ -49,6 +51,8 @@ test-runtime-contract = { depends-on = [
 ] }
 test = { depends-on = [
   "test-unit",
+  "test-harness",
+  "test-harness-runner-exit",
   "test-domain",
   "test-assist",
   "test-jev",

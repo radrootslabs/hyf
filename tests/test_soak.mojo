@@ -1,5 +1,5 @@
 from std.collections import List
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 from std.testing import TestSuite, assert_equal, assert_true
 
 from fixture_assertions import load_scenario_request_json
@@ -23,7 +23,7 @@ def _context(temp_dir: String) raises -> RuntimeStartupContext:
 
 
 def test_bounded_process_soak_200_frames() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var context = _context(temp_dir)
         var frames = List[String]()
         for _ in range(200):

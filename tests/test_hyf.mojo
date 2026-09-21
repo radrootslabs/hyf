@@ -7,7 +7,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 
 from json import Value, loads, validate
 
@@ -78,7 +78,7 @@ struct ScopedEnvVar:
 
 def _dispatch(line: String) raises -> Value:
     var result = Value(None)
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var runtime_context = resolve_startup_context(
             RuntimeStartupInput(
                 env_paths_profile="repo_local",
@@ -381,7 +381,7 @@ def test_repo_local_fixture_loader_reads_all_mirrored_scenarios() raises:
 
 
 def test_fixture_loader_reads_top_level_request_and_expected_structurally() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var scenario_path = Path(temp_dir) / "scenario.json"
         scenario_path.write_text(
             "{"
@@ -883,7 +883,7 @@ def test_invalid_request_preserves_request_and_trace_correlation() raises:
 
 
 def test_internal_error_is_bounded_on_wire() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var diagnostics_dir = Path(temp_dir) / "hyf-internal-diagnostics"
         with ScopedEnvVar(
             _HYF_DIAGNOSTICS_DIR_ENV, diagnostics_dir.__fspath__()
@@ -913,7 +913,7 @@ def _assert_internal_error_is_bounded(result: Value) raises:
 
 
 def test_internal_error_diagnostics_records_detail() raises:
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         var diagnostics_dir = Path(temp_dir) / "hyf-internal-diagnostics"
 
         with ScopedEnvVar(
@@ -1262,7 +1262,7 @@ def test_fixture_validator_accepts_corpus_and_rejects_corruptions() raises:
     mutations.append("empty_requirements")
     mutations.append("activation_step_mismatch")
     for mutation in mutations:
-        with TemporaryDirectory() as temp_dir:
+        with SafeTempDir() as temp_dir:
             var base = Path(temp_dir)
             _write_min_fixture_corpus(base, mutation)
             assert_true(

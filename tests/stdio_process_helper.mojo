@@ -2,7 +2,7 @@ import std.os
 from std.os import Pipe, Process
 from std.ffi import CStringSlice, c_int, external_call
 from std.sys._libc import close
-from std.tempfile import TemporaryDirectory
+from safe_tempdir import SafeTempDir
 
 from json import Value, loads
 
@@ -151,7 +151,7 @@ def run_stdio_entrypoint_with_2_args(
 
 def run_hyf_stdio(request_json: String) raises -> Value:
     var response = Value(None)
-    with TemporaryDirectory() as temp_dir:
+    with SafeTempDir() as temp_dir:
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 response = run_stdio_entrypoint("src/main.mojo", request_json)

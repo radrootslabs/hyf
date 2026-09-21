@@ -1,5 +1,5 @@
 from std.collections import List
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from hyf_runtime.env import (
     hyf_paths_profile_env_name,
@@ -214,3 +214,51 @@ def test_startup_context_rejects_missing_root_unknown_flag_and_flag_as_value() r
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from hyf_runtime.config import (
+    HyfAssistedRuntimeConfig,
+    HyfExecutionRuntimeConfig,
+    HyfLoadedRuntimeConfig,
+    HyfMaxLocalProviderRuntimeConfig,
+    HyfRuntimeConfig,
+    HyfServiceRuntimeConfig,
+    HyfTypesafeProviderRuntimeConfig,
+    assisted_runtime_configured,
+    typesafe_provider_configured,
+)
+
+
+def _typesafe_config(enabled: Bool, base_url: String) -> HyfLoadedRuntimeConfig:
+    return HyfLoadedRuntimeConfig(
+        artifact_present=True,
+        loaded=True,
+        compiled_defaults_active=False,
+        load_state="loaded",
+        load_error="",
+        effective=HyfRuntimeConfig(
+            service=HyfServiceRuntimeConfig(transport="stdio"),
+            runtime=HyfExecutionRuntimeConfig(
+                default_execution_mode="deterministic", allow_assisted=True
+            ),
+            assisted=HyfAssistedRuntimeConfig(
+                provider="typesafe",
+                max_local=HyfMaxLocalProviderRuntimeConfig(),
+                typesafe=HyfTypesafeProviderRuntimeConfig(
+                    enabled=enabled,
+                    base_url=base_url,
+                    model="jev-1.13.0",
+                    request_timeout_ms=15000,
+                ),
+            ),
+        ),
+    )
+
+
+def test_typesafe_profile_is_configured_and_pins_https_model() raises:
+    var config = _typesafe_config(True, "https://api.typesafe.ai")
+    assert_true(assisted_runtime_configured(config))
+    assert_true(typesafe_provider_configured(config))
+    assert_equal(config.effective.assisted.typesafe.model, "jev-1.13.0")
+    var disabled = _typesafe_config(False, "https://api.typesafe.ai")
+    assert_true(not assisted_runtime_configured(disabled))

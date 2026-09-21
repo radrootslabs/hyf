@@ -39,13 +39,29 @@ struct HyfMaxLocalProviderRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
+struct HyfTypesafeProviderRuntimeConfig(Defaultable, Copyable, Movable):
+    var enabled: Bool
+    var base_url: String
+    var model: String
+    var request_timeout_ms: Int
+
+    def __init__(out self):
+        self.enabled = False
+        self.base_url = "https://api.typesafe.ai"
+        self.model = "jev-1.13.0"
+        self.request_timeout_ms = 15000
+
+
+@fieldwise_init
 struct HyfAssistedRuntimeConfig(Defaultable, Copyable, Movable):
     var provider: String
     var max_local: HyfMaxLocalProviderRuntimeConfig
+    var typesafe: HyfTypesafeProviderRuntimeConfig
 
     def __init__(out self):
         self.provider = ""
         self.max_local = HyfMaxLocalProviderRuntimeConfig()
+        self.typesafe = HyfTypesafeProviderRuntimeConfig()
 
 
 @fieldwise_init
@@ -90,10 +106,20 @@ def assisted_execution_enabled(config: HyfLoadedRuntimeConfig) -> Bool:
 
 
 def assisted_runtime_configured(config: HyfLoadedRuntimeConfig) -> Bool:
+    if not config.effective.runtime.allow_assisted:
+        return False
+    if config.effective.assisted.provider == "max_local":
+        return config.effective.assisted.max_local.enabled
+    if config.effective.assisted.provider == "typesafe":
+        return config.effective.assisted.typesafe.enabled
+    return False
+
+
+def typesafe_provider_configured(config: HyfLoadedRuntimeConfig) -> Bool:
     return (
         config.effective.runtime.allow_assisted
-        and config.effective.assisted.provider == "max_local"
-        and config.effective.assisted.max_local.enabled
+        and config.effective.assisted.provider == "typesafe"
+        and config.effective.assisted.typesafe.enabled
     )
 
 
@@ -145,13 +171,31 @@ def _validate_runtime_config(config: HyfRuntimeConfig) raises:
         )
 
     if config.runtime.allow_assisted:
-        if config.assisted.provider != "max_local":
+        if (
+            config.assisted.provider != "max_local"
+            and config.assisted.provider != "typesafe"
+        ):
             raise Error(
-                "assisted.provider must be 'max_local' when runtime.allow_assisted is true"
+                "assisted.provider must be 'max_local' or 'typesafe' when runtime.allow_assisted is true"
             )
 
-    if config.assisted.provider != "" and config.assisted.provider != "max_local":
-        raise Error("assisted.provider must be 'max_local'")
+    if (
+        config.assisted.provider != ""
+        and config.assisted.provider != "max_local"
+        and config.assisted.provider != "typesafe"
+    ):
+        raise Error("assisted.provider must be 'max_local' or 'typesafe'")
+
+    if config.assisted.typesafe.enabled:
+        if not config.runtime.allow_assisted:
+            raise Error(
+                "runtime.allow_assisted must be true when assisted.typesafe.enabled is true"
+            )
+        if config.assisted.provider != "typesafe":
+            raise Error(
+                "assisted.provider must be 'typesafe' when assisted.typesafe.enabled is true"
+            )
+        _validate_typesafe_provider_config(config.assisted.typesafe)
 
     if config.assisted.max_local.enabled:
         if not config.runtime.allow_assisted:
@@ -324,6 +368,21 @@ def _reject_removed_max_local_route_config(config_text: String) raises:
             raise Error(
                 "assisted.max_local.route has been removed; provider route is derived by HYF"
             )
+
+
+def _validate_typesafe_provider_config(
+    config: HyfTypesafeProviderRuntimeConfig
+) raises:
+    _require_non_empty(config.base_url, "assisted.typesafe.base_url")
+    _require_no_boundary_whitespace(
+        config.base_url, "assisted.typesafe.base_url"
+    )
+    if not config.base_url.startswith("https://"):
+        raise Error("assisted.typesafe.base_url must use https")
+    _require_non_empty(config.model, "assisted.typesafe.model")
+    _require_no_boundary_whitespace(config.model, "assisted.typesafe.model")
+    if config.request_timeout_ms <= 0:
+        raise Error("assisted.typesafe.request_timeout_ms must be greater than zero")
 
 
 def _validate_max_local_provider_config(

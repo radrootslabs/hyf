@@ -104,3 +104,38 @@ def parse_score_answer(
         if total < 0.999 or total > 1.001:
             raise Error("provider_answer_bad_distribution_sum")
     return typed_score(question_id, score, len(rubric), confidence)
+
+
+from hyf_assist.questions import QuestionBundle
+
+
+def parse_jev_response(
+    body: Value, bundle: QuestionBundle
+) raises -> List[TypedAnswer]:
+    if not body.is_object():
+        raise Error("provider_response_invalid")
+    if not _has_key(body, "model") or not _has_key(body, "answers"):
+        raise Error("provider_response_invalid")
+    if body["model"].string_value() != bundle.model:
+        raise Error("provider_model_mismatch")
+    var answers = body["answers"]
+    if not answers.is_object():
+        raise Error("provider_response_invalid")
+
+    var result = List[TypedAnswer]()
+    for question in bundle.questions:
+        if not _has_key(answers, question.id):
+            raise Error("provider_answer_missing")
+        var answer = answers[question.id]
+        if question.kind == "choice":
+            result.append(parse_choice_answer(question.id, answer, question.choices))
+        elif question.kind == "noul":
+            result.append(parse_noul_answer(question.id, answer))
+        elif question.kind == "score":
+            result.append(parse_score_answer(question.id, answer, question.rubric))
+        else:
+            raise Error("provider_answer_wrong_type")
+
+    if len(answers.object_keys()) != len(bundle.questions):
+        raise Error("provider_answer_extra")
+    return result^

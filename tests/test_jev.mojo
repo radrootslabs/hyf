@@ -108,3 +108,39 @@ def test_parse_score_answer_validates_rubric_and_levels() raises:
             loads('{"type":"score","score":1,"legend":{"0":"a"},"confidence":1.0}'),
             rubric,
         )
+
+
+from hyf_provider.jev_answers import parse_jev_response
+
+
+def test_parse_jev_response_validates_answer_set() raises:
+    var body = loads(
+        '{"model":"jev-1.13.0","answers":{'
+        '"supply_status":{"type":"choice","choice":"offered","probabilities":{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0},'
+        '"seconds_ok":{"type":"noul","noul":0.9},'
+        '"culinary_fit":{"type":"score","score":2,"legend":{"0":"u","1":"l","2":"s"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0}},'
+        '"usage":{"input_tokens":10,"output_tokens":5}}'
+    )
+    var answers = parse_jev_response(body, _bundle())
+    assert_equal(len(answers), 3)
+
+    var extra = loads(
+        '{"model":"jev-1.13.0","answers":{'
+        '"supply_status":{"type":"choice","choice":"offered","probabilities":{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0},'
+        '"seconds_ok":{"type":"noul","noul":0.9},'
+        '"culinary_fit":{"type":"score","score":2,"legend":{"0":"u","1":"l","2":"s"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0},'
+        '"extra":{"type":"noul","noul":0.5}},'
+        '"usage":{"input_tokens":10,"output_tokens":5}}'
+    )
+    with assert_raises():
+        _ = parse_jev_response(extra, _bundle())
+
+    var mismatch = loads(
+        '{"model":"jev-other","answers":{"supply_status":{"type":"choice","choice":"offered","confidence":1.0},"seconds_ok":{"type":"noul","noul":0.9},"culinary_fit":{"type":"score","score":2,"confidence":1.0}}}'
+    )
+    with assert_raises():
+        _ = parse_jev_response(mismatch, _bundle())
+
+    var missing = loads('{"model":"jev-1.13.0","answers":{"supply_status":{"type":"choice","choice":"offered","confidence":1.0}}}')
+    with assert_raises():
+        _ = parse_jev_response(missing, _bundle())

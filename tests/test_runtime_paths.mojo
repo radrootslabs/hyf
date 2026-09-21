@@ -279,3 +279,16 @@ def test_operation_enablement_and_kill_switch() raises:
     config.effective.runtime.disable_provider = True
     assert_true(provider_disabled(config))
     assert_true(not operation_enabled(config, "buyer_request.match"))
+
+
+from hyf_runtime.budget import budget_from_clock, budget_remaining_ms, budget_exhausted
+
+
+def test_shared_budget_does_not_reset_per_stage() raises:
+    var value = budget_from_clock(500, 2000, 0)
+    assert_equal(value.cap_ms, 500)
+    assert_equal(budget_remaining_ms(value, 200_000_000), 300)
+    assert_equal(budget_remaining_ms(value, 600_000_000), 0)
+    assert_true(budget_exhausted(value, 600_000_000))
+    var capped = budget_from_clock(5000, 2000, 0)
+    assert_equal(capped.cap_ms, 2000)

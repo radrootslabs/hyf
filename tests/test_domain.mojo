@@ -184,3 +184,16 @@ def test_pack_conversion_known_and_rejections() raises:
         )
     with assert_raises():
         _ = pack_rule("tomato.roma", "box", "mystery", 5, 0, "pack-1")
+
+
+from hyf_core.domain.units import normalize_quantity_with_rule
+
+
+def test_normalization_preserves_approximation() raises:
+    var approximate = new_quantity(80, 0, "lb", "mass", "approximate")
+    var rule = conversion_rule("lb", "kg", 45359237, 100000000, "test-1")
+    var normalized = normalize_quantity_with_rule(approximate, rule)
+    assert_equal(normalized.qualifier, "approximate")
+    assert_equal(normalized.unit, "kg")
+    var exact = new_quantity(80, 0, "lb", "mass", "exact")
+    assert_equal(normalize_quantity_with_rule(exact, rule).qualifier, "exact")

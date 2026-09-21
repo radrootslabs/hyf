@@ -71,3 +71,12 @@ def apply_conversion(quantity: Quantity, rule: ConversionRule) raises -> Quantit
     result.unit = String(rule.to_unit)
     result.dimension = String(unit_dimension(rule.to_unit))
     return result^
+
+
+def normalize_quantity_with_rule(
+    quantity: Quantity, rule: ConversionRule
+) raises -> Quantity:
+    var result = apply_conversion(quantity, rule)
+    if result.qualifier != quantity.qualifier:
+        raise Error("normalization must preserve the approximation qualifier")
+    return result^

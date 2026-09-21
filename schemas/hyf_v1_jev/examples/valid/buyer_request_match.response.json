@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "request_id": "buyer_request.match-ex-1",
+  "trace_id": "trace-buyer_request.match-ex-1",
+  "ok": true,
+  "output": {
+    "assessments": [
+      {
+        "candidate_id": "lot-1",
+        "eligibility": "eligible",
+        "checks": [
+          {
+            "kind": "product",
+            "result": "pass",
+            "reason": "catalogue match",
+            "evidence": []
+          }
+        ]
+      }
+    ],
+    "plans": [
+      {
+        "plan_id": "p1",
+        "supplier_id": "farm-1",
+        "allocations": [
+          {
+            "lot_id": "lot-1",
+            "revision": "l1",
+            "line_id": "l1",
+            "quantity": {
+              "state": "known",
+              "value": "25",
+              "unit": "kg",
+              "qualifier": "exact"
+            }
+          }
+        ],
+        "coverage": {
+          "lines_covered": [
+            "l1"
+          ],
+          "uncovered": [],
+          "partial": false
+        },
+        "unresolved": [],
+        "preference": {
+          "policy": "rk1",
+          "score": 0
+        }
+      }
+    ],
+    "limitations": {
+      "scope": "supplied_only",
+      "truncated": false,
+      "supported_mode": "single_supplier_compatible_lots",
+      "unsupported": [
+        "multi_supplier"
+      ]
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": "qb1"
+    }
+  },
+  "meta": {
+    "execution_mode": "deterministic",
+    "backend": "heuristic"
+  }
+}

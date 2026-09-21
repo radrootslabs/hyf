@@ -1,0 +1,195 @@
+{
+  "$comment": "hyf_v1_jev additive wire envelope; strict unknown-field rejection",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability": {
+      "type": "string",
+      "const": "farm_update.interpret"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "consumer": {
+          "type": "string"
+        },
+        "execution_mode_preference": {
+          "type": "string",
+          "enum": [
+            "deterministic",
+            "assisted"
+          ]
+        },
+        "deadline_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evaluation_time": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "versions": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "taxonomy": {
+              "type": "string"
+            },
+            "normalization": {
+              "type": "string"
+            },
+            "review_policy": {
+              "type": "string"
+            },
+            "ranking_policy": {
+              "type": "string"
+            },
+            "question_bundle": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "normalization",
+            "question_bundle",
+            "ranking_policy",
+            "review_policy",
+            "schema",
+            "taxonomy"
+          ],
+          "additionalProperties": false
+        },
+        "return_provenance": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evaluation_time",
+        "versions"
+      ],
+      "additionalProperties": false
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "object",
+          "properties": {
+            "source_id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "source_time": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "locale": {
+              "type": "string"
+            },
+            "actor_id": {
+              "type": "string"
+            },
+            "farm_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "revision",
+            "text",
+            "source_time",
+            "actor_id",
+            "farm_id"
+          ],
+          "additionalProperties": false
+        },
+        "prior_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "record_id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "record_id",
+              "revision",
+              "role"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "clarification": {
+          "type": "object",
+          "properties": {
+            "target_field": {
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "revision",
+            "source_id",
+            "target_field",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "capability",
+    "input"
+  ],
+  "additionalProperties": false
+}

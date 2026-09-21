@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "spec_id": "hyf_v1_jev",
+  "family": "wire_operations",
+  "note": "Additive operation envelopes. New operations are NOT advertised until S104. Existing wire-v1 envelope is preserved.",
+  "bindings": [
+    {
+      "capability": "farm_update.interpret",
+      "request_schema": "farm_update_interpret.request.schema.json",
+      "request_valid": "examples/valid/farm_update_interpret.request.json",
+      "response_schema": "farm_update_interpret.response.schema.json",
+      "response_valid": "examples/valid/farm_update_interpret.response.json"
+    },
+    {
+      "capability": "buyer_request.interpret",
+      "request_schema": "buyer_request_interpret.request.schema.json",
+      "request_valid": "examples/valid/buyer_request_interpret.request.json",
+      "response_schema": "buyer_request_interpret.response.schema.json",
+      "response_valid": "examples/valid/buyer_request_interpret.response.json"
+    },
+    {
+      "capability": "buyer_request.match",
+      "request_schema": "buyer_request_match.request.schema.json",
+      "request_valid": "examples/valid/buyer_request_match.request.json",
+      "response_schema": "buyer_request_match.response.schema.json",
+      "response_valid": "examples/valid/buyer_request_match.response.json"
+    },
+    {
+      "capability": "farm_update.interpret",
+      "request_schema": "farm_update_interpret.request.schema.json",
+      "request_valid": "examples/valid/farm_update_interpret.request.json",
+      "request_invalid": "examples/invalid/farm_update_interpret.request.unknown_field.json"
+    },
+    {
+      "capability": "buyer_request.interpret",
+      "response_schema": "buyer_request_interpret.response.schema.json",
+      "response_valid": "examples/valid/buyer_request_interpret.response.json",
+      "response_invalid": "examples/invalid/buyer_request_interpret.response.wrong_type.json"
+    },
+    {
+      "capability": "buyer_request.match",
+      "request_schema": "buyer_request_match.request.schema.json",
+      "request_valid": "examples/valid/buyer_request_match.request.json",
+      "request_invalid": "examples/invalid/buyer_request_match.request.bad_eligibility.json"
+    }
+  ]
+}

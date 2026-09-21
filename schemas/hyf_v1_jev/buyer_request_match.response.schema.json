@@ -1,0 +1,351 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "assessments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "candidate_id": {
+                "type": "string"
+              },
+              "eligibility": {
+                "type": "string",
+                "enum": [
+                  "eligible",
+                  "conditional",
+                  "ineligible"
+                ]
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "unknown"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source_id": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "end": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "method": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "end",
+                          "method",
+                          "revision",
+                          "source_id",
+                          "start"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "result",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "candidate_id",
+              "checks",
+              "eligibility"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "plans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plan_id": {
+                "type": "string"
+              },
+              "supplier_id": {
+                "type": "string"
+              },
+              "allocations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "lot_id": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "line_id": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "known",
+                            "unknown"
+                          ]
+                        },
+                        "value": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "unit": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "qualifier": {
+                          "type": "string",
+                          "enum": [
+                            "exact",
+                            "approximate"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "qualifier"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "lot_id",
+                    "revision",
+                    "line_id",
+                    "quantity"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "coverage": {
+                "type": "object",
+                "properties": {
+                  "lines_covered": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "uncovered": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "partial": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "lines_covered",
+                  "partial",
+                  "uncovered"
+                ],
+                "additionalProperties": false
+              },
+              "unresolved": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "preference": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "policy",
+                  "score"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "plan_id",
+              "supplier_id",
+              "allocations",
+              "coverage"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "limitations": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "string",
+              "enum": [
+                "supplied_only"
+              ]
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "supported_mode": {
+              "type": "string"
+            },
+            "unsupported": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "scope",
+            "supported_mode",
+            "truncated",
+            "unsupported"
+          ],
+          "additionalProperties": false
+        },
+        "execution": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "degraded",
+                "failed"
+              ]
+            },
+            "provider_calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "question_bundle": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "provider_calls",
+            "question_bundle",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "assessments",
+        "plans",
+        "limitations",
+        "execution"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "ok"
+  ],
+  "additionalProperties": false
+}

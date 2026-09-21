@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "request_id": "farm_update.interpret-ex-1",
+  "trace_id": "trace-farm_update.interpret-ex-1",
+  "ok": true,
+  "output": {
+    "claims": [
+      {
+        "claim_id": "c1",
+        "product": {
+          "phrase": "Roma tomatoes",
+          "catalogue_id": "tomato.roma",
+          "resolution": "resolved"
+        },
+        "status": "offered",
+        "quantity": {
+          "state": "known",
+          "value": "80",
+          "unit": "lb",
+          "qualifier": "approximate"
+        },
+        "evidence": [
+          {
+            "source_id": "farm-source-1",
+            "revision": "r1",
+            "start": 4,
+            "end": 14,
+            "method": "span"
+          }
+        ],
+        "review_required": true
+      }
+    ],
+    "proposed_changes": [],
+    "review": {
+      "required": true,
+      "clarifications": [
+        {
+          "field": "quantity.unreserved",
+          "reason": "reported total is not verified unreserved stock"
+        }
+      ]
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": "qb1"
+    }
+  },
+  "meta": {
+    "execution_mode": "deterministic",
+    "backend": "heuristic"
+  }
+}

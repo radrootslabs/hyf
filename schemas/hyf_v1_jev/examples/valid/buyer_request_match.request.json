@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "request_id": "buyer_request.match-ex-1",
+  "trace_id": "trace-buyer_request.match-ex-1",
+  "capability": "buyer_request.match",
+  "context": {
+    "execution_mode_preference": "deterministic",
+    "evaluation_time": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "versions": {
+      "schema": "v1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "n1",
+      "review_policy": "rp1",
+      "ranking_policy": "rk1",
+      "question_bundle": "qb1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "input": {
+    "need": {
+      "need_id": "n1",
+      "revision": "n1",
+      "partial_fulfillment": "disallowed",
+      "demand_lines": [
+        {
+          "line_id": "l1",
+          "product": {
+            "phrase": "tomatoes",
+            "catalogue_id": "tomato",
+            "resolution": "resolved"
+          },
+          "quantity": {
+            "state": "known",
+            "value": "25",
+            "unit": "kg",
+            "qualifier": "exact"
+          },
+          "conditions": [],
+          "evidence": [],
+          "review_required": false
+        }
+      ]
+    },
+    "snapshots": [
+      {
+        "lot_id": "lot-1",
+        "revision": "l1",
+        "supplier_id": "farm-1",
+        "product": {
+          "phrase": "Roma tomatoes",
+          "catalogue_id": "tomato.roma",
+          "resolution": "resolved"
+        },
+        "unreserved_quantity": {
+          "state": "known",
+          "value": "50",
+          "unit": "kg",
+          "qualifier": "exact"
+        }
+      }
+    ],
+    "coverage": {
+      "scope": "supplied_only",
+      "truncated": false,
+      "evaluated": 1,
+      "excluded": 0
+    }
+  }
+}

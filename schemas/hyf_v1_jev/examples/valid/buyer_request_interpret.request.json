@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "request_id": "buyer_request.interpret-ex-1",
+  "trace_id": "trace-buyer_request.interpret-ex-1",
+  "capability": "buyer_request.interpret",
+  "context": {
+    "execution_mode_preference": "deterministic",
+    "evaluation_time": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "versions": {
+      "schema": "v1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "n1",
+      "review_policy": "rp1",
+      "ranking_policy": "rk1",
+      "question_bundle": "qb1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "input": {
+    "source": {
+      "source_id": "buyer-source-1",
+      "revision": "r1",
+      "text": "Need 25 kg of tomatoes for sauce, delivered Friday. Seconds are fine.",
+      "source_time": "2026-09-21T09:05:00-07:00",
+      "timezone": "America/Vancouver",
+      "locale": "en-CA",
+      "actor_id": "buyer-1",
+      "farm_id": "buyer-1"
+    }
+  }
+}

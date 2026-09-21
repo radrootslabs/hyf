@@ -1,0 +1,548 @@
+{
+  "$comment": "hyf_v1_jev additive wire envelope; strict unknown-field rejection",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability": {
+      "type": "string",
+      "const": "buyer_request.match"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "consumer": {
+          "type": "string"
+        },
+        "execution_mode_preference": {
+          "type": "string",
+          "enum": [
+            "deterministic",
+            "assisted"
+          ]
+        },
+        "deadline_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evaluation_time": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "versions": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "taxonomy": {
+              "type": "string"
+            },
+            "normalization": {
+              "type": "string"
+            },
+            "review_policy": {
+              "type": "string"
+            },
+            "ranking_policy": {
+              "type": "string"
+            },
+            "question_bundle": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "normalization",
+            "question_bundle",
+            "ranking_policy",
+            "review_policy",
+            "schema",
+            "taxonomy"
+          ],
+          "additionalProperties": false
+        },
+        "return_provenance": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evaluation_time",
+        "versions"
+      ],
+      "additionalProperties": false
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "need": {
+          "type": "object",
+          "properties": {
+            "need_id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "demand_lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "line_id": {
+                    "type": "string"
+                  },
+                  "product": {
+                    "type": "object",
+                    "properties": {
+                      "phrase": {
+                        "type": "string"
+                      },
+                      "catalogue_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "resolution": {
+                        "type": "string",
+                        "enum": [
+                          "resolved",
+                          "unresolved"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "catalogue_id",
+                      "phrase",
+                      "resolution"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "quantity": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "known",
+                          "unknown"
+                        ]
+                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "unit": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "qualifier": {
+                        "type": "string",
+                        "enum": [
+                          "exact",
+                          "approximate"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "qualifier"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "conditions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "fulfillment",
+                            "window",
+                            "grade",
+                            "price",
+                            "attribute",
+                            "substitution"
+                          ]
+                        },
+                        "strength": {
+                          "type": "string",
+                          "enum": [
+                            "mandatory",
+                            "preferred",
+                            "excluded",
+                            "permitted"
+                          ]
+                        },
+                        "value": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "evidence": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "source_id": {
+                                "type": "string"
+                              },
+                              "revision": {
+                                "type": "string"
+                              },
+                              "start": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "end": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "method": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "end",
+                              "method",
+                              "revision",
+                              "source_id",
+                              "start"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "strength",
+                        "evidence"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "source_id": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "string"
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "end": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "method": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "end",
+                        "method",
+                        "revision",
+                        "source_id",
+                        "start"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "review_required": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "line_id",
+                  "product",
+                  "quantity",
+                  "conditions",
+                  "evidence",
+                  "review_required"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "partial_fulfillment": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "disallowed",
+                "unstated"
+              ]
+            }
+          },
+          "required": [
+            "need_id",
+            "revision",
+            "demand_lines",
+            "partial_fulfillment"
+          ],
+          "additionalProperties": false
+        },
+        "snapshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "lot_id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "supplier_id": {
+                "type": "string"
+              },
+              "product": {
+                "type": "object",
+                "properties": {
+                  "phrase": {
+                    "type": "string"
+                  },
+                  "catalogue_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "unresolved"
+                    ]
+                  }
+                },
+                "required": [
+                  "catalogue_id",
+                  "phrase",
+                  "resolution"
+                ],
+                "additionalProperties": false
+              },
+              "unreserved_quantity": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "known",
+                      "unknown"
+                    ]
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "unit": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "qualifier": {
+                    "type": "string",
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "qualifier"
+                ],
+                "additionalProperties": false
+              },
+              "attributes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "verified"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "fulfillment": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "pickup",
+                      "delivery",
+                      "unspecified"
+                    ]
+                  },
+                  "area": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "window": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "area",
+                  "method",
+                  "window"
+                ],
+                "additionalProperties": false
+              },
+              "price": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "known",
+                      "unknown"
+                    ]
+                  },
+                  "amount": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "basis": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "basis",
+                  "currency",
+                  "state"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "lot_id",
+              "revision",
+              "supplier_id",
+              "product",
+              "unreserved_quantity"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "string",
+              "enum": [
+                "supplied_only"
+              ]
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "evaluated": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "excluded": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "scope",
+            "truncated"
+          ],
+          "additionalProperties": false
+        },
+        "policy": {
+          "type": "object",
+          "properties": {
+            "ranking_policy": {
+              "type": "string"
+            },
+            "review_policy": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ranking_policy",
+            "review_policy"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "need",
+        "snapshots",
+        "coverage"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "capability",
+    "input"
+  ],
+  "additionalProperties": false
+}

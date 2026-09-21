@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "request_id": "buyer_request.interpret-ex-1",
+  "trace_id": "trace-buyer_request.interpret-ex-1",
+  "ok": true,
+  "output": {
+    "demand_lines": [
+      {
+        "line_id": "l1",
+        "product": {
+          "phrase": "tomatoes",
+          "catalogue_id": "tomato",
+          "resolution": "resolved"
+        },
+        "quantity": {
+          "state": "known",
+          "value": "25",
+          "unit": "kg",
+          "qualifier": "exact"
+        },
+        "conditions": [
+          {
+            "kind": "fulfillment",
+            "strength": "mandatory",
+            "value": "delivery",
+            "evidence": []
+          },
+          {
+            "kind": "grade",
+            "strength": "permitted",
+            "value": "seconds",
+            "evidence": []
+          }
+        ],
+        "evidence": [],
+        "review_required": false
+      }
+    ],
+    "review": {
+      "required": false,
+      "clarifications": []
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": "qb1"
+    }
+  },
+  "meta": {
+    "execution_mode": "deterministic",
+    "backend": "heuristic"
+  }
+}

@@ -1,0 +1,341 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "claim_id": {
+                "type": "string"
+              },
+              "product": {
+                "type": "object",
+                "properties": {
+                  "phrase": {
+                    "type": "string"
+                  },
+                  "catalogue_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "unresolved"
+                    ]
+                  }
+                },
+                "required": [
+                  "catalogue_id",
+                  "phrase",
+                  "resolution"
+                ],
+                "additionalProperties": false
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "offered",
+                  "forecast",
+                  "unavailable",
+                  "correction",
+                  "unclear"
+                ]
+              },
+              "quantity": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "known",
+                      "unknown"
+                    ]
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "unit": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "qualifier": {
+                    "type": "string",
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "qualifier"
+                ],
+                "additionalProperties": false
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "start": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "end": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "method": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "end",
+                    "method",
+                    "revision",
+                    "source_id",
+                    "start"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "review_required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "claim_id",
+              "product",
+              "status",
+              "evidence",
+              "review_required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "proposed_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "listing",
+                      "product",
+                      "farm"
+                    ]
+                  },
+                  "id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "addition",
+                  "remaining",
+                  "replacement",
+                  "withdrawal",
+                  "correction",
+                  "unresolved"
+                ]
+              },
+              "expected_revision": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "start": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "end": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "method": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "end",
+                    "method",
+                    "revision",
+                    "source_id",
+                    "start"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "target",
+              "operation",
+              "evidence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "review": {
+          "type": "object",
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "clarifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "field",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "clarifications",
+            "required"
+          ],
+          "additionalProperties": false
+        },
+        "execution": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "degraded",
+                "failed"
+              ]
+            },
+            "provider_calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "question_bundle": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "provider_calls",
+            "question_bundle",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "claims",
+        "proposed_changes",
+        "review",
+        "execution"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "ok"
+  ],
+  "additionalProperties": false
+}

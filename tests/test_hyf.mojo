@@ -9,7 +9,7 @@ from std.testing import (
 )
 from std.tempfile import TemporaryDirectory
 
-from json import Value, loads
+from json import Value, loads, validate
 
 from fixture_assertions import (
     assert_matches_scenario_response,
@@ -977,6 +977,92 @@ def test_semantic_fixture_manifest_declares_repo_local_family() raises:
     assert_equal(manifest["installation_status"].string_value(), "planned")
     assert_equal(Int(manifest["declared_case_count"].int_value()), 116)
     assert_equal(Int(manifest["declared_raw_payload_count"].int_value()), 5)
+
+
+def _wire_schema_path(name: String) raises -> Path:
+    return _dir_of_current_file() / ".." / "schemas" / "hyf_v1_jev" / name
+
+
+def _wire_schema_json(name: String) raises -> Value:
+    return loads(_wire_schema_path(name).read_text())
+
+
+def test_wire_operation_schemas_accept_valid_and_reject_invalid() raises:
+    var manifest = _wire_schema_json("manifest.json")
+    assert_equal(manifest["schema_version"].int_value(), 1)
+    assert_equal(manifest["spec_id"].string_value(), "hyf_v1_jev")
+
+    var validated = 0
+    for binding in manifest["bindings"].array_items():
+        if _has_key(binding, "request_schema"):
+            var request_schema_name = binding["request_schema"].string_value()
+            var request_valid = binding["request_valid"].string_value()
+            var request_schema = _wire_schema_json(request_schema_name)
+            var request_doc = loads(
+                (
+                    _dir_of_current_file()
+                    / ".."
+                    / "schemas"
+                    / "hyf_v1_jev"
+                    / request_valid
+                ).read_text()
+            )
+            assert_true(
+                validate(request_doc, request_schema).valid,
+                "request example failed schema: " + request_valid,
+            )
+            validated += 1
+
+            if _has_key(binding, "request_invalid"):
+                var invalid_doc = loads(
+                    (
+                        _dir_of_current_file()
+                        / ".."
+                        / "schemas"
+                        / "hyf_v1_jev"
+                        / binding["request_invalid"].string_value()
+                    ).read_text()
+                )
+                assert_true(
+                    not validate(invalid_doc, request_schema).valid,
+                    "invalid request example unexpectedly passed schema",
+                )
+
+        if _has_key(binding, "response_schema"):
+            var response_schema = _wire_schema_json(
+                binding["response_schema"].string_value()
+            )
+            var response_doc = loads(
+                (
+                    _dir_of_current_file()
+                    / ".."
+                    / "schemas"
+                    / "hyf_v1_jev"
+                    / binding["response_valid"].string_value()
+                ).read_text()
+            )
+            assert_true(
+                validate(response_doc, response_schema).valid,
+                "response example failed schema",
+            )
+            validated += 1
+
+            if _has_key(binding, "response_invalid"):
+                var invalid_response = loads(
+                    (
+                        _dir_of_current_file()
+                        / ".."
+                        / "schemas"
+                        / "hyf_v1_jev"
+                        / binding["response_invalid"].string_value()
+                    ).read_text()
+                )
+                assert_true(
+                    not validate(invalid_response, response_schema).valid,
+                    "invalid response example unexpectedly passed schema",
+                )
+
+    assert_true(validated >= 6)
 
 
 def main() raises:

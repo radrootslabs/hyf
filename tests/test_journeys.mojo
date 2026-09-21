@@ -74,3 +74,23 @@ def test_duplicate_and_stale_authority_responses() raises:
     assert_equal(simulation.stale_rejections, 1)
     # A match is not a lock on stock: the authority still revalidates.
     assert_true(simulation.requires_confirmation)
+
+
+from hyf_application.match_input import validate_match_scope
+from hyf_application.match_explain import (
+    explanation_reveals_private_source,
+    explanation_claims_global_availability,
+)
+from hyf_application.match_semantic import (
+    gated_semantic_suitability,
+)
+
+
+def test_multi_tenant_and_evidence_disclosure_adversaries() raises:
+    validate_match_scope("tenant-1", "tenant-1")
+    with assert_raises():
+        validate_match_scope("tenant-1", "tenant-2")
+    assert_true(not explanation_reveals_private_source())
+    assert_true(not explanation_claims_global_availability())
+    # A single unknown mandatory check yields conditional, not a stock claim.
+    assert_equal(gated_semantic_suitability(3, 0, 1).result, "unknown")

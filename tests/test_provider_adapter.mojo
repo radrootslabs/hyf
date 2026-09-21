@@ -33,6 +33,18 @@ from max_local_process_helper import (
 
 
 def _provider_runtime_config() -> HyfLoadedRuntimeConfig:
+    var runtime = HyfExecutionRuntimeConfig()
+    runtime.default_execution_mode = "deterministic"
+    runtime.allow_assisted = True
+    var assisted = HyfAssistedRuntimeConfig()
+    assisted.provider = "max_local"
+    assisted.max_local = HyfMaxLocalProviderRuntimeConfig(
+        enabled=True,
+        base_url="http://127.0.0.1:8000/v1/",
+        health_url="http://127.0.0.1:8000/health",
+        model="max-local-query-rewrite",
+        request_timeout_ms=15000,
+    )
     return HyfLoadedRuntimeConfig(
         artifact_present=True,
         loaded=True,
@@ -41,20 +53,8 @@ def _provider_runtime_config() -> HyfLoadedRuntimeConfig:
         load_error="",
         effective=HyfRuntimeConfig(
             service=HyfServiceRuntimeConfig(transport="stdio"),
-            runtime=HyfExecutionRuntimeConfig(
-                default_execution_mode="deterministic",
-                allow_assisted=True,
-            ),
-            assisted=HyfAssistedRuntimeConfig(
-                provider="max_local",
-                max_local=HyfMaxLocalProviderRuntimeConfig(
-                    enabled=True,
-                    base_url="http://127.0.0.1:8000/v1/",
-                    health_url="http://127.0.0.1:8000/health",
-                    model="max-local-query-rewrite",
-                    request_timeout_ms=15000,
-                ),
-            ),
+            runtime=runtime.copy(),
+            assisted=assisted.copy(),
         ),
     )
 

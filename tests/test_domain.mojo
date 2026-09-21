@@ -365,3 +365,27 @@ def test_supply_claims_are_per_product_and_not_inventory() raises:
     assert_true(not claim_is_forecast(tomato_claim))
     with assert_raises():
         _ = supply_claim("c4", tomatoes, "probably", "known", 1, 0, "kg", "exact")
+
+
+from hyf_core.domain.supply_change import (
+    change_expands_to_farm,
+    proposed_change,
+)
+
+
+def test_supply_change_operations_and_scoped_withdrawal() raises:
+    var addition = proposed_change("listing", Optional[String]("b1"), "addition", None)
+    assert_equal(addition.operation, "addition")
+    var remaining = proposed_change("listing", Optional[String]("b1"), "remaining", None)
+    assert_equal(remaining.operation, "remaining")
+    var replacement = proposed_change("listing", Optional[String]("b1"), "replacement", None)
+    assert_equal(replacement.operation, "replacement")
+    # Ambiguous withdrawal target must not expand to whole-farm stock.
+    var ambiguous = proposed_change("listing", None, "withdrawal", None)
+    assert_equal(ambiguous.operation, "unresolved")
+    assert_true(ambiguous.unresolved)
+    assert_true(not change_expands_to_farm(ambiguous))
+    var correction = proposed_change("product", None, "correction", None)
+    assert_equal(correction.operation, "unresolved")
+    with assert_raises():
+        _ = proposed_change("galaxy", Optional[String]("x"), "addition", None)

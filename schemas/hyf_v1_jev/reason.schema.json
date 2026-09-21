@@ -1,0 +1,22 @@
+{
+  "$comment": "stable reason-code inventory; consumers branch on codes, not substrings",
+  "type": "string",
+  "enum": [
+    "quantity_insufficient",
+    "product_mismatch",
+    "substitution_not_permitted",
+    "fulfillment_mismatch",
+    "area_unknown",
+    "window_mismatch",
+    "price_above_ceiling",
+    "attribute_unverified",
+    "quantity_unknown",
+    "information_needed",
+    "review_required",
+    "evidence_insufficient",
+    "stock_unknown",
+    "provider_unavailable",
+    "provider_degraded",
+    "budget_exhausted"
+  ]
+}

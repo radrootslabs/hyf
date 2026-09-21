@@ -1,0 +1,26 @@
+{
+  "eligibility": "eligible",
+  "review": {
+    "required": false,
+    "clarifications": []
+  },
+  "checks": [
+    {
+      "kind": "product",
+      "result": "pass",
+      "reason": "product_mismatch",
+      "mandatory": true
+    },
+    {
+      "kind": "preference",
+      "result": "unknown",
+      "reason": "evidence_insufficient",
+      "mandatory": false
+    }
+  ],
+  "execution": {
+    "status": "degraded",
+    "reason": "provider_degraded",
+    "provider_calls": 0
+  }
+}

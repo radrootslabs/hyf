@@ -1,0 +1,200 @@
+{
+  "$comment": "Typed business outcome; eligibility is separate from execution status; no contradictory combinations",
+  "type": "object",
+  "properties": {
+    "eligibility": {
+      "type": "string",
+      "enum": [
+        "eligible",
+        "conditional",
+        "ineligible"
+      ]
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "quantity_insufficient",
+                  "product_mismatch",
+                  "substitution_not_permitted",
+                  "fulfillment_mismatch",
+                  "area_unknown",
+                  "window_mismatch",
+                  "price_above_ceiling",
+                  "attribute_unverified",
+                  "quantity_unknown",
+                  "information_needed",
+                  "review_required",
+                  "evidence_insufficient",
+                  "stock_unknown",
+                  "provider_unavailable",
+                  "provider_degraded",
+                  "budget_exhausted"
+                ]
+              }
+            },
+            "required": [
+              "field",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "required",
+        "clarifications"
+      ],
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "applicable": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "unknown"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "quantity_insufficient",
+              "product_mismatch",
+              "substitution_not_permitted",
+              "fulfillment_mismatch",
+              "area_unknown",
+              "window_mismatch",
+              "price_above_ceiling",
+              "attribute_unverified",
+              "quantity_unknown",
+              "information_needed",
+              "review_required",
+              "evidence_insufficient",
+              "stock_unknown",
+              "provider_unavailable",
+              "provider_degraded",
+              "budget_exhausted"
+            ]
+          },
+          "mandatory": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "result",
+          "reason",
+          "mandatory"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "degraded",
+            "failed"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "quantity_insufficient",
+            "product_mismatch",
+            "substitution_not_permitted",
+            "fulfillment_mismatch",
+            "area_unknown",
+            "window_mismatch",
+            "price_above_ceiling",
+            "attribute_unverified",
+            "quantity_unknown",
+            "information_needed",
+            "review_required",
+            "evidence_insufficient",
+            "stock_unknown",
+            "provider_unavailable",
+            "provider_degraded",
+            "budget_exhausted"
+          ]
+        },
+        "provider_calls": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status",
+        "provider_calls"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unsupported_capability",
+            "capability_disabled",
+            "capability_unavailable",
+            "invalid_context",
+            "budget_exhausted",
+            "provider_auth",
+            "provider_validation",
+            "provider_capacity",
+            "provider_transport",
+            "provider_response_contract",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "eligibility",
+    "review",
+    "checks",
+    "execution"
+  ],
+  "additionalProperties": false
+}

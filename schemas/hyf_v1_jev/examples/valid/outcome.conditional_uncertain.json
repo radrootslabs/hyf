@@ -1,0 +1,30 @@
+{
+  "eligibility": "conditional",
+  "review": {
+    "required": true,
+    "clarifications": [
+      {
+        "field": "unreserved_quantity",
+        "reason": "quantity_unknown"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "kind": "product",
+      "result": "pass",
+      "reason": "product_mismatch",
+      "mandatory": true
+    },
+    {
+      "kind": "quantity",
+      "result": "unknown",
+      "reason": "stock_unknown",
+      "mandatory": true
+    }
+  ],
+  "execution": {
+    "status": "complete",
+    "provider_calls": 0
+  }
+}

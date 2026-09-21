@@ -1,0 +1,19 @@
+{
+  "eligibility": "eligible",
+  "review": {
+    "required": false,
+    "clarifications": []
+  },
+  "checks": [
+    {
+      "kind": "quantity",
+      "result": "fail",
+      "reason": "quantity_insufficient",
+      "mandatory": true
+    }
+  ],
+  "execution": {
+    "status": "complete",
+    "provider_calls": 0
+  }
+}

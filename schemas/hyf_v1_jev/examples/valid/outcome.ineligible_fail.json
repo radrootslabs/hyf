@@ -1,0 +1,25 @@
+{
+  "eligibility": "ineligible",
+  "review": {
+    "required": false,
+    "clarifications": []
+  },
+  "checks": [
+    {
+      "kind": "quantity",
+      "result": "fail",
+      "reason": "quantity_insufficient",
+      "mandatory": true
+    },
+    {
+      "kind": "window",
+      "result": "unknown",
+      "reason": "window_mismatch",
+      "mandatory": true
+    }
+  ],
+  "execution": {
+    "status": "complete",
+    "provider_calls": 0
+  }
+}

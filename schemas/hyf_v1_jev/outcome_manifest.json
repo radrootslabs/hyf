@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "hyf_v1_jev",
+  "family": "outcomes",
+  "bindings": [
+    {
+      "schema": "outcome.schema.json",
+      "valid": [
+        "examples/valid/outcome.conditional_uncertain.json",
+        "examples/valid/outcome.ineligible_fail.json",
+        "examples/valid/outcome.degraded_optional.json"
+      ],
+      "invalid": [
+        "examples/invalid/outcome.bad_eligibility.json",
+        "examples/invalid/outcome.bad_reason.json"
+      ],
+      "semantic_invalid": [
+        "examples/invalid/outcome.contradictory_eligible_with_fail.json"
+      ]
+    }
+  ]
+}

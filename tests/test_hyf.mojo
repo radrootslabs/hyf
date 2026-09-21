@@ -1111,5 +1111,63 @@ def test_temporal_evidence_schemas_accept_valid_and_reject_invalid() raises:
     _assert_manifest_examples("temporal_manifest.json", 7)
 
 
+def _outcome_is_contradictory(doc: Value) raises -> Bool:
+    var eligibility = doc["eligibility"].string_value()
+    var mandatory_fail = False
+    var mandatory_unknown = False
+    for check in doc["checks"].array_items():
+        var result = check["result"].string_value()
+        if check["mandatory"].bool_value():
+            if result == "fail":
+                mandatory_fail = True
+            elif result == "unknown":
+                mandatory_unknown = True
+    if mandatory_fail and eligibility != "ineligible":
+        return True
+    if not mandatory_fail and mandatory_unknown and eligibility == "eligible":
+        return True
+    return False
+
+
+def test_outcome_composition_rejects_contradictions() raises:
+    _assert_manifest_examples("outcome_manifest.json", 3)
+    var manifest = _wire_schema_json("outcome_manifest.json")
+    for binding in manifest["bindings"].array_items():
+        var schema = _wire_schema_json(binding["schema"].string_value())
+        for rel in binding["valid"].array_items():
+            var doc = loads(
+                (
+                    _dir_of_current_file()
+                    / ".."
+                    / "schemas"
+                    / "hyf_v1_jev"
+                    / rel.string_value()
+                ).read_text()
+            )
+            assert_true(validate(doc, schema).valid)
+            assert_true(
+                not _outcome_is_contradictory(doc),
+                "valid outcome treated as contradictory: " + rel.string_value(),
+            )
+        for rel in binding["semantic_invalid"].array_items():
+            var doc = loads(
+                (
+                    _dir_of_current_file()
+                    / ".."
+                    / "schemas"
+                    / "hyf_v1_jev"
+                    / rel.string_value()
+                ).read_text()
+            )
+            assert_true(
+                validate(doc, schema).valid,
+                "semantic-invalid example must remain structurally valid",
+            )
+            assert_true(
+                _outcome_is_contradictory(doc),
+                "contradictory outcome not detected: " + rel.string_value(),
+            )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -1,0 +1,19 @@
+{
+  "eligibility": "eligible",
+  "review": {
+    "required": false,
+    "clarifications": []
+  },
+  "checks": [
+    {
+      "kind": "product",
+      "result": "pass",
+      "reason": "looks_good",
+      "mandatory": true
+    }
+  ],
+  "execution": {
+    "status": "complete",
+    "provider_calls": 0
+  }
+}

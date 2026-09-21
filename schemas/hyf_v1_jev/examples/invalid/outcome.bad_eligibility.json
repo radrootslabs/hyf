@@ -1,0 +1,12 @@
+{
+  "eligibility": "maybe",
+  "review": {
+    "required": false,
+    "clarifications": []
+  },
+  "checks": [],
+  "execution": {
+    "status": "complete",
+    "provider_calls": 0
+  }
+}

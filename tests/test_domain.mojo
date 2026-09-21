@@ -323,3 +323,23 @@ def test_freshness_separates_record_harvest_and_verification() raises:
     assert_true(not record_recency_implies_harvest_age())
     with assert_raises():
         _ = freshness(-1, 0, 0)
+
+
+from hyf_core.domain.product import (
+    product_is_resolved,
+    product_matches,
+    resolved_product,
+    unresolved_product,
+)
+
+
+def test_product_reference_resolution_and_unknown() raises:
+    var tomato = resolved_product("Roma tomatoes", "tomato.roma")
+    var other = resolved_product("Roma tomato", "tomato.roma")
+    assert_true(product_is_resolved(tomato))
+    assert_true(product_matches(tomato, other))
+    var unknown = unresolved_product("mystery greens")
+    assert_true(not product_is_resolved(unknown))
+    assert_true(not product_matches(tomato, unknown))
+    with assert_raises():
+        _ = resolved_product("x", "")

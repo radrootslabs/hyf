@@ -40,3 +40,25 @@ def test_interpretation_source_context_validation() raises:
         _ = interpretation_source("", "r1", "x", "t", "z", "a", "f")
     with assert_raises():
         _ = interpretation_source("s", "r1", "x", "t", "", "a", "f")
+
+
+from hyf_application.farm_status import (
+    interpret_product_statuses,
+    status_is_confirmed_inventory,
+    status_is_forecast,
+)
+
+
+def test_product_specific_supply_status_per_crop() raises:
+    var products = List[String]()
+    products.append("roma tomatoes")
+    products.append("basil")
+    var statuses = interpret_product_statuses(products, "offered")
+    assert_equal(len(statuses), 2)
+    assert_equal(statuses[0].product_phrase, "roma tomatoes")
+    assert_equal(statuses[1].product_phrase, "basil")
+    assert_true(not status_is_confirmed_inventory(statuses[0].status))
+    var forecast = interpret_product_statuses(products, "forecast")
+    assert_true(status_is_forecast(forecast[0].status))
+    var unknown = interpret_product_statuses(products, "probably")
+    assert_equal(unknown[0].status, "unclear")

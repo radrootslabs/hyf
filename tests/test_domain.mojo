@@ -525,3 +525,22 @@ def test_plan_conservation_across_lots() raises:
     shared.append(allocation("lot-1", "l1", "line-2", 20, 0))
     var shared_plan = match_plan("p3", "farm-1", shared)
     assert_true(len(plan_conservation_violations(shared_plan, lots)) > 0)
+
+
+from hyf_core.domain.coverage import (
+    Coverage,
+    coverage,
+    no_match_is_global_absence,
+    unsupported_is_no_supply,
+)
+
+
+def test_coverage_limitations_do_not_claim_global_absence() raises:
+    var unsupported = List[String]()
+    unsupported.append("multi_supplier")
+    var value = coverage(True, 10, 2, "single_supplier_compatible_lots", unsupported)
+    assert_equal(value.scope, "supplied_only")
+    assert_true(value.truncated)
+    assert_equal(len(value.unsupported), 1)
+    assert_true(not no_match_is_global_absence())
+    assert_true(not unsupported_is_no_supply())

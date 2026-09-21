@@ -198,3 +198,124 @@ def validate_fixture_corpus(
                 )
 
     return issues^
+
+
+def validate_requirement_traceability(
+    registry_path: String, manifest_path: String, steps_path: String
+) raises -> List[FixtureValidationIssue]:
+    var issues = List[FixtureValidationIssue]()
+    var registry = loads(Path(registry_path).read_text())
+    var manifest = loads(Path(manifest_path).read_text())
+    var steps = loads(Path(steps_path).read_text())
+
+    var step_ids = List[String]()
+    for step in steps["steps"].array_items():
+        step_ids.append(step["id"].string_value())
+
+    var case_ids = List[String]()
+    for case_entry in manifest["cases"].array_items():
+        case_ids.append(case_entry["case_id"].string_value())
+
+    var requirement_ids = List[String]()
+    var requirements = registry["requirements"].array_items()
+    if len(requirements) == 0:
+        issues.append(
+            FixtureValidationIssue(
+                case_id="", rule="empty_registry", detail="no requirements"
+            )
+        )
+    for requirement in requirements:
+        var rid = requirement["id"].string_value()
+        var duplicate = False
+        for prior in requirement_ids:
+            if prior == rid:
+                duplicate = True
+        if duplicate:
+            issues.append(
+                FixtureValidationIssue(
+                    case_id=rid,
+                    rule="duplicate_requirement",
+                    detail="duplicate requirement id",
+                )
+            )
+        requirement_ids.append(String(rid))
+
+        var method = requirement["verification_method"].string_value()
+        if method == "":
+            issues.append(
+                FixtureValidationIssue(
+                    case_id=rid,
+                    rule="missing_verification_method",
+                    detail="verification_method is empty",
+                )
+            )
+        var impl_steps = requirement["implementation_steps"].array_items()
+        if len(impl_steps) == 0:
+            issues.append(
+                FixtureValidationIssue(
+                    case_id=rid,
+                    rule="uncovered_requirement",
+                    detail="no implementation steps",
+                )
+            )
+        else:
+            for step in impl_steps:
+                var sid = step.string_value()
+                var found = False
+                for known in step_ids:
+                    if known == sid:
+                        found = True
+                if not found:
+                    issues.append(
+                        FixtureValidationIssue(
+                            case_id=rid,
+                            rule="unknown_step",
+                            detail=sid,
+                        )
+                    )
+        var fixtures = requirement["fixture_ids"].array_items()
+        for fixture in fixtures:
+            var fid = fixture.string_value()
+            var found = False
+            for known in case_ids:
+                if known == fid:
+                    found = True
+            if not found:
+                issues.append(
+                    FixtureValidationIssue(
+                        case_id=rid,
+                        rule="dangling_fixture",
+                        detail=fid,
+                    )
+                )
+
+    var step_seen = List[String]()
+    for step in steps["steps"].array_items():
+        var sid = step["id"].string_value()
+        var duplicate = False
+        for prior in step_seen:
+            if prior == sid:
+                duplicate = True
+        if duplicate:
+            issues.append(
+                FixtureValidationIssue(
+                    case_id=sid, rule="duplicate_step", detail="duplicate step id"
+                )
+            )
+        step_seen.append(String(sid))
+        for dependency in step["dependencies"].array_items():
+            var did = dependency.string_value()
+            var found = False
+            for known in step_ids:
+                if known == did:
+                    found = True
+            if not found:
+                issues.append(
+                    FixtureValidationIssue(
+                        case_id=sid,
+                        rule="dangling_dependency",
+                        detail=did,
+                    )
+                )
+
+    return issues^

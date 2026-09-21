@@ -1,0 +1,1584 @@
+{
+  "spec_id": "hyf_v1_jev",
+  "format_version": 1,
+  "requirements": [
+    {
+      "id": "HYF-CORE-001",
+      "title": "Language and transport",
+      "status": "approved",
+      "requirement": "Keep the service core in Mojo and the canonical hyfd interface as stdio RPC; no Rust rewrite or HTTP ingress is authorized.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "architecture check and process integration",
+      "implementation_steps": [
+        "S001",
+        "S012"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-CORE-002",
+      "title": "Business authority",
+      "status": "approved",
+      "requirement": "Keep authentication, durable business workflow, inventory, reservations, orders and notifications in owning application services; Hyf emits assessments without business mutations.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "architecture check, journey simulation and real-authority gate",
+      "implementation_steps": [
+        "S014",
+        "S111",
+        "S131"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-CORE-003",
+      "title": "Typed independent layers",
+      "status": "approved",
+      "requirement": "Separate domain, application orchestration, provider adapter, runtime composition and transport; use explicit typed outcomes and no string-matched error control flow.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "unit tests and import-boundary review",
+      "implementation_steps": [
+        "S007",
+        "S014",
+        "S016",
+        "S018",
+        "S039",
+        "S064",
+        "S065"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-CORE-004",
+      "title": "Spec-anchored scope",
+      "status": "approved",
+      "requirement": "Implement the three approved operations incrementally against durable specs without unrelated deferred features or speculative framework work.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "requirement traceability and per-commit review",
+      "implementation_steps": [
+        "S002",
+        "S004",
+        "S010",
+        "S015",
+        "S137"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-CORE-005",
+      "title": "Compatibility",
+      "status": "approved",
+      "requirement": "Preserve existing supported wire behavior, capability semantics and max_local compatibility; new operations are additive or explicitly versioned.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "existing canonical wire fixtures and compatibility tests",
+      "implementation_steps": [
+        "S003",
+        "S004",
+        "S053",
+        "S065",
+        "S101",
+        "S103",
+        "S104",
+        "S108",
+        "S109"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-CORE-006",
+      "title": "Repository authority",
+      "status": "approved",
+      "requirement": "Use repo-owned forge-agnostic validation, preserve applicable AGENTS and parent release authority; no capsule-local .github workflows.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "policy check and documented command review",
+      "implementation_steps": [
+        "S001",
+        "S013",
+        "S014",
+        "S132"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-FARM-001",
+      "title": "Product-level claims",
+      "status": "approved",
+      "requirement": "Interpret multi-product updates as distinct evidence-backed claims rather than one global stock classification.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and application fixtures",
+      "implementation_steps": [
+        "S029",
+        "S067"
+      ],
+      "fixture_ids": [
+        "FU001_multiple_crops",
+        "FU004_quantity_association"
+      ]
+    },
+    {
+      "id": "HYF-FARM-002",
+      "title": "Claim status",
+      "status": "approved",
+      "requirement": "Distinguish reported offers, forecasts, unavailable supply, corrections and unclear status; never promote a forecast to confirmed inventory.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and application fixtures",
+      "implementation_steps": [
+        "S029",
+        "S067"
+      ],
+      "fixture_ids": [
+        "FU001_multiple_crops",
+        "FU002_forecast",
+        "FU003_negation"
+      ]
+    },
+    {
+      "id": "HYF-FARM-003",
+      "title": "Update operation semantics",
+      "status": "approved",
+      "requirement": "Differentiate addition, remaining balance, replacement, withdrawal and correction with a scoped target or unresolved operation.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and journey fixtures",
+      "implementation_steps": [
+        "S030",
+        "S069"
+      ],
+      "fixture_ids": [
+        "FU005_addition",
+        "FU006_remaining",
+        "FU007_total"
+      ]
+    },
+    {
+      "id": "HYF-FARM-004",
+      "title": "Unconfirmed quantities",
+      "status": "approved",
+      "requirement": "Reported quantity is not automatically verified unreserved stock; preserve approximation and uncertainty.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and journey fixtures",
+      "implementation_steps": [
+        "S022",
+        "S029",
+        "S068",
+        "S071"
+      ],
+      "fixture_ids": [
+        "DM004_approximation_retained",
+        "FU002_forecast",
+        "FU010_unreserved_unknown",
+        "MT002_unknown_quantity"
+      ]
+    },
+    {
+      "id": "HYF-FARM-005",
+      "title": "Review and material clarification",
+      "status": "approved",
+      "requirement": "Return reviewable proposed changes and material clarification targets; missing optional price does not block drafting while ambiguous withdrawal target blocks application.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "application and consumer-contract fixtures",
+      "implementation_steps": [
+        "S031",
+        "S072",
+        "S111"
+      ],
+      "fixture_ids": [
+        "FU009_optional_price",
+        "FU011_ambiguous_withdrawal",
+        "JR001_farm_review_handoff"
+      ]
+    },
+    {
+      "id": "HYF-FARM-006",
+      "title": "Immutable clarification history",
+      "status": "approved",
+      "requirement": "Treat correction and clarification as explicit revisioned new evidence; do not overwrite original text or rely on hidden memory.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and journey fixtures",
+      "implementation_steps": [
+        "S032",
+        "S073",
+        "S079",
+        "S111"
+      ],
+      "fixture_ids": [
+        "FU012_linked_clarification",
+        "FU013_stale_clarification",
+        "JR001_farm_review_handoff"
+      ]
+    },
+    {
+      "id": "HYF-FARM-007",
+      "title": "Scoped withdrawal",
+      "status": "approved",
+      "requirement": "Do not expand a product/listing withdrawal to unrelated farm stock; require sufficient authorized target evidence.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and security fixtures",
+      "implementation_steps": [
+        "S030",
+        "S070"
+      ],
+      "fixture_ids": [
+        "FU011_ambiguous_withdrawal"
+      ]
+    },
+    {
+      "id": "HYF-FARM-008",
+      "title": "Unknown products",
+      "status": "approved",
+      "requirement": "Unknown or unsupported product terms remain unresolved instead of forced nearest-catalogue assignments.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "candidate-discovery and interpretation fixtures",
+      "implementation_steps": [
+        "S028",
+        "S042",
+        "S075"
+      ],
+      "fixture_ids": [
+        "FU008_unknown_product"
+      ]
+    },
+    {
+      "id": "HYF-FARM-009",
+      "title": "No publication side effect",
+      "status": "approved",
+      "requirement": "farm_update.interpret returns proposals only; confirmation and version-checked idempotent application belong to the authority.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "architecture check and real-authority integration gate",
+      "implementation_steps": [
+        "S069",
+        "S072",
+        "S074",
+        "S105",
+        "S111"
+      ],
+      "fixture_ids": [
+        "FU009_optional_price",
+        "FU014_provider_timeout",
+        "FU015_invalid_answer",
+        "JR001_farm_review_handoff"
+      ]
+    },
+    {
+      "id": "HYF-BUY-001",
+      "title": "Multiple demand lines",
+      "status": "approved",
+      "requirement": "buyer_request.interpret preserves multiple products and demand lines with correct condition applicability.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and application fixtures",
+      "implementation_steps": [
+        "S033",
+        "S075",
+        "S092",
+        "S106"
+      ],
+      "fixture_ids": [
+        "BR001_multiple_lines",
+        "MT015_shared_lot_two_lines"
+      ]
+    },
+    {
+      "id": "HYF-BUY-002",
+      "title": "Constraint strength",
+      "status": "approved",
+      "requirement": "Differentiate mandatory requirements, preferences, explicit exclusions and permitted alternatives, including negation.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and application fixtures",
+      "implementation_steps": [
+        "S033",
+        "S043",
+        "S076",
+        "S085",
+        "S106"
+      ],
+      "fixture_ids": [
+        "BR002_fulfillment_negation",
+        "BR003_delivery_preference",
+        "BR004_seconds_permitted"
+      ]
+    },
+    {
+      "id": "HYF-BUY-003",
+      "title": "Missing is not a decision",
+      "status": "approved",
+      "requirement": "Not-stated and contradictory conditions remain visible; missing substitution permission is not automatic permission or prohibition.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "domain and application fixtures",
+      "implementation_steps": [
+        "S007",
+        "S018",
+        "S033",
+        "S076",
+        "S078",
+        "S080",
+        "S083",
+        "S093"
+      ],
+      "fixture_ids": [
+        "DM002_unknown_not_zero",
+        "BR005_substitution_not_stated",
+        "BR006_conflicting_conditions",
+        "BR007_missing_quantity",
+        "BR009_provider_failure"
+      ]
+    },
+    {
+      "id": "HYF-BUY-004",
+      "title": "Typed matching input",
+      "status": "approved",
+      "requirement": "buyer_request.match consumes the typed need and its revisions rather than reparsing rewritten query text.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "application integration",
+      "implementation_steps": [
+        "S079",
+        "S081",
+        "S107",
+        "S112"
+      ],
+      "fixture_ids": [
+        "BR008_no_reparse",
+        "JR002_buyer_match_revalidate"
+      ]
+    },
+    {
+      "id": "HYF-BUY-005",
+      "title": "Reviewable intent",
+      "status": "approved",
+      "requirement": "Expose material unresolved fields and confirmations for the host without creating orders or hidden state.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "consumer-contract and journey fixtures",
+      "implementation_steps": [
+        "S031",
+        "S078",
+        "S079",
+        "S106",
+        "S112"
+      ],
+      "fixture_ids": [
+        "BR007_missing_quantity"
+      ]
+    },
+    {
+      "id": "HYF-BUY-006",
+      "title": "Public surfaces",
+      "status": "approved",
+      "requirement": "Provide farm_update.interpret, buyer_request.interpret and buyer_request.match with stable product semantics, not a generic Jev endpoint.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "API schema, discovery and process tests",
+      "implementation_steps": [
+        "S004",
+        "S053",
+        "S104",
+        "S105",
+        "S134"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-DATA-001",
+      "title": "Trusted source identity",
+      "status": "approved",
+      "requirement": "Original text, actor/source IDs, revisions and timestamps come from trusted application context and cannot be generated or overridden by provider output.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit, adapter and security fixtures",
+      "implementation_steps": [
+        "S006",
+        "S016",
+        "S017",
+        "S045",
+        "S049",
+        "S066",
+        "S115"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-DATA-002",
+      "title": "Evidence integrity",
+      "status": "approved",
+      "requirement": "Every interpreted field links to authorized evidence or declared deterministic derivation; validate exact source revisions and span-offset conventions.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "Unicode/span/reference fixtures",
+      "implementation_steps": [
+        "S006",
+        "S017",
+        "S042",
+        "S068",
+        "S075"
+      ],
+      "fixture_ids": [
+        "DM014_unicode_evidence",
+        "DM015_wrong_revision_evidence",
+        "FU004_quantity_association"
+      ]
+    },
+    {
+      "id": "HYF-DATA-003",
+      "title": "Exact supported values",
+      "status": "approved",
+      "requirement": "Use explicit bounded exact decimal/fixed arithmetic where needed; define overflow, precision and rounding, and keep unknown distinct from zero.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit and property tests",
+      "implementation_steps": [
+        "S005",
+        "S018",
+        "S019",
+        "S020",
+        "S023",
+        "S077",
+        "S088",
+        "S118"
+      ],
+      "fixture_ids": [
+        "DM001_exact_quantity",
+        "DM002_unknown_not_zero",
+        "DM003_mass_conversion",
+        "DM016_numeric_overflow",
+        "MT003_exact_available"
+      ]
+    },
+    {
+      "id": "HYF-DATA-004",
+      "title": "Unit and pack semantics",
+      "status": "approved",
+      "requirement": "Normalize only compatible dimensions and trusted pack conversions; unknown pack size remains unresolved.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit and matching fixtures",
+      "implementation_steps": [
+        "S005",
+        "S020",
+        "S021",
+        "S068",
+        "S077"
+      ],
+      "fixture_ids": [
+        "DM003_mass_conversion",
+        "DM005_missing_pack_weight",
+        "DM006_wrong_product_pack",
+        "DM007_dimension_mismatch"
+      ]
+    },
+    {
+      "id": "HYF-DATA-005",
+      "title": "Approximation semantics",
+      "status": "approved",
+      "requirement": "Preserve approximate wording without inventing numerical bounds or treating conversion precision as source precision.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit and interpretation fixtures",
+      "implementation_steps": [
+        "S005",
+        "S022"
+      ],
+      "fixture_ids": [
+        "DM004_approximation_retained"
+      ]
+    },
+    {
+      "id": "HYF-DATA-006",
+      "title": "Money semantics",
+      "status": "approved",
+      "requirement": "Keep amount, currency, price basis, fees and minimum-order conditions distinct; missing price is unknown.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit and matching fixtures",
+      "implementation_steps": [
+        "S005",
+        "S023",
+        "S077",
+        "S087"
+      ],
+      "fixture_ids": [
+        "DM008_money_unknown",
+        "DM009_currency_mismatch"
+      ]
+    },
+    {
+      "id": "HYF-DATA-007",
+      "title": "Source-anchored time",
+      "status": "approved",
+      "requirement": "Resolve dates from source time and known zone/locale, preserve date-only/ambiguity semantics, and keep wall and monotonic time roles separate.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "time and replay fixtures",
+      "implementation_steps": [
+        "S006",
+        "S024",
+        "S025",
+        "S026",
+        "S071",
+        "S077",
+        "S086"
+      ],
+      "fixture_ids": [
+        "DM010_relative_date_replay",
+        "DM011_missing_zone",
+        "DM012_ambiguous_local_time",
+        "MT010_nonoverlap"
+      ]
+    },
+    {
+      "id": "HYF-DATA-008",
+      "title": "Freshness semantics",
+      "status": "approved",
+      "requirement": "Separate record recency, harvest age, availability and verification time; one cannot stand in for another.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "domain and matching fixtures",
+      "implementation_steps": [
+        "S006",
+        "S024",
+        "S027",
+        "S086"
+      ],
+      "fixture_ids": [
+        "DM013_record_not_harvest"
+      ]
+    },
+    {
+      "id": "HYF-DATA-009",
+      "title": "Version provenance",
+      "status": "approved",
+      "requirement": "Record actual source/need/supply, schema, taxonomy, normalization, model, question and policy versions used.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "domain, adapter and process fixtures",
+      "implementation_steps": [
+        "S011",
+        "S016",
+        "S021",
+        "S026",
+        "S028",
+        "S034",
+        "S038",
+        "S049",
+        "S117"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-DATA-010",
+      "title": "Conflicts and revisions",
+      "status": "approved",
+      "requirement": "Detect conflicting or stale records and preserve correction links rather than last-response-wins; external writes use expected versions.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "domain fixtures and real-authority gate",
+      "implementation_steps": [
+        "S006",
+        "S030",
+        "S032",
+        "S034",
+        "S070",
+        "S073",
+        "S082",
+        "S113"
+      ],
+      "fixture_ids": [
+        "DM015_wrong_revision_evidence",
+        "FU012_linked_clarification",
+        "FU013_stale_clarification",
+        "MT014_conflicting_revisions",
+        "JR003_duplicate_acceptance",
+        "JR004_stale_acceptance"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-001",
+      "title": "Three-way checks",
+      "status": "approved",
+      "requirement": "Each applicable mandatory check is pass, fail or unknown; any fail makes ineligible, otherwise unknown makes conditional, otherwise eligible.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit, property and application fixtures",
+      "implementation_steps": [
+        "S007",
+        "S035",
+        "S083",
+        "S084",
+        "S085",
+        "S086",
+        "S087",
+        "S088",
+        "S089",
+        "S100",
+        "S118"
+      ],
+      "fixture_ids": [
+        "MT001_shortage",
+        "MT002_unknown_quantity",
+        "MT003_exact_available",
+        "MT005_fail_dominates_unknown",
+        "MT006_unknown_dominates_pass",
+        "MT007_optional_missing",
+        "MT008_delivery_mismatch",
+        "MT009_unknown_area",
+        "MT010_nonoverlap"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-002",
+      "title": "Mandatory precedence",
+      "status": "approved",
+      "requirement": "No semantic score or preference can override a failed mandatory condition; optional unstated preferences do not create blockers.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "property and adversarial fixtures",
+      "implementation_steps": [
+        "S035",
+        "S083",
+        "S085",
+        "S089",
+        "S098",
+        "S118"
+      ],
+      "fixture_ids": [
+        "MT001_shortage",
+        "MT004_wrong_product_high_score",
+        "MT007_optional_missing"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-003",
+      "title": "Snapshot scope",
+      "status": "approved",
+      "requirement": "Evaluate only bounded authorized supplied records and identify exact revisions and coverage limitations.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "domain, security and process fixtures",
+      "implementation_steps": [
+        "S027",
+        "S034",
+        "S037",
+        "S081",
+        "S107",
+        "S114"
+      ],
+      "fixture_ids": [
+        "SC001_cross_tenant"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-004",
+      "title": "Supported plan mode",
+      "status": "approved",
+      "requirement": "Produce bounded single-supplier compatible-lot plans; label unsupported multi-supplier/planner modes rather than global unavailability.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "allocation and coverage fixtures",
+      "implementation_steps": [
+        "S036",
+        "S090",
+        "S091",
+        "S094",
+        "S107",
+        "S126"
+      ],
+      "fixture_ids": [
+        "MT012_two_compatible_lots",
+        "MT017_multi_supplier_unsupported"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-005",
+      "title": "Allocation conservation",
+      "status": "approved",
+      "requirement": "Within a plan, allocations across all lines cannot exceed underlying lot stock; reject/resolve duplicate conflicting records.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit, property and independent-oracle tests",
+      "implementation_steps": [
+        "S036",
+        "S082",
+        "S091",
+        "S092",
+        "S119"
+      ],
+      "fixture_ids": [
+        "MT012_two_compatible_lots",
+        "MT013_duplicate_lot",
+        "MT014_conflicting_revisions",
+        "MT015_shared_lot_two_lines"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-006",
+      "title": "Partial fulfillment policy",
+      "status": "approved",
+      "requirement": "Shortage fails when partial fulfillment is disallowed; any partial plan requires explicit buyer permission and clear uncovered demand.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "allocation and application fixtures",
+      "implementation_steps": [
+        "S088",
+        "S093"
+      ],
+      "fixture_ids": [
+        "MT001_shortage",
+        "MT016_partial_allowed"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-007",
+      "title": "Alternative plan semantics",
+      "status": "approved",
+      "requirement": "Alternative plans are not simultaneous commitments even if they reuse stock; output is never a reservation.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "allocation and consumer-contract fixtures",
+      "implementation_steps": [
+        "S036",
+        "S094",
+        "S099",
+        "S112"
+      ],
+      "fixture_ids": [
+        "MT019_alternative_plans"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-008",
+      "title": "Evidence before scoring",
+      "status": "approved",
+      "requirement": "Separate evidence sufficiency from suitability; do not use unknown as a score midpoint or promote uncertain mandatory premises silently.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "domain and provider fixtures",
+      "implementation_steps": [
+        "S071",
+        "S084",
+        "S090",
+        "S095",
+        "S096"
+      ],
+      "fixture_ids": [
+        "MT011_certification_unverified",
+        "MT020_unknown_not_midpoint"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-009",
+      "title": "Stable preference composition",
+      "status": "approved",
+      "requirement": "Normalize rubric scores deliberately, compose versioned preferences and use stable deterministic tie-breaking without representing success probabilities.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "unit/property/ranking fixtures",
+      "implementation_steps": [
+        "S097",
+        "S098",
+        "S119"
+      ],
+      "fixture_ids": [
+        "MT021_score_normalization",
+        "MT022_stable_ties"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-010",
+      "title": "No-market-claim overreach",
+      "status": "approved",
+      "requirement": "No eligible result means none within supplied/evaluated scope; retrieval truncation and unsupported planning are explicit limitations.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "coverage and consumer-contract fixtures",
+      "implementation_steps": [
+        "S037",
+        "S094",
+        "S099",
+        "S134"
+      ],
+      "fixture_ids": [
+        "MT017_multi_supplier_unsupported",
+        "MT018_truncated_retrieval"
+      ]
+    },
+    {
+      "id": "HYF-MATCH-011",
+      "title": "Revalidate before commitment",
+      "status": "approved",
+      "requirement": "Owning service must revalidate current inventory and reserve atomically under its transaction policy; Hyf does not implement that authority.",
+      "spec": "specs/DATA_MODEL.md",
+      "verification_method": "journey simulation and real-authority gate",
+      "implementation_steps": [
+        "S113",
+        "S131"
+      ],
+      "fixture_ids": [
+        "JR002_buyer_match_revalidate",
+        "JR005_stock_race"
+      ]
+    },
+    {
+      "id": "HYF-JEV-001",
+      "title": "Dedicated provider adapter",
+      "status": "approved",
+      "requirement": "Use a dedicated TypeSafe evaluation adapter rather than repointing max_local chat completions; keep provider wire types out of public business contracts.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "adapter and architecture tests",
+      "implementation_steps": [
+        "S039",
+        "S044",
+        "S052",
+        "S060"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-JEV-002",
+      "title": "Bounded interpretation",
+      "status": "approved",
+      "requirement": "Use versioned bounded choices/propositions/scores; candidate discovery and value normalization remain explicit stages.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "builder, domain and live-evaluation gates",
+      "implementation_steps": [
+        "S039",
+        "S042",
+        "S043",
+        "S044",
+        "S067",
+        "S095"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-JEV-003",
+      "title": "Correct question dependencies",
+      "status": "approved",
+      "requirement": "Only batch independent questions against relevant shared state; dependent stages are separate and correlated outputs are not independent corroboration.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "request-plan and evaluation review",
+      "implementation_steps": [
+        "S051"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-JEV-004",
+      "title": "Strict answer contracts",
+      "status": "approved",
+      "requirement": "Validate expected answer IDs/types, choices, finite values, probability distributions, rubric mapping and actual model version; fail safely on invalid responses.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "positive/negative adapter fixtures",
+      "implementation_steps": [
+        "S045",
+        "S046",
+        "S047",
+        "S059",
+        "S121"
+      ],
+      "fixture_ids": [
+        "PV001_valid_all_types",
+        "PV002_missing_answer",
+        "PV003_extra_answer",
+        "PV004_wrong_type",
+        "PV005_unknown_choice",
+        "PV006_bad_distribution_sum",
+        "PV007_score_out_of_range",
+        "PV008_wrong_legend",
+        "PV009_model_mismatch",
+        "PV010_noul_out_of_range",
+        "PV011_missing_level",
+        "PV012_confidence_out_of_range",
+        "PV021_invalid_json_bytes",
+        "PV022_nan_bytes"
+      ]
+    },
+    {
+      "id": "HYF-JEV-005",
+      "title": "Score range handling",
+      "status": "approved",
+      "requirement": "Handle zero-indexed score levels and normalize by the actual rubric; Noul has no required confidence field.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "adapter and numeric fixtures",
+      "implementation_steps": [
+        "S045",
+        "S046",
+        "S049",
+        "S097"
+      ],
+      "fixture_ids": [
+        "MT021_score_normalization",
+        "PV001_valid_all_types",
+        "PV002_missing_answer",
+        "PV003_extra_answer",
+        "PV004_wrong_type",
+        "PV005_unknown_choice",
+        "PV006_bad_distribution_sum",
+        "PV007_score_out_of_range",
+        "PV008_wrong_legend",
+        "PV009_model_mismatch",
+        "PV010_noul_out_of_range",
+        "PV011_missing_level",
+        "PV012_confidence_out_of_range"
+      ]
+    },
+    {
+      "id": "HYF-JEV-006",
+      "title": "Pinned evaluation configuration",
+      "status": "approved",
+      "requirement": "Pin model/question/policy/taxonomy/schema versions and evaluate upgrades explicitly; never follow aliases silently in production.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "configuration, provenance and model-promotion tests",
+      "implementation_steps": [
+        "S043",
+        "S047",
+        "S127",
+        "S133"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-JEV-007",
+      "title": "Semantic not arithmetic authority",
+      "status": "approved",
+      "requirement": "Keep arithmetic/date resolution/authorization and all business actions out of model judgments.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "architecture, domain and adversarial fixtures",
+      "implementation_steps": [
+        "S096"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-JEV-008",
+      "title": "Safe provider failure",
+      "status": "approved",
+      "requirement": "Interpretation failures remain unconfirmed/unresolved or explicit errors; only semantically safe labeled ranking fallback is allowed.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "application and provider-failure fixtures",
+      "implementation_steps": [
+        "S007",
+        "S038",
+        "S048",
+        "S062",
+        "S065",
+        "S074",
+        "S080",
+        "S100",
+        "S108",
+        "S133"
+      ],
+      "fixture_ids": [
+        "FU014_provider_timeout",
+        "FU015_invalid_answer",
+        "BR009_provider_failure",
+        "MT023_ranking_outage",
+        "PV013_auth_no_retry",
+        "PV014_validation_no_retry",
+        "PV015_capacity_retry",
+        "PV016_overload_retry",
+        "SC012_provider_disabled"
+      ]
+    },
+    {
+      "id": "HYF-JEV-009",
+      "title": "Provider request minimization",
+      "status": "approved",
+      "requirement": "Send only authorized relevant content, with server-controlled instructions/model/configuration and bounded question/candidate/state sizes.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "request-contract and privacy fixtures",
+      "implementation_steps": [
+        "S044",
+        "S050",
+        "S051",
+        "S089",
+        "S096"
+      ],
+      "fixture_ids": [
+        "PV020_wrong_request_state",
+        "SC004_state_minimization"
+      ]
+    },
+    {
+      "id": "HYF-JEV-010",
+      "title": "Live-model gate",
+      "status": "approved",
+      "requirement": "Separate opt-in account smoke and real raw-input semantic evaluation from deterministic software correctness; use independent labels and controlled holdouts.",
+      "spec": "specs/PROVIDER_JEV.md",
+      "verification_method": "evaluation harness and external release evidence",
+      "implementation_steps": [
+        "S127",
+        "S128",
+        "S129"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-RUN-001",
+      "title": "Persistent framing",
+      "status": "approved",
+      "requirement": "Process multiple newline-delimited JSON requests until EOF, handle fragmentation/coalescing and flush responses without stdout diagnostics.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "stdio process fixtures",
+      "implementation_steps": [
+        "S101",
+        "S102",
+        "S110"
+      ],
+      "fixture_ids": [
+        "PR001_persistent",
+        "PR002_valid_invalid_valid",
+        "PR003_fragmented",
+        "PR004_coalesced",
+        "PR005_escaped_newline",
+        "PR006_size_limit",
+        "PR007_partial_eof",
+        "PR008_stderr_separation",
+        "PR009_shutdown_cleanup",
+        "PR010_one_inflight"
+      ]
+    },
+    {
+      "id": "HYF-RUN-002",
+      "title": "Recovery and limits",
+      "status": "approved",
+      "requirement": "Recover after malformed frames when boundaries are known; bound input/depth/output and fail or close safely on unrecoverable framing.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "raw protocol and resource fixtures",
+      "implementation_steps": [
+        "S082",
+        "S098",
+        "S101",
+        "S103",
+        "S121",
+        "S126"
+      ],
+      "fixture_ids": [
+        "PR001_persistent",
+        "PR002_valid_invalid_valid",
+        "PR003_fragmented",
+        "PR004_coalesced",
+        "PR005_escaped_newline",
+        "PR006_size_limit",
+        "PR007_partial_eof",
+        "PR008_stderr_separation",
+        "PR009_shutdown_cleanup",
+        "PR010_one_inflight"
+      ]
+    },
+    {
+      "id": "HYF-RUN-003",
+      "title": "Single in-flight request",
+      "status": "approved",
+      "requirement": "Initially support one in-flight business request per process with host-owned bounded pooling; do not invent unnecessary multiplexing.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "process and lifecycle tests",
+      "implementation_steps": [
+        "S102"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-RUN-004",
+      "title": "Shared deadline",
+      "status": "approved",
+      "requirement": "All phases consume one server-capped remaining budget using monotonic elapsed time; host queuing does not reset it.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "virtual-time and process tests",
+      "implementation_steps": [
+        "S040",
+        "S051",
+        "S055",
+        "S060",
+        "S062",
+        "S074",
+        "S080"
+      ],
+      "fixture_ids": [
+        "PV017_no_remaining_budget",
+        "RT001_shared_budget"
+      ]
+    },
+    {
+      "id": "HYF-RUN-005",
+      "title": "Bounded retries and circuits",
+      "status": "approved",
+      "requirement": "Classify permanent/transient errors, bound retries/backoff/queues, avoid per-request health calls, and distinguish liveness from provider readiness.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "virtual-time and transport fixtures",
+      "implementation_steps": [
+        "S048",
+        "S056",
+        "S057",
+        "S062"
+      ],
+      "fixture_ids": [
+        "PV013_auth_no_retry",
+        "PV014_validation_no_retry",
+        "PV015_capacity_retry",
+        "PV016_overload_retry",
+        "PV017_no_remaining_budget",
+        "RT002_circuit_liveness"
+      ]
+    },
+    {
+      "id": "HYF-RUN-006",
+      "title": "Configuration and flags",
+      "status": "approved",
+      "requirement": "Separate implementation support, provider configuration, permission, readiness and per-operation enablement; validate invalid combinations.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "runtime/discovery matrix tests",
+      "implementation_steps": [
+        "S052",
+        "S053",
+        "S054",
+        "S064",
+        "S104",
+        "S108",
+        "S136"
+      ],
+      "fixture_ids": [
+        "SC012_provider_disabled"
+      ]
+    },
+    {
+      "id": "HYF-RUN-007",
+      "title": "Cleanup and cancellation",
+      "status": "approved",
+      "requirement": "Bound waits, close/reap resources and report local cancellation honestly without claiming remote computation or charges stopped.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "transport, process and soak tests",
+      "implementation_steps": [
+        "S059",
+        "S063",
+        "S102",
+        "S110",
+        "S125"
+      ],
+      "fixture_ids": [
+        "PR001_persistent",
+        "PR002_valid_invalid_valid",
+        "PR003_fragmented",
+        "PR004_coalesced",
+        "PR005_escaped_newline",
+        "PR006_size_limit",
+        "PR007_partial_eof",
+        "PR008_stderr_separation",
+        "PR009_shutdown_cleanup",
+        "PR010_one_inflight",
+        "RT003_resource_soak"
+      ]
+    },
+    {
+      "id": "HYF-RUN-008",
+      "title": "Observability",
+      "status": "approved",
+      "requirement": "Emit safe bounded reason/trace/version/degraded diagnostics; no secrets or unrestricted private text, no unbounded metric label cardinality.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "redaction and telemetry fixtures",
+      "implementation_steps": [
+        "S038",
+        "S048",
+        "S057",
+        "S100",
+        "S116"
+      ],
+      "fixture_ids": [
+        "MT023_ranking_outage",
+        "SC005_secret_redaction"
+      ]
+    },
+    {
+      "id": "HYF-RUN-009",
+      "title": "Optional caching policy",
+      "status": "approved",
+      "requirement": "Caching is optional; if introduced it is bounded, tenant/source/context/version keyed and invalidated safely; it never implies reservation.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "conditional cache tests or no-cache architecture evidence",
+      "implementation_steps": [
+        "S117"
+      ],
+      "fixture_ids": [
+        "RT004_no_cache_or_isolated_cache"
+      ]
+    },
+    {
+      "id": "HYF-RUN-010",
+      "title": "Measured objectives",
+      "status": "approved",
+      "requirement": "Freeze resource/SLO/cost/quality budgets from measured pilot evidence before launch; no fabricated numeric acceptance claims.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "load reports and owner release gate",
+      "implementation_steps": [
+        "S055",
+        "S125",
+        "S126",
+        "S130"
+      ],
+      "fixture_ids": [
+        "RT003_resource_soak"
+      ]
+    },
+    {
+      "id": "HYF-SEC-001",
+      "title": "Trusted host authorization",
+      "status": "approved",
+      "requirement": "A consumer string or end-user tenant claim is not authentication; use the real host trust boundary and reject inconsistent/cross-scope context.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "security fixtures and deployment gate",
+      "implementation_steps": [
+        "S066",
+        "S070",
+        "S081",
+        "S114",
+        "S117"
+      ],
+      "fixture_ids": [
+        "SC001_cross_tenant",
+        "SC002_consumer_not_auth"
+      ]
+    },
+    {
+      "id": "HYF-SEC-002",
+      "title": "Source text is data",
+      "status": "approved",
+      "requirement": "Source text cannot select endpoints, alter policy, fetch arbitrary URLs, invoke tools or elevate privileges.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "injection/adversarial fixtures",
+      "implementation_steps": [
+        "S066",
+        "S115"
+      ],
+      "fixture_ids": [
+        "SC003_instruction_in_source",
+        "SC010_request_endpoint_override"
+      ]
+    },
+    {
+      "id": "HYF-SEC-003",
+      "title": "External HTTPS",
+      "status": "approved",
+      "requirement": "External Jev transport validates TLS certificates/hostnames and redirect credential policy; local test overrides cannot weaken production behavior.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "local TLS and configuration fixtures",
+      "implementation_steps": [
+        "S060",
+        "S061"
+      ],
+      "fixture_ids": [
+        "SC006_external_plaintext",
+        "SC007_wrong_tls_host",
+        "SC008_untrusted_tls_ca",
+        "SC009_redirect_secret"
+      ]
+    },
+    {
+      "id": "HYF-SEC-004",
+      "title": "Privacy and retention",
+      "status": "approved",
+      "requirement": "Minimize provider payloads and evidence disclosure; respect host/provider approved retention instead of indefinite raw audit copies.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "privacy fixtures and account release gate",
+      "implementation_steps": [
+        "S050",
+        "S099",
+        "S114",
+        "S116",
+        "S129"
+      ],
+      "fixture_ids": [
+        "SC004_state_minimization"
+      ]
+    },
+    {
+      "id": "HYF-SEC-005",
+      "title": "Secrets and configuration",
+      "status": "approved",
+      "requirement": "Credentials/endpoints/model are server-controlled, sanitized in tests and never leaked in errors/logs or committed as real secrets.",
+      "spec": "specs/NONFUNCTIONAL_REQUIREMENTS.md",
+      "verification_method": "secret/redaction/configuration checks",
+      "implementation_steps": [
+        "S050",
+        "S052",
+        "S054",
+        "S061",
+        "S116",
+        "S122"
+      ],
+      "fixture_ids": [
+        "SC005_secret_redaction",
+        "SC009_redirect_secret",
+        "SC010_request_endpoint_override",
+        "SC011_offline_secret_env"
+      ]
+    },
+    {
+      "id": "HYF-TEST-001",
+      "title": "Canonical fixtures",
+      "status": "approved",
+      "requirement": "Version acceptance cases with requirements, fixed context, expectations, forbidden behavior and explicit synthetic/recorded provenance.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "fixture-schema and traceability checks",
+      "implementation_steps": [
+        "S003",
+        "S008",
+        "S009"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-002",
+      "title": "One shared authority",
+      "status": "approved",
+      "requirement": "Preserve declared parent shared-wire authority with offline local mirror; keep Hyf-local test families separate.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "manifest/sync and parent gate",
+      "implementation_steps": [
+        "S003",
+        "S109",
+        "S132"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-003",
+      "title": "Fixture validator integrity",
+      "status": "approved",
+      "requirement": "Reject duplicate IDs, missing references/files, unknown assertion operators and empty expectations; test the validator negatively.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "validator unit tests",
+      "implementation_steps": [
+        "S009",
+        "S010",
+        "S124"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-004",
+      "title": "Hermetic local execution",
+      "status": "approved",
+      "requirement": "After dependency provisioning, default build/tests require no external network, account, secrets, GPU, model server or parent checkout.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "offline isolation and process integration",
+      "implementation_steps": [
+        "S061",
+        "S122",
+        "S136"
+      ],
+      "fixture_ids": [
+        "SC011_offline_secret_env"
+      ]
+    },
+    {
+      "id": "HYF-TEST-005",
+      "title": "Production path coverage",
+      "status": "approved",
+      "requirement": "Exercise actual domain/application/adapter/HTTP/stdio code using controlled external boundaries rather than a parallel fake service.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "unit/loopback/process suites",
+      "implementation_steps": [
+        "S041",
+        "S058",
+        "S064",
+        "S105",
+        "S106",
+        "S107"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-006",
+      "title": "Strict scripted provider",
+      "status": "approved",
+      "requirement": "Validate outbound request semantics and call counts/order; fail unmatched/unconsumed scripts and prohibit live fallback.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "harness negative and provider integration tests",
+      "implementation_steps": [
+        "S041",
+        "S058"
+      ],
+      "fixture_ids": [
+        "PV018_unexpected_call",
+        "PV019_missing_call",
+        "PV020_wrong_request_state"
+      ]
+    },
+    {
+      "id": "HYF-TEST-007",
+      "title": "Determinism controls",
+      "status": "approved",
+      "requirement": "Control clocks/IDs/seeds/config/files/ports/scheduling and isolate cleanup; no sleep-based readiness or reserve-rebind races.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "harness unit/process tests",
+      "implementation_steps": [
+        "S025",
+        "S040",
+        "S056",
+        "S058",
+        "S059",
+        "S063",
+        "S110",
+        "S122"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-008",
+      "title": "Independent oracles",
+      "status": "approved",
+      "requirement": "Use reviewed expectations and independent small allocation oracles, not production self-comparison or model output as ground truth.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "review and oracle tests",
+      "implementation_steps": [
+        "S011",
+        "S019",
+        "S091",
+        "S092",
+        "S119",
+        "S120",
+        "S128"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-009",
+      "title": "Properties and regressions",
+      "status": "approved",
+      "requirement": "Test conservation/precedence/uncertainty/order/unit/revision properties with bounded seeds and saved minimal regressions.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "property and targeted fault-seeding tests",
+      "implementation_steps": [
+        "S118",
+        "S119",
+        "S120",
+        "S121",
+        "S123"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-010",
+      "title": "Golden discipline",
+      "status": "approved",
+      "requirement": "Exact business expectations include forbidden extras; tolerances are explicit and golden changes require requirement review.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "assertion tests and review",
+      "implementation_steps": [
+        "S008",
+        "S011",
+        "S072"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-011",
+      "title": "Planned versus executed",
+      "status": "approved",
+      "requirement": "Planned cases are not passed tests; activate each at its checkpoint and require all mandatory cases at completion without silent skips.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "activation and completion checks",
+      "implementation_steps": [
+        "S008",
+        "S010",
+        "S124",
+        "S137"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-TEST-012",
+      "title": "Repo-owned validation",
+      "status": "approved",
+      "requirement": "Default pixi test remains familiar; add discovered repo-owned spec/domain/application/provider/journey/soak/live tasks incrementally and forge-agnostically.",
+      "spec": "specs/PRODUCT_SPEC.md",
+      "verification_method": "task discovery and command-contract tests",
+      "implementation_steps": [
+        "S010",
+        "S012",
+        "S123",
+        "S134",
+        "S135"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-REL-001",
+      "title": "Ordered commits",
+      "status": "approved",
+      "requirement": "Follow the included sequence one independently tested/reviewed known-good commit at a time; evidence and document any proven necessary deviation.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "step ledger and per-commit review",
+      "implementation_steps": [
+        "S002",
+        "S015",
+        "S137",
+        "S138"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-REL-002",
+      "title": "Verification honesty",
+      "status": "approved",
+      "requirement": "Record real commands/results and blocked/N/A checks; no source/model/production completion claims from package validation alone.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "verification reports and release checklist",
+      "implementation_steps": [
+        "S001",
+        "S002",
+        "S015",
+        "S120",
+        "S123",
+        "S124",
+        "S130",
+        "S134",
+        "S135",
+        "S137",
+        "S138"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-REL-003",
+      "title": "Tooling and quality",
+      "status": "approved",
+      "requirement": "Preserve pinned tooling, discover actual format/lint/build/security checks and supported target matrices; Cargo applies only to real relevant Rust workspaces.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "build/quality/target evidence",
+      "implementation_steps": [
+        "S001",
+        "S012",
+        "S013",
+        "S135",
+        "S136"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-REL-004",
+      "title": "Real authority integration",
+      "status": "approved",
+      "requirement": "Simulated handoffs do not establish actual persistence/idempotency/concurrency; test real owning services before production activation.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "external integration gate",
+      "implementation_steps": [
+        "S109",
+        "S113",
+        "S131",
+        "S132",
+        "S138"
+      ],
+      "fixture_ids": [
+        "JR002_buyer_match_revalidate",
+        "JR003_duplicate_acceptance",
+        "JR004_stale_acceptance",
+        "JR005_stock_race"
+      ]
+    },
+    {
+      "id": "HYF-REL-005",
+      "title": "Model and account readiness",
+      "status": "approved",
+      "requirement": "Real-model metrics and provider privacy/region/capacity approvals are independent release gates; keep thresholds predeclared.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "external evaluation/account gate",
+      "implementation_steps": [
+        "S127",
+        "S128",
+        "S129",
+        "S130",
+        "S138"
+      ],
+      "fixture_ids": []
+    },
+    {
+      "id": "HYF-REL-006",
+      "title": "Operational readiness",
+      "status": "approved",
+      "requirement": "Exercise safe provider disablement/rollback without deleting accepted business records; supply runbooks, examples and measured resource evidence.",
+      "spec": "specs/ARCHITECTURE.md",
+      "verification_method": "runbook drills and release gate",
+      "implementation_steps": [
+        "S054",
+        "S125",
+        "S133",
+        "S138"
+      ],
+      "fixture_ids": []
+    }
+  ]
+}

@@ -26,6 +26,7 @@ from fixture_loader import (
     load_fixture_scenario_request,
     load_fixture_top_level_field_from_path,
 )
+from fixture_validator import validate_fixture_corpus
 from hyf_core.backends.selector import (
     execute_capability as execute_core_capability,
     resolve_backend,
@@ -1196,6 +1197,77 @@ def test_semantic_fixture_corpus_is_installed_and_planned() raises:
     assert_equal(len(raw_files), 5)
     for raw in raw_files:
         assert_true(exists(fixture_dir / raw.string_value()))
+
+
+def _write_min_fixture_corpus(base: Path, mutation: String) raises:
+    var domain = base / "domain"
+    std.os.makedirs(domain.__fspath__(), exist_ok=True)
+    var case_text = (
+        '{"fixture_format_version":1,"case_id":"T001",'
+        '"requirements":["HYF-TEST-001"],"implementation_status":"planned",'
+        '"required_from_step":"S009","mandatory":true,"given":{},'
+        '"provider_script":[],'
+        '"then":[{"operator":"equals","path":"/x","value":1}],'
+        '"provenance":{"kind":"synthetic"}}'
+    )
+    if mutation == "unknown_operator":
+        case_text = case_text.replace('"equals"', '"not_registered"')
+    elif mutation == "empty_then":
+        case_text = case_text.replace(
+            '[{"operator":"equals","path":"/x","value":1}]', "[]"
+        )
+    elif mutation == "missing_provenance":
+        case_text = case_text.replace(',"provenance":{"kind":"synthetic"}', "")
+    elif mutation == "empty_requirements":
+        case_text = case_text.replace('["HYF-TEST-001"]', "[]")
+    (domain / "T001.json").write_text(case_text)
+
+    var case_entry = (
+        '{"case_id":"T001","path":"domain/T001.json",'
+        '"required_from_step":"S009","mandatory":true}'
+    )
+    if mutation == "duplicate_case_id":
+        case_entry = case_entry + "," + case_entry
+    elif mutation == "dangling_path":
+        case_entry = (
+            '{"case_id":"T001","path":"domain/missing.json",'
+            '"required_from_step":"S009","mandatory":true}'
+        )
+    elif mutation == "activation_step_mismatch":
+        case_entry = (
+            '{"case_id":"T001","path":"domain/T001.json",'
+            '"required_from_step":"S999","mandatory":true}'
+        )
+    var manifest = (
+        '{"schema_version":1,"spec_id":"hyf_v1_jev",'
+        '"installation_status":"installed","cases":['
+        + case_entry
+        + '],"raw_files":[]}'
+    )
+    (base / "manifest.json").write_text(manifest)
+
+
+def test_fixture_validator_accepts_corpus_and_rejects_corruptions() raises:
+    var corpus_dir = _dir_of_current_file() / "fixtures" / "hyf_v1_jev"
+    assert_equal(
+        len(validate_fixture_corpus(corpus_dir.__fspath__())), 0
+    )
+    var mutations = List[String]()
+    mutations.append("duplicate_case_id")
+    mutations.append("dangling_path")
+    mutations.append("unknown_operator")
+    mutations.append("empty_then")
+    mutations.append("missing_provenance")
+    mutations.append("empty_requirements")
+    mutations.append("activation_step_mismatch")
+    for mutation in mutations:
+        with TemporaryDirectory() as temp_dir:
+            var base = Path(temp_dir)
+            _write_min_fixture_corpus(base, mutation)
+            assert_true(
+                len(validate_fixture_corpus(base.__fspath__())) > 0,
+                "validator accepted corruption: " + mutation,
+            )
 
 
 def main() raises:

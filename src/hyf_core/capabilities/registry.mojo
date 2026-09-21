@@ -14,6 +14,10 @@ from hyf_core.errors import (
 )
 from hyf_core.request_context import RequestContext
 from hyf_application.farm_operation import execute_farm_update_interpret
+from hyf_application.buyer_operation import (
+    execute_buyer_request_interpret,
+    execute_buyer_request_match,
+)
 
 
 @fieldwise_init
@@ -187,6 +191,10 @@ def execute_gated_operation(
     try:
         if capability_id == "farm_update.interpret":
             return successful_capability(execute_farm_update_interpret(input))
+        if capability_id == "buyer_request.interpret":
+            return successful_capability(execute_buyer_request_interpret(input))
+        if capability_id == "buyer_request.match":
+            return successful_capability(execute_buyer_request_match(input))
         return failed_capability(capability_not_implemented_error(capability_id))
     except e:
         return failed_capability(invalid_input_error(String(e)))

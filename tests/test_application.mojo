@@ -748,3 +748,26 @@ def test_farm_update_operation_returns_proposal_output() raises:
     assert_true(output["original_source_preserved"].bool_value())
     with assert_raises():
         _ = execute_farm_update_interpret(_json_loads("{}"))
+
+
+from hyf_application.buyer_operation import (
+    execute_buyer_request_interpret,
+    execute_buyer_request_match,
+)
+
+
+def test_buyer_request_operations_return_proposals() raises:
+    var source = _json_loads(
+        '{"source":{"source_id":"b1","revision":"r1","text":"Need 25 kg of tomatoes.",'
+        '"source_time":"2026-09-21T09:05:00-07:00","timezone":"America/Vancouver",'
+        '"actor_id":"buyer-1","farm_id":"buyer-1"}}'
+    )
+    var interpreted = execute_buyer_request_interpret(source)
+    assert_true(interpreted["review"]["required"].bool_value())
+    var match_input = _json_loads(
+        '{"need":{"need_id":"n1"},"snapshots":[{"lot_id":"lot-1"}]}'
+    )
+    var matched = execute_buyer_request_match(match_input)
+    assert_equal(matched["limitations"]["scope"].string_value(), "supplied_only")
+    with assert_raises():
+        _ = execute_buyer_request_match(_json_loads("{}"))

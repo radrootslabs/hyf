@@ -27,6 +27,7 @@ from fixture_loader import (
     load_fixture_top_level_field_from_path,
 )
 from fixture_validator import validate_fixture_corpus
+from projection_assertions import assert_projection
 from hyf_core.backends.selector import (
     execute_capability as execute_core_capability,
     resolve_backend,
@@ -1268,6 +1269,64 @@ def test_fixture_validator_accepts_corpus_and_rejects_corruptions() raises:
                 len(validate_fixture_corpus(base.__fspath__())) > 0,
                 "validator accepted corruption: " + mutation,
             )
+
+
+def test_projection_assertions_enforce_exactness_and_reject_unknown_operators() raises:
+    var actual = loads(
+        '{"assessment":{"eligibility":"eligible"},'
+        '"plans":[{"plan_id":"p1","allocations":[{"lot_id":"lot-1",'
+        '"revision":"l1","quantity":30}]}],'
+        '"execution":{"hyf_business_writes":0}}'
+    )
+    var passing = List[Value]()
+    passing.append(
+        loads('{"operator":"equals","path":"/assessment/eligibility","value":"eligible"}')
+    )
+    passing.append(
+        loads('{"operator":"absent","path":"/assessment/failed_checks"}')
+    )
+    passing.append(
+        loads('{"operator":"contains","path":"/plans/0/allocations","value":{"lot_id":"lot-1","revision":"l1","quantity":30}}')
+    )
+    passing.append(
+        loads('{"operator":"tolerance","path":"/plans/0/allocations/0/quantity","value":30,"tolerance":0}')
+    )
+    assert_projection(actual, passing)
+
+    var wrong_value = List[Value]()
+    wrong_value.append(
+        loads('{"operator":"equals","path":"/assessment/eligibility","value":"ineligible"}')
+    )
+    with assert_raises():
+        assert_projection(actual, wrong_value)
+
+    var missing_revision = List[Value]()
+    missing_revision.append(
+        loads('{"operator":"present","path":"/plans/0/allocations/0/expected_revision"}')
+    )
+    with assert_raises():
+        assert_projection(actual, missing_revision)
+
+    var wrong_order = List[Value]()
+    wrong_order.append(
+        loads('{"operator":"equals","path":"/plans/0/allocations/0","value":{"lot_id":"lot-2","revision":"l1","quantity":30}}')
+    )
+    with assert_raises():
+        assert_projection(actual, wrong_order)
+
+    var out_of_tolerance = List[Value]()
+    out_of_tolerance.append(
+        loads('{"operator":"tolerance","path":"/plans/0/allocations/0/quantity","value":31,"tolerance":0}')
+    )
+    with assert_raises():
+        assert_projection(actual, out_of_tolerance)
+
+    var unknown_operator = List[Value]()
+    unknown_operator.append(
+        loads('{"operator":"approximately","path":"/assessment/eligibility","value":"eligible"}')
+    )
+    with assert_raises():
+        assert_projection(actual, unknown_operator)
 
 
 def main() raises:

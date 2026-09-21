@@ -429,3 +429,20 @@ def test_grade_and_required_attribute_checks() raises:
     assert_equal(check_required_attributes(required, List[String]()).result, "unknown")
     assert_equal(check_required_attributes(List[String](), verified).result, "pass")
     assert_true(not model_confidence_verifies_certification())
+
+
+from hyf_application.match_checks import (
+    check_area,
+    check_fulfillment,
+    delivery_mention_verifies_area,
+)
+
+
+def test_fulfillment_method_and_area_checks() raises:
+    assert_equal(check_fulfillment("delivery", "delivery").result, "pass")
+    assert_equal(check_fulfillment("delivery", "pickup").result, "fail")
+    assert_equal(check_fulfillment("delivery", "").result, "unknown")
+    assert_equal(check_fulfillment("", "pickup").result, "pass")
+    assert_equal(check_area("Vancouver", "").result, "unknown")
+    assert_equal(check_area("", "").result, "pass")
+    assert_true(not delivery_mention_verifies_area())

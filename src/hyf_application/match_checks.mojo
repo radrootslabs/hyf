@@ -47,3 +47,35 @@ def check_required_attributes(
 
 def model_confidence_verifies_certification() -> Bool:
     return False
+
+
+def check_fulfillment(
+    required_method: String, offered_method: String
+) raises -> ConstraintAssessment:
+    if String(required_method).strip().byte_length() == 0:
+        return constraint_assessment(
+            "fulfillment", "pass", True, "fulfillment_optional"
+        )
+    if String(offered_method).strip().byte_length() == 0:
+        return constraint_assessment(
+            "fulfillment", "unknown", True, "fulfillment_unknown"
+        )
+    if required_method == offered_method:
+        return constraint_assessment(
+            "fulfillment", "pass", True, "fulfillment_match"
+        )
+    return constraint_assessment(
+        "fulfillment", "fail", True, "fulfillment_mismatch"
+    )
+
+
+def check_area(area_required: String, area_known: String) raises -> ConstraintAssessment:
+    if String(area_required).strip().byte_length() == 0:
+        return constraint_assessment("area", "pass", True, "area_optional")
+    if String(area_known).strip().byte_length() == 0:
+        return constraint_assessment("area", "unknown", True, "area_unknown")
+    return constraint_assessment("area", "pass", True, "area_verified")
+
+
+def delivery_mention_verifies_area() -> Bool:
+    return False

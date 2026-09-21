@@ -162,3 +162,25 @@ def test_jev_failure_mapping_permanent_vs_transient() raises:
     assert_true(not map_jev_failure("response_validation").retryable)
     with assert_raises():
         _ = map_jev_failure("mystery")
+
+
+from hyf_provider.jev_projection import (
+    answer_by_id,
+    project_choice,
+    provider_cannot_supply_trusted_identity,
+)
+
+
+def test_provider_response_projection() raises:
+    var body = loads(
+        '{"model":"jev-1.13.0","answers":{'
+        '"supply_status":{"type":"choice","choice":"offered","probabilities":{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0},'
+        '"seconds_ok":{"type":"noul","noul":0.9},'
+        '"culinary_fit":{"type":"score","score":2,"legend":{"0":"u","1":"l","2":"s"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0}}}'
+    )
+    var answers = parse_jev_response(body, _bundle())
+    assert_equal(project_choice(answers, "supply_status"), "offered")
+    assert_equal(answer_by_id(answers, "seconds_ok").noul, 0.9)
+    assert_true(provider_cannot_supply_trusted_identity())
+    with assert_raises():
+        _ = answer_by_id(answers, "nonexistent")

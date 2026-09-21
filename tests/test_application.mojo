@@ -62,3 +62,23 @@ def test_product_specific_supply_status_per_crop() raises:
     assert_true(status_is_forecast(forecast[0].status))
     var unknown = interpret_product_statuses(products, "probably")
     assert_equal(unknown[0].status, "unclear")
+
+
+from hyf_application.farm_quantity import (
+    ProductQuantityAssociation,
+    associate_quantity,
+    reported_quantity_is_unreserved_stock,
+)
+
+
+def test_quantity_association_per_product_without_swap() raises:
+    var tomatoes = associate_quantity("roma tomatoes", 80, 0, "lb", "approximate")
+    var basil = associate_quantity("basil", 0, 0, "bunch", "exact")
+    assert_equal(tomatoes.product_phrase, "roma tomatoes")
+    assert_equal(tomatoes.quantity_value, 80)
+    assert_equal(tomatoes.qualifier, "approximate")
+    assert_equal(basil.product_phrase, "basil")
+    assert_true(tomatoes.quantity_value != basil.quantity_value)
+    assert_true(not reported_quantity_is_unreserved_stock())
+    with assert_raises():
+        _ = associate_quantity("", 1, 0, "kg", "exact")

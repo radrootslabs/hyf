@@ -1,0 +1,30 @@
+{
+  "fixture_namespace": "radroots-hyf-v1-jev-semantic",
+  "schema_version": 1,
+  "description": "Repo-local semantic acceptance corpus for the hyf_v1_jev refactor. Cases are synthetic intent projections, not recorded Jev judgments or an existing public wire protocol.",
+  "family_kind": "semantic_acceptance",
+  "family_role": "hyf_local",
+  "transport": "stdio",
+  "request_framing": "newline_delimited_json",
+  "shared_wire_authority": {
+    "declared_path": "testing/fixtures/canonical/hyf/v1",
+    "local_offline_mirror": "tests/fixtures/v1",
+    "role": "preserve_existing_authority",
+    "note": "The existing shared-wire declaration is preserved; this new semantic family is repo-local after adoption. No runtime parent-checkout dependency is created."
+  },
+  "repo_local_families": {
+    "domain": "tests/fixtures/hyf_v1_jev/domain",
+    "provider": "tests/fixtures/hyf_v1_jev/provider",
+    "protocol": "tests/fixtures/hyf_v1_jev/protocol",
+    "security": "tests/fixtures/hyf_v1_jev/security",
+    "journeys": "tests/fixtures/hyf_v1_jev/journeys",
+    "raw": "tests/fixtures/hyf_v1_jev/raw"
+  },
+  "projection_adapter": "tests/fixtures/hyf_v1_jev/projection.json",
+  "owning_repository": "radrootslabs/hyf",
+  "installation_status": "planned",
+  "installed_at_step": "S008",
+  "declared_case_count": 116,
+  "declared_raw_payload_count": 5,
+  "activation_policy": "Each mandatory case activates at its required_from_step; planned cases are not counted as passing behavior."
+}

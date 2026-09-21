@@ -941,5 +941,43 @@ def test_internal_error_diagnostics_records_detail() raises:
             )
 
 
+def test_semantic_fixture_manifest_declares_repo_local_family() raises:
+    var manifest_path = (
+        _dir_of_current_file()
+        / "fixtures"
+        / "hyf_v1_jev"
+        / "manifest.json"
+    )
+    assert_true(exists(manifest_path))
+    var manifest = loads(manifest_path.read_text())
+    assert_equal(
+        manifest["fixture_namespace"].string_value(),
+        "radroots-hyf-v1-jev-semantic",
+    )
+    assert_equal(Int(manifest["schema_version"].int_value()), 1)
+    assert_equal(manifest["family_kind"].string_value(), "semantic_acceptance")
+    assert_equal(manifest["family_role"].string_value(), "hyf_local")
+    assert_equal(manifest["transport"].string_value(), "stdio")
+    assert_equal(
+        manifest["request_framing"].string_value(), "newline_delimited_json"
+    )
+    assert_equal(
+        manifest["shared_wire_authority"]["declared_path"].string_value(),
+        "testing/fixtures/canonical/hyf/v1",
+    )
+    assert_equal(
+        manifest["shared_wire_authority"]["local_offline_mirror"]
+        .string_value(),
+        "tests/fixtures/v1",
+    )
+    assert_equal(
+        manifest["repo_local_families"]["domain"].string_value(),
+        "tests/fixtures/hyf_v1_jev/domain",
+    )
+    assert_equal(manifest["installation_status"].string_value(), "planned")
+    assert_equal(Int(manifest["declared_case_count"].int_value()), 116)
+    assert_equal(Int(manifest["declared_raw_payload_count"].int_value()), 5)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

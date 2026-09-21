@@ -692,3 +692,23 @@ def test_deterministic_ranking_and_tie_breaks() raises:
     assert_equal(ranked[0].plan_id, "plan-a")
     assert_equal(ranked[1].plan_id, "plan-b")
     assert_true(ranking_is_order_independent())
+
+
+from hyf_application.match_explain import (
+    explanation_claims_global_availability,
+    explanation_claims_reservation,
+    explanation_reveals_private_source,
+    match_explanation,
+)
+
+
+def test_evidence_backed_match_explanations() raises:
+    var lines = List[String]()
+    lines.append("line-1")
+    var text = match_explanation("farm-1", lines, "supplied_only")
+    assert_true(text.find("farm-1") >= 0)
+    assert_true(text.find("line-1") >= 0)
+    assert_true(text.find("not a reservation") >= 0)
+    assert_true(not explanation_reveals_private_source())
+    assert_true(not explanation_claims_reservation())
+    assert_true(not explanation_claims_global_availability())

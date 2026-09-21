@@ -43,12 +43,32 @@ def _read_pipe_line(mut pipe: Pipe) raises -> String:
 
 
 def _read_request(mut stream: TcpStream) raises -> String:
-    var buffer = List[UInt8]()
-    buffer.resize(8192, 0)
-    var n = stream.read(buffer.unsafe_ptr(), len(buffer))
-    if n <= 0:
+    var bytes = List[UInt8]()
+    var chunk = InlineArray[Byte, 4096](fill=0)
+    var expected_total = -1
+    while True:
+        var n = stream.read(chunk.unsafe_ptr(), 4096)
+        if n <= 0:
+            break
+        for index in range(Int(n)):
+            bytes.append(chunk[index])
+        var text = String(unsafe_from_utf8=bytes[:])
+        var header_end = text.find("\r\n\r\n")
+        if header_end >= 0 and expected_total < 0:
+            var lowered = text.lower()
+            var marker = lowered.find("content-length:")
+            var content_length = 0
+            if marker >= 0:
+                var rest = String(text[byte=marker + 15:])
+                var line_end = rest.find("\r\n")
+                var value = rest if line_end < 0 else String(rest[byte=0:line_end])
+                content_length = Int(String(String(value).strip()))
+            expected_total = header_end + 4 + content_length
+        if expected_total >= 0 and len(bytes) >= expected_total:
+            break
+    if len(bytes) == 0:
         return ""
-    return String(unsafe_from_utf8=buffer[:n])
+    return String(unsafe_from_utf8=bytes[:])
 
 
 def _request_path(request: String) -> String:

@@ -544,3 +544,18 @@ def test_coverage_limitations_do_not_claim_global_absence() raises:
     assert_equal(len(value.unsupported), 1)
     assert_true(not no_match_is_global_absence())
     assert_true(not unsupported_is_no_supply())
+
+
+from hyf_core.domain.execution import ExecutionMeta, execution_is_business_outcome, execution_meta
+
+
+def test_execution_metadata_is_separate_from_business_outcome() raises:
+    var complete = execution_meta("complete", 0, None, Optional[String]("qb1"), None)
+    assert_equal(complete.status, "complete")
+    var degraded = execution_meta("degraded", 0, None, None, Optional[String]("provider_degraded"))
+    assert_equal(degraded.status, "degraded")
+    assert_true(not execution_is_business_outcome())
+    with assert_raises():
+        _ = execution_meta("degraded", 0, None, None, None)
+    with assert_raises():
+        _ = execution_meta("weird", 0, None, None, None)

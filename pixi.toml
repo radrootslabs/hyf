@@ -37,6 +37,7 @@ test-runtime-contract = { depends-on = [
 ] }
 test = { depends-on = [
   "test-unit",
+  "test-domain",
   "test-provider-adapter",
   "test-spec",
   "test-architecture",

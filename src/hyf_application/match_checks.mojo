@@ -118,3 +118,20 @@ def check_price(ceiling: Price, offered: Price) raises -> ConstraintAssessment:
     if price_compare(offered, ceiling) <= 0:
         return constraint_assessment("price", "pass", True, "price_within_ceiling")
     return constraint_assessment("price", "fail", True, "price_above_ceiling")
+
+
+def check_quantity(
+    required: Quantity,
+    available: Quantity,
+    available_known: Bool,
+    partial_allowed: Bool,
+) raises -> ConstraintAssessment:
+    if not available_known:
+        return constraint_assessment("quantity", "unknown", True, "stock_unknown")
+    if quantity_compare(available, required) >= 0:
+        return constraint_assessment("quantity", "pass", True, "quantity_sufficient")
+    if partial_allowed:
+        return constraint_assessment(
+            "quantity", "pass", True, "partial_permitted"
+        )
+    return constraint_assessment("quantity", "fail", True, "quantity_insufficient")

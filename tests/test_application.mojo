@@ -475,3 +475,17 @@ def test_applicable_price_and_minimum_order_checks() raises:
     assert_equal(check_price(ceiling, _known_price(550, 2, "CAD", "per_unit")).result, "fail")
     assert_equal(check_price(ceiling, _unknown_price()).result, "unknown")
     assert_equal(check_price(_unknown_price(), _known_price(1, 2, "CAD", "per_unit")).result, "pass")
+
+
+from hyf_application.match_checks import check_quantity
+from hyf_core.domain.quantity import new_quantity
+
+
+def test_per_lot_quantity_feasibility() raises:
+    var required = new_quantity(50, 0, "kg", "mass", "exact")
+    var enough = new_quantity(50, 0, "kg", "mass", "exact")
+    var short = new_quantity(30, 0, "kg", "mass", "exact")
+    assert_equal(check_quantity(required, enough, True, False).result, "pass")
+    assert_equal(check_quantity(required, short, True, False).result, "fail")
+    assert_equal(check_quantity(required, short, True, True).result, "pass")
+    assert_equal(check_quantity(required, short, False, False).result, "unknown")

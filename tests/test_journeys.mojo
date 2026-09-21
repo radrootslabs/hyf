@@ -173,3 +173,41 @@ def test_quantity_and_eligibility_properties() raises:
             elif unknown_count > 0:
                 expected = "conditional"
             assert_equal(compose_eligibility(checks), expected)
+
+
+from hyf_application.match_plan import allocate_multiple_lines
+from hyf_application.match_ranking import rank_by_preference
+from hyf_core.domain.plan import LotCapacity, plan_conservation_violations
+
+
+def test_allocation_conservation_and_ordering_properties() raises:
+    for capacity in range(10, 60, 10):
+        var lots = List[LotCapacity]()
+        lots.append(LotCapacity(lot_id="lot-1", revision="l1", value=capacity, scale=0))
+        lots.append(LotCapacity(lot_id="lot-2", revision="l1", value=capacity, scale=0))
+        var lines = List[String]()
+        lines.append("line-1")
+        lines.append("line-2")
+        var required = List[Int]()
+        required.append(capacity)
+        required.append(capacity * 2)
+        var plan = allocate_multiple_lines("p1", "farm-1", lines, required, lots)
+        assert_equal(len(plan_conservation_violations(plan, lots)), 0)
+        var total = 0
+        for entry in plan.allocations:
+            total += entry.value
+        assert_true(total <= capacity * 2)
+
+    var ids = List[String]()
+    ids.append("b")
+    ids.append("a")
+    ids.append("c")
+    var scores = List[Int]()
+    scores.append(1)
+    scores.append(1)
+    scores.append(1)
+    var ranked = rank_by_preference(ids, scores)
+    assert_equal(len(ranked), 3)
+    assert_equal(ranked[0], "a")
+    assert_equal(ranked[1], "b")
+    assert_equal(ranked[2], "c")

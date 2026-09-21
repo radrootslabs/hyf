@@ -3,6 +3,7 @@ from std.collections import List
 from std.pathlib import Path, _dir_of_current_file
 from std.tempfile import TemporaryDirectory
 from std.testing import TestSuite, assert_equal, assert_true
+from json import loads
 
 from fixture_validator import (
     FixtureValidationIssue,
@@ -116,3 +117,43 @@ def test_step_state_contract_is_valid_and_rejects_corruption() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from fixture_validator import validate_requirement_traceability as _vrt
+
+
+def test_requirement_and_fixture_closure_audit() raises:
+    var root = _dir_of_current_file()
+    var registry = loads(
+        (root / "requirements" / "hyf_v1_jev.requirements.json").read_text()
+    )
+    var steps = loads(
+        (root / "requirements" / "hyf_v1_jev.steps.json").read_text()
+    )
+    var step_ids = List[String]()
+    for step in steps["steps"].array_items():
+        step_ids.append(step["id"].string_value())
+    assert_equal(len(step_ids), 138)
+    var covered = 0
+    for requirement in registry["requirements"].array_items():
+        assert_true(len(requirement["implementation_steps"].array_items()) > 0)
+        covered += 1
+    assert_equal(covered, 85)
+
+    var manifest = loads(
+        (root / "fixtures" / "hyf_v1_jev" / "manifest.json").read_text()
+    )
+    var planned = 0
+    for entry in manifest["cases"].array_items():
+        var doc = loads(
+            (root / "fixtures" / "hyf_v1_jev" / entry["path"].string_value())
+            .read_text()
+        )
+        var found_step = False
+        for known in step_ids:
+            if known == entry["required_from_step"].string_value():
+                found_step = True
+        assert_true(found_step)
+        assert_equal(doc["implementation_status"].string_value(), "planned")
+        planned += 1
+    assert_equal(planned, 116)

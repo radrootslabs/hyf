@@ -449,3 +449,21 @@ def test_demand_lines_and_condition_strength() raises:
     assert_true(not missing_information_is_prohibition())
     with assert_raises():
         _ = condition("grade", "maybe", Optional[String]("x"))
+
+
+from hyf_core.domain.snapshot import (
+    SupplySnapshot,
+    snapshot_identity,
+    snapshot_unreserved_known,
+    supply_snapshot,
+)
+
+
+def test_supply_snapshot_revisions_and_unknown_unreserved() raises:
+    var tomatoes = resolved_product("Roma tomatoes", "tomato.roma")
+    var known = supply_snapshot("lot-1", "l1", "farm-1", tomatoes, "known", 50, 0, "kg")
+    var other_revision = supply_snapshot("lot-1", "l2", "farm-1", tomatoes, "known", 30, 0, "kg")
+    assert_true(snapshot_unreserved_known(known))
+    assert_true(snapshot_identity(known) != snapshot_identity(other_revision))
+    var unknown = supply_snapshot("lot-2", "l1", "farm-1", tomatoes, "unknown", 0, 0, "kg")
+    assert_true(not snapshot_unreserved_known(unknown))

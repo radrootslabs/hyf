@@ -44,3 +44,25 @@ def test_typed_answers_and_score_normalization() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from hyf_runtime.clock import (
+    Clock,
+    advance,
+    clock_monotonic_ns,
+    clock_wall_epoch_seconds,
+    fixed_clock,
+    monotonic_elapsed_ns,
+    system_monotonic_ns,
+    system_wall_epoch_seconds,
+)
+
+
+def test_clock_ports_are_injectable_and_monotonic() raises:
+    var start = fixed_clock(1789000000, 1000)
+    assert_equal(clock_wall_epoch_seconds(start), 1789000000)
+    var end = advance(start, 5000)
+    assert_equal(clock_monotonic_ns(end), 6000)
+    assert_equal(monotonic_elapsed_ns(start, end), 5000)
+    assert_true(system_wall_epoch_seconds() > 1600000000)
+    assert_true(system_monotonic_ns() > 0)

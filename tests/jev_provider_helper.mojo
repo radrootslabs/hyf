@@ -157,7 +157,8 @@ def _handle(mut stream: TcpStream, mode: String) raises:
 
 def _serve(port: Int, mode: String, requests: Int) raises:
     var listener = TcpListener.bind(SocketAddr.localhost(UInt16(port)))
-    _write(1, "ready\n")
+    var actual_port = Int(listener.local_addr().port)
+    _write(1, "ready " + String(actual_port) + "\n")
     for _ in range(requests):
         var stream = listener.accept()
         try:
@@ -187,7 +188,24 @@ def reserve_jev_port() raises -> Int:
     return port
 
 
+@fieldwise_init
+struct SpawnedJevStubAuto(Movable):
+    var port: Int
+    var stub: SpawnedJevStub
+
+
+def spawn_jev_stub_auto(mode: String, requests: Int) raises -> SpawnedJevStubAuto:
+    return _spawn_jev_stub(0, mode, requests)
+
+
 def spawn_jev_stub(port: Int, mode: String, requests: Int) raises -> SpawnedJevStub:
+    var started = _spawn_jev_stub(port, mode, requests)
+    return started.stub^
+
+
+def _spawn_jev_stub(
+    port: Int, mode: String, requests: Int
+) raises -> SpawnedJevStubAuto:
     var stdout_pipe = Pipe()
     var stdout_read_fd = c_int(stdout_pipe.fd_in.value().value)
     var stdout_write_fd = c_int(stdout_pipe.fd_out.value().value)
@@ -206,10 +224,14 @@ def spawn_jev_stub(port: Int, mode: String, requests: Int) raises -> SpawnedJevS
             _exit_child(c_int(125))
     stdout_pipe.set_input_only()
     var ready_line = _read_pipe_line(stdout_pipe)
-    if ready_line != "ready":
+    if not ready_line.startswith("ready"):
         stdout_pipe.set_output_only()
         var process = Process(Int(pid))
         _ = process.wait()
         raise Error("jev stub failed to report ready")
+    var reported_port = port
+    var space = ready_line.find(" ")
+    if space >= 0:
+        reported_port = Int(String(ready_line[byte=space + 1:]))
     stdout_pipe.set_output_only()
-    return SpawnedJevStub(Int(pid))
+    return SpawnedJevStubAuto(port=reported_port, stub=SpawnedJevStub(Int(pid)))

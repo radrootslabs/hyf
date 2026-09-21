@@ -245,48 +245,51 @@ def test_circuit_opens_and_recovers() raises:
 
 
 from flare.http import HttpClient
-from jev_provider_helper import reserve_jev_port, spawn_jev_stub
+from jev_provider_helper import (
+    reserve_jev_port,
+    spawn_jev_stub_auto,
+)
 
 
 def test_local_provider_server_serves_scripted_jev() raises:
-    var port = reserve_jev_port()
-    var stub = spawn_jev_stub(port, "ok", 1)
+    var started = spawn_jev_stub_auto("ok", 1)
+    var port = started.port
     var url = "http://127.0.0.1:" + String(port) + "/v1/systemone"
     with HttpClient(timeout_ms=5000, max_redirects=0) as client:
         var response = client.post(url, '{"model":"jev-1.13.0","state":"s","questions":{}}')
         assert_true(response.ok())
         var body = response.json()
         assert_equal(body["model"].string_value(), "jev-1.13.0")
-    stub.wait()
+    started.stub.wait()
 
 
 def test_local_provider_server_scripts_transport_failures() raises:
-    var rate_port = reserve_jev_port()
-    var rate_stub = spawn_jev_stub(rate_port, "rate_limit", 1)
+    var rate_port_started = spawn_jev_stub_auto("rate_limit", 1)
+    var rate_port = rate_port_started.port
     with HttpClient(timeout_ms=5000, max_redirects=0) as client:
         var response = client.post(
             "http://127.0.0.1:" + String(rate_port) + "/v1/systemone", "{}"
         )
         assert_equal(response.status, 429)
-    rate_stub.wait()
+    rate_port_started.stub.wait()
 
-    var malformed_port = reserve_jev_port()
-    var malformed_stub = spawn_jev_stub(malformed_port, "malformed_json", 1)
+    var malformed_port_started = spawn_jev_stub_auto("malformed_json", 1)
+    var malformed_port = malformed_port_started.port
     with HttpClient(timeout_ms=5000, max_redirects=0) as client:
         var response = client.post(
             "http://127.0.0.1:" + String(malformed_port) + "/v1/systemone", "{}"
         )
         assert_equal(response.text(), "not json")
-    malformed_stub.wait()
+    malformed_port_started.stub.wait()
 
-    var err_port = reserve_jev_port()
-    var err_stub = spawn_jev_stub(err_port, "server_error", 1)
+    var err_port_started = spawn_jev_stub_auto("server_error", 1)
+    var err_port = err_port_started.port
     with HttpClient(timeout_ms=5000, max_redirects=0) as client:
         var response = client.post(
             "http://127.0.0.1:" + String(err_port) + "/v1/systemone", "{}"
         )
         assert_equal(response.status, 500)
-    err_stub.wait()
+    err_port_started.stub.wait()
 
 
 from hyf_provider.jev_client import post_jev_systemone, validate_jev_base_url
@@ -311,8 +314,8 @@ def test_jev_endpoint_policy_and_loopback_client() raises:
     with assert_raises():
         _ = validate_jev_base_url("ftp://api.typesafe.ai")
 
-    var port = reserve_jev_port()
-    var stub = spawn_jev_stub(port, "ok", 1)
+    var started = spawn_jev_stub_auto("ok", 1)
+    var port = started.port
     var outcome = post_jev_systemone(
         "http://127.0.0.1:" + String(port),
         _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
@@ -320,7 +323,7 @@ def test_jev_endpoint_policy_and_loopback_client() raises:
     )
     assert_equal(outcome.status, 200)
     assert_true(outcome.body_text.find("jev-1.13.0") >= 0)
-    stub.wait()
+    started.stub.wait()
 
 
 from flare.tls import TlsVerify
@@ -340,14 +343,14 @@ def test_tls_and_redirect_policy() raises:
         assert_tls_verification_required(TlsConfig.insecure())
     assert_true(not redirects_forward_credentials())
 
-    var port = reserve_jev_port()
-    var stub = spawn_jev_stub(port, "redirect", 1)
+    var started = spawn_jev_stub_auto("redirect", 1)
+    var port = started.port
     with assert_raises():
         with HttpClient(timeout_ms=5000, max_redirects=0) as client:
             _ = client.post(
                 "http://127.0.0.1:" + String(port) + "/v1/systemone", "{}"
             )
-    stub.wait()
+    started.stub.wait()
 
 
 from hyf_provider.jev_client import failure_kind_for_status, retry_decision
@@ -370,15 +373,15 @@ def test_bounded_retry_and_budget_behavior() raises:
 
 
 def test_transport_cleanup_and_local_cancellation() raises:
-    var port = reserve_jev_port()
-    var stub = spawn_jev_stub(port, "ok", 1)
+    var started = spawn_jev_stub_auto("ok", 1)
+    var port = started.port
     var outcome = post_jev_systemone(
         "http://127.0.0.1:" + String(port),
         _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
         5000,
     )
     assert_equal(outcome.status, 200)
-    stub.wait()
+    started.stub.wait()
 
     # A refused connection is a bounded local transport failure (no listener).
     var dead_port = reserve_jev_port()

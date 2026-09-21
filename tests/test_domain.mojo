@@ -559,3 +559,35 @@ def test_execution_metadata_is_separate_from_business_outcome() raises:
         _ = execution_meta("degraded", 0, None, None, None)
     with assert_raises():
         _ = execution_meta("weird", 0, None, None, None)
+
+
+from hyf_core.normalization.candidates import Candidate, candidate_kinds, discover_candidates
+
+
+def test_candidate_discovery_spans_and_unknown_products() raises:
+    var products = List[String]()
+    products.append("roma tomatoes")
+    var units = List[String]()
+    units.append("lb")
+    var dates = List[String]()
+    dates.append("friday")
+    var candidates = discover_candidates(
+        "Got about 80 lb of Roma tomatoes. Can deliver Friday.", products, units, dates
+    )
+    var kinds = candidate_kinds(candidates)
+    assert_true(len(kinds) == 3)
+    var saw_quantity = False
+    for candidate in candidates:
+        if candidate.kind == "quantity":
+            assert_equal(candidate.text, "80 lb")
+            saw_quantity = True
+    assert_true(saw_quantity)
+
+    var unknown_products = List[String]()
+    unknown_products.append("kohlrabi")
+    var empty_units = List[String]()
+    var empty_dates = List[String]()
+    assert_equal(
+        len(discover_candidates("mystery greens", unknown_products, empty_units, empty_dates)),
+        0,
+    )

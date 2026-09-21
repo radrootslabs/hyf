@@ -133,3 +133,32 @@ def partial_outcome(
 
 def partial_discloses_deficit() -> Bool:
     return True
+
+
+@fieldwise_init
+struct PlannerOffer(Copyable, Movable):
+    var plans: List[MatchPlan]
+    var supported_mode: String
+    var unsupported: List[String]
+    var alternatives_are_simultaneous: Bool
+
+
+def alternative_plans(
+    plans: List[MatchPlan], unsupported: List[String]
+) raises -> PlannerOffer:
+    var copied = List[MatchPlan]()
+    for plan in plans:
+        copied.append(plan.copy())
+    var unsupported_copied = List[String]()
+    for entry in unsupported:
+        unsupported_copied.append(String(entry))
+    return PlannerOffer(
+        plans=copied^,
+        supported_mode="single_supplier_compatible_lots",
+        unsupported=unsupported_copied^,
+        alternatives_are_simultaneous=False,
+    )
+
+
+def unsupported_mode_means_no_supply() -> Bool:
+    return False

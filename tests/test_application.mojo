@@ -515,7 +515,7 @@ from hyf_application.match_plan import (
     group_lots_by_supplier,
     multi_supplier_is_supported,
 )
-from hyf_core.domain.plan import LotCapacity, plan_conservation_violations
+from hyf_core.domain.plan import LotCapacity, MatchPlan, plan_conservation_violations
 
 
 def test_supplier_grouping_and_bounded_allocation() raises:
@@ -590,3 +590,24 @@ def test_explicit_partial_fulfillment_outcome() raises:
     var disallowed = partial_outcome(50, 30, False)
     assert_true(not disallowed.permitted)
     assert_true(partial_discloses_deficit())
+
+
+from hyf_application.match_plan import (
+    alternative_plans,
+    unsupported_mode_means_no_supply,
+)
+
+
+def test_alternative_plans_and_planner_limitations() raises:
+    var capacities = List[LotCapacity]()
+    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0))
+    var plans = List[MatchPlan]()
+    plans.append(allocate_single_line("p1", "line-1", "farm-1", 25, 0, capacities))
+    plans.append(allocate_single_line("p2", "line-1", "farm-1", 30, 0, capacities))
+    var unsupported = List[String]()
+    unsupported.append("multi_supplier")
+    var offer = alternative_plans(plans, unsupported)
+    assert_equal(len(offer.plans), 2)
+    assert_true(not offer.alternatives_are_simultaneous)
+    assert_equal(len(offer.unsupported), 1)
+    assert_true(not unsupported_mode_means_no_supply())

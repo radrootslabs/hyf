@@ -119,3 +119,19 @@ def test_authorized_change_target_resolution() raises:
     assert_true(unauthorized.unresolved)
     var ambiguous = resolve_change_target("withdrawal", None, authorized)
     assert_equal(ambiguous.operation, "unresolved")
+
+
+from hyf_application.farm_fulfillment import interpret_fulfillment
+from hyf_core.domain.time import date_only
+
+
+def test_farm_fulfillment_and_timing_claims() raises:
+    var monday = date_only(2026, 9, 21)
+    var delivery = interpret_fulfillment("delivery", "Friday", monday, "America/Vancouver")
+    assert_equal(delivery.resolved_date, "2026-9-25")
+    assert_equal(delivery.ambiguity, "none")
+    assert_true(not delivery.area_verified)
+    var no_zone = interpret_fulfillment("delivery", "Friday", monday, "")
+    assert_equal(no_zone.ambiguity, "missing_zone")
+    var none = interpret_fulfillment("pickup", "", monday, "America/Vancouver")
+    assert_equal(none.window_expression, "")

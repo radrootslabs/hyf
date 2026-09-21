@@ -309,14 +309,25 @@ def run_stdio_server() raises:
     )
 
 
+def handle_frame(frame: String, runtime_context: RuntimeStartupContext) raises -> String:
+    if frame_too_large(frame):
+        return encode_error(
+            WireErrorResponse(
+                version=hyf_protocol_version(),
+                request_id="",
+                trace_id=None,
+                error=invalid_request_error("request frame exceeds the size limit"),
+            )
+        )
+    return handle_request_line_with_runtime_context(frame, runtime_context)
+
+
 def run_stdio_session(
     frames: List[String], runtime_context: RuntimeStartupContext
 ) raises -> List[String]:
     var responses = List[String]()
     for frame in frames:
-        responses.append(
-            handle_request_line_with_runtime_context(frame, runtime_context)
-        )
+        responses.append(handle_frame(frame, runtime_context))
     return responses^
 
 
@@ -331,7 +342,7 @@ def run_stdio_server_with_runtime_context(
             var line = input_file.readline()
             if line == "":
                 break
-            print(handle_request_line_with_runtime_context(line, runtime_context))
+            print(handle_frame(line, runtime_context))
 
 
 comptime MAX_FRAME_BYTES = 1048576

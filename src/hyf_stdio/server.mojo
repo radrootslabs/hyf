@@ -350,7 +350,13 @@ def run_stdio_server_with_runtime_context(
 
     with _fdopen["r"](stdin) as input_file:
         while True:
-            var line = input_file.readline()
+            var line = String()
+            try:
+                line = input_file.readline()
+            except e:
+                if String(e) == "EOF":
+                    break
+                raise e^
             if line == "":
                 break
             print(handle_frame(line, runtime_context))

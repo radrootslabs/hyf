@@ -129,3 +129,16 @@ def test_new_operation_wire_frames_are_gated() raises:
             assert_true(
                 responses[0].find(scenario["expected_error_code"].string_value()) >= 0
             )
+
+
+def test_long_session_processes_many_frames_in_order() raises:
+    with TemporaryDirectory() as temp_dir:
+        var context = _context(temp_dir)
+        var frames = List[String]()
+        for index in range(50):
+            frames.append(load_scenario_request_json("scenarios/status_ok.json"))
+        var responses = run_stdio_session(frames, context)
+        assert_equal(len(responses), 50)
+        for response in responses:
+            assert_true(response.find('"ok":true') >= 0)
+            assert_true(response.find("status-fixture-1") >= 0)

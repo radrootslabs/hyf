@@ -389,3 +389,26 @@ def test_index_supplied_lots_rejects_duplicates_and_conflicts() raises:
     with assert_raises():
         _ = index_supplied_lots(conflict_ids, conflict_revs)
     assert_true(not duplicate_records_double_stock())
+
+
+from hyf_application.match_checks import (
+    check_product,
+    semantic_score_can_rescue_product,
+)
+from hyf_core.domain.product import resolved_product, unresolved_product
+
+
+def test_product_and_substitution_check() raises:
+    var tomato = resolved_product("tomatoes", "tomato")
+    var roma = resolved_product("roma tomatoes", "tomato")
+    pass_check = check_product(tomato, roma, False)
+    assert_equal(pass_check.result, "pass")
+    var carrot = resolved_product("carrots", "carrot")
+    fail_check = check_product(tomato, carrot, False)
+    assert_equal(fail_check.result, "fail")
+    assert_equal(fail_check.reason, "product_mismatch")
+    var substitution = check_product(tomato, carrot, True)
+    assert_equal(substitution.result, "unknown")
+    var unknown = check_product(unresolved_product("mystery"), roma, False)
+    assert_equal(unknown.result, "unknown")
+    assert_true(not semantic_score_can_rescue_product())

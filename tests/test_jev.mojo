@@ -287,3 +287,37 @@ def test_local_provider_server_scripts_transport_failures() raises:
         )
         assert_equal(response.status, 500)
     err_stub.wait()
+
+
+from hyf_provider.jev_client import post_jev_systemone, validate_jev_base_url
+from json import loads as _loads
+
+
+def test_jev_endpoint_policy_and_loopback_client() raises:
+    assert_equal(
+        validate_jev_base_url("https://api.typesafe.ai/"),
+        "https://api.typesafe.ai",
+    )
+    assert_equal(
+        validate_jev_base_url("http://127.0.0.1:8000"),
+        "http://127.0.0.1:8000",
+    )
+    with assert_raises():
+        _ = validate_jev_base_url("http://api.typesafe.ai")
+    with assert_raises():
+        _ = validate_jev_base_url("http://127.0.0.1.evil.example")
+    with assert_raises():
+        _ = validate_jev_base_url("https://user:pass@api.typesafe.ai")
+    with assert_raises():
+        _ = validate_jev_base_url("ftp://api.typesafe.ai")
+
+    var port = reserve_jev_port()
+    var stub = spawn_jev_stub(port, "ok", 1)
+    var outcome = post_jev_systemone(
+        "http://127.0.0.1:" + String(port),
+        _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
+        5000,
+    )
+    assert_equal(outcome.status, 200)
+    assert_true(outcome.body_text.find("jev-1.13.0") >= 0)
+    stub.wait()

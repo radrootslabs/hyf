@@ -221,3 +221,24 @@ def test_retry_classification_and_bounded_scheduling() raises:
     assert_true(not should_retry(policy, 0, 950, True))
     with assert_raises():
         _ = retry_policy(1, 0, 10, 100)
+
+
+from hyf_provider.jev_circuit import (
+    circuit_allows,
+    circuit_record_failure,
+    circuit_record_success,
+    circuit_state,
+    process_liveness_is_provider_readiness,
+)
+
+
+def test_circuit_opens_and_recovers() raises:
+    var state = circuit_state(2)
+    assert_true(circuit_allows(state))
+    state = circuit_record_failure(state)
+    assert_true(circuit_allows(state))
+    state = circuit_record_failure(state)
+    assert_true(not circuit_allows(state))
+    state = circuit_record_success(state)
+    assert_true(circuit_allows(state))
+    assert_true(not process_liveness_is_provider_readiness())

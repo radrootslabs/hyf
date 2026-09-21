@@ -1,4 +1,4 @@
-from std.collections import Optional
+from std.collections import List, Optional
 from std.io.io import _fdopen
 from std.sys import stdin
 
@@ -309,17 +309,26 @@ def run_stdio_server() raises:
     )
 
 
+def run_stdio_session(
+    frames: List[String], runtime_context: RuntimeStartupContext
+) raises -> List[String]:
+    var responses = List[String]()
+    for frame in frames:
+        responses.append(
+            handle_request_line_with_runtime_context(frame, runtime_context)
+        )
+    return responses^
+
+
 def run_stdio_server_with_runtime_context(
     runtime_context: RuntimeStartupContext,
 ) raises:
     if stdin.isatty():
         return
 
-    try:
-        var line = _read_request_line()
-
-        print(handle_request_line_with_runtime_context(line, runtime_context))
-    except e:
-        if String(e) == "EOF":
-            return
-        raise e^
+    with _fdopen["r"](stdin) as input_file:
+        while True:
+            var line = input_file.readline()
+            if line == "":
+                break
+            print(handle_request_line_with_runtime_context(line, runtime_context))

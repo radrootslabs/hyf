@@ -28,6 +28,7 @@ test-domain = "mojo -I src -I tests tests/test_domain.mojo"
 test-assist = "mojo -I src -I tests tests/test_assist.mojo"
 test-jev = "mojo -I src -I tests tests/test_jev.mojo"
 test-application = "mojo -I src -I tests tests/test_application.mojo"
+test-stdio-session = "mojo -I src -I tests tests/test_persistent_stdio.mojo"
 test-spec = "mojo -I src -I tests tests/test_traceability.mojo"
 check-build = "mkdir -p .pixi/build && mojo build -I src src/main.mojo -o .pixi/build/hyfd"
 check-format = "sh tools/check_format.sh"
@@ -44,6 +45,7 @@ test = { depends-on = [
   "test-assist",
   "test-jev",
   "test-application",
+  "test-stdio-session",
   "test-provider-adapter",
   "test-spec",
   "test-architecture",

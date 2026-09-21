@@ -224,3 +224,34 @@ def test_price_unknown_distinct_from_zero_and_no_fx() raises:
         _ = known_price(1, 2, "", "per_unit")
     with assert_raises():
         _ = known_price(1, 2, "CAD", "per_kg_approx")
+
+
+from hyf_core.domain.time import (
+    date_only,
+    time_context,
+    timestamp,
+    timestamp_has_zone,
+    zoneless_timestamp,
+)
+
+
+def test_time_types_distinguish_source_and_evaluation() raises:
+    var source = timestamp(1789000000, "America/Vancouver")
+    var ingestion = timestamp(1789000100, "America/Vancouver")
+    var replay_later = timestamp(1789900000, "America/Vancouver")
+    var context = time_context(source, ingestion, replay_later)
+    assert_true(timestamp_has_zone(context.source_time))
+    assert_true(timestamp_has_zone(context.evaluation_time))
+    assert_true(context.evaluation_time.epoch_seconds > context.source_time.epoch_seconds)
+    var d = date_only(2026, 9, 25)
+    assert_equal(d.year, 2026)
+    assert_equal(d.month, 9)
+    assert_equal(d.day, 25)
+    var zoneless = zoneless_timestamp(1789000000)
+    assert_true(not timestamp_has_zone(zoneless))
+    with assert_raises():
+        _ = time_context(zoneless, ingestion, replay_later)
+    with assert_raises():
+        _ = date_only(2026, 13, 1)
+    with assert_raises():
+        _ = timestamp(1, "")

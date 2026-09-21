@@ -611,3 +611,18 @@ def test_alternative_plans_and_planner_limitations() raises:
     assert_true(not offer.alternatives_are_simultaneous)
     assert_equal(len(offer.unsupported), 1)
     assert_true(not unsupported_mode_means_no_supply())
+
+
+from hyf_application.match_semantic import (
+    evidence_sufficient,
+    gated_semantic_suitability,
+    unknown_evidence_is_midpoint_score,
+)
+
+
+def test_semantic_suitability_gated_on_evidence() raises:
+    assert_true(evidence_sufficient(2, 1))
+    assert_equal(gated_semantic_suitability(3, 2, 1).result, "pass")
+    assert_equal(gated_semantic_suitability(3, 0, 1).result, "unknown")
+    assert_equal(gated_semantic_suitability(3, 0, 1).reason, "evidence_insufficient")
+    assert_true(not unknown_evidence_is_midpoint_score())

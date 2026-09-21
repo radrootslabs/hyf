@@ -313,3 +313,19 @@ def test_assemble_reviewable_typed_buyer_need() raises:
         _ = assemble_buyer_need(
             List[DemandLine](), review_clear(), execution_meta("complete", 0, None, None, None)
         )
+
+
+from hyf_application.buyer_failure import (
+    buyer_failure_means_unavailable_supply,
+    buyer_inference_degraded,
+    buyer_inference_failure,
+)
+
+
+def test_buyer_inference_failure_is_not_market_absence() raises:
+    var failed = buyer_inference_failure("provider_timeout")
+    assert_equal(failed.status, "failed")
+    assert_equal(failed.resolved_lines, 0)
+    var degraded = buyer_inference_degraded("provider_degraded")
+    assert_equal(degraded.status, "degraded")
+    assert_true(not buyer_failure_means_unavailable_supply())

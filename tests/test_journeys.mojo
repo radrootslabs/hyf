@@ -293,3 +293,19 @@ def test_single_case_and_seed_replay() raises:
     assert_equal(first, second)
     assert_equal(fixture["context"]["seed"].int_value(), 101)
     assert_equal(fixture["required_from_step"].string_value(), "S022")
+
+
+from fixture_validator import validate_fixture_corpus
+
+
+def test_acceptance_activation_checkpoints() raises:
+    var corpus = _jdir() / "fixtures" / "hyf_v1_jev"
+    var manifest = _json_loads2((corpus / "manifest.json").read_text())
+    assert_equal(manifest["installation_status"].string_value(), "installed")
+    assert_equal(len(validate_fixture_corpus(corpus.__fspath__())), 0)
+    var planned = 0
+    for entry in manifest["cases"].array_items():
+        var doc = _json_loads2((corpus / entry["path"].string_value()).read_text())
+        assert_equal(doc["implementation_status"].string_value(), "planned")
+        planned += 1
+    assert_equal(planned, 116)

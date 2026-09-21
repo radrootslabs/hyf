@@ -258,3 +258,32 @@ def test_local_provider_server_serves_scripted_jev() raises:
         var body = response.json()
         assert_equal(body["model"].string_value(), "jev-1.13.0")
     stub.wait()
+
+
+def test_local_provider_server_scripts_transport_failures() raises:
+    var rate_port = reserve_jev_port()
+    var rate_stub = spawn_jev_stub(rate_port, "rate_limit", 1)
+    with HttpClient(timeout_ms=5000, max_redirects=0) as client:
+        var response = client.post(
+            "http://127.0.0.1:" + String(rate_port) + "/v1/systemone", "{}"
+        )
+        assert_equal(response.status, 429)
+    rate_stub.wait()
+
+    var malformed_port = reserve_jev_port()
+    var malformed_stub = spawn_jev_stub(malformed_port, "malformed_json", 1)
+    with HttpClient(timeout_ms=5000, max_redirects=0) as client:
+        var response = client.post(
+            "http://127.0.0.1:" + String(malformed_port) + "/v1/systemone", "{}"
+        )
+        assert_equal(response.text(), "not json")
+    malformed_stub.wait()
+
+    var err_port = reserve_jev_port()
+    var err_stub = spawn_jev_stub(err_port, "server_error", 1)
+    with HttpClient(timeout_ms=5000, max_redirects=0) as client:
+        var response = client.post(
+            "http://127.0.0.1:" + String(err_port) + "/v1/systemone", "{}"
+        )
+        assert_equal(response.status, 500)
+    err_stub.wait()

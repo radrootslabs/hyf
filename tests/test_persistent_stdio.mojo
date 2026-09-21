@@ -51,3 +51,18 @@ def test_session_recovers_from_malformed_frame() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+def test_session_preserves_order_and_recovers_after_malformed() raises:
+    with TemporaryDirectory() as temp_dir:
+        var context = _context(temp_dir)
+        var frames = List[String]()
+        frames.append(load_scenario_request_json("scenarios/status_ok.json"))
+        frames.append("{bad json")
+        frames.append(load_scenario_request_json("scenarios/capabilities_ok.json"))
+        var responses = run_stdio_session(frames, context)
+        assert_equal(len(responses), 3)
+        assert_true(responses[0].find('"ok":true') >= 0)
+        assert_true(responses[1].find('invalid_request') >= 0)
+        assert_true(responses[2].find('"ok":true') >= 0)
+        assert_true(responses[2].find('business_capabilities') >= 0)

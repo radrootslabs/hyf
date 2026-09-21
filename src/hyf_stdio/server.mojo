@@ -332,3 +332,10 @@ def run_stdio_server_with_runtime_context(
             if line == "":
                 break
             print(handle_request_line_with_runtime_context(line, runtime_context))
+
+
+comptime MAX_FRAME_BYTES = 1048576
+
+
+def frame_too_large(line: String) -> Bool:
+    return line.byte_length() > MAX_FRAME_BYTES

@@ -188,3 +188,22 @@ def test_farm_clarification_is_revisioned_new_evidence() raises:
             "quantity.unreserved", "farm-source-1", "r2", "60 lb", "r3"
         )
     )
+
+
+from hyf_application.farm_failure import (
+    farm_inference_degraded,
+    farm_inference_failure,
+    inference_failure_confirms_stock,
+)
+
+
+def test_farm_inference_failure_never_confirms_stock() raises:
+    var failed = farm_inference_failure("provider_timeout")
+    assert_equal(failed.status, "failed")
+    assert_equal(failed.confirmed_claims, 0)
+    assert_equal(failed.unresolved_claims, 1)
+    var degraded = farm_inference_degraded("provider_degraded")
+    assert_equal(degraded.status, "degraded")
+    assert_true(not inference_failure_confirms_stock())
+    with assert_raises():
+        _ = farm_inference_failure("")

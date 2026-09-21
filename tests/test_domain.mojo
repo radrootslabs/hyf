@@ -493,3 +493,35 @@ def test_eligibility_precedence() raises:
     assert_equal(compose_eligibility(optional_only), "eligible")
     with assert_raises():
         _ = constraint_assessment("product", "maybe", True, "x")
+
+
+from hyf_core.domain.plan import (
+    Allocation,
+    LotCapacity,
+    MatchPlan,
+    allocation,
+    match_plan,
+    plan_conservation_violations,
+)
+
+
+def test_plan_conservation_across_lots() raises:
+    var lots = List[LotCapacity]()
+    lots.append(LotCapacity(lot_id="lot-1", revision="l1", value=30, scale=0))
+    lots.append(LotCapacity(lot_id="lot-2", revision="l1", value=40, scale=0))
+    var allocations = List[Allocation]()
+    allocations.append(allocation("lot-1", "l1", "line-1", 30, 0))
+    allocations.append(allocation("lot-2", "l1", "line-1", 40, 0))
+    var plan = match_plan("p1", "farm-1", allocations)
+    assert_equal(len(plan_conservation_violations(plan, lots)), 0)
+
+    var over = List[Allocation]()
+    over.append(allocation("lot-1", "l1", "line-1", 31, 0))
+    var bad = match_plan("p2", "farm-1", over)
+    assert_true(len(plan_conservation_violations(bad, lots)) > 0)
+
+    var shared = List[Allocation]()
+    shared.append(allocation("lot-1", "l1", "line-1", 20, 0))
+    shared.append(allocation("lot-1", "l1", "line-2", 20, 0))
+    var shared_plan = match_plan("p3", "farm-1", shared)
+    assert_true(len(plan_conservation_violations(shared_plan, lots)) > 0)

@@ -1,0 +1,212 @@
+{
+  "type": "object",
+  "properties": {
+    "fixture_format_version": {
+      "const": 1
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^HYF-[A-Z]+-[0-9]{3}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "family": {
+      "enum": [
+        "domain",
+        "provider",
+        "journeys",
+        "protocol",
+        "security"
+      ]
+    },
+    "boundary": {
+      "enum": [
+        "domain",
+        "application",
+        "provider",
+        "transport",
+        "harness",
+        "process",
+        "security",
+        "journey"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "implementation_status": {
+      "const": "planned"
+    },
+    "required_from_step": {
+      "type": "string",
+      "pattern": "^S[0-9]{3}$"
+    },
+    "mandatory": {
+      "const": true
+    },
+    "context": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "given": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "provider_script": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "minProperties": 1
+      }
+    },
+    "then": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "enum": [
+              "equals",
+              "contains",
+              "not_contains",
+              "present",
+              "absent",
+              "max",
+              "min",
+              "approx"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "value": {},
+          "tolerance": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "operator",
+          "path"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "operator": {
+                  "enum": [
+                    "equals",
+                    "contains",
+                    "not_contains",
+                    "max",
+                    "min",
+                    "approx"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "value"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "operator": {
+                  "const": "approx"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "tolerance"
+              ],
+              "properties": {
+                "value": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "prohibited": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "synthetic"
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "author",
+        "review_status"
+      ],
+      "additionalProperties": false
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "fixture_format_version",
+    "case_id",
+    "requirements",
+    "family",
+    "boundary",
+    "operation",
+    "purpose",
+    "implementation_status",
+    "required_from_step",
+    "mandatory",
+    "context",
+    "given",
+    "provider_script",
+    "then",
+    "prohibited",
+    "provenance",
+    "assumptions"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hyf_v1_jev handoff semantic fixture definition; not a public Hyf request"
+}

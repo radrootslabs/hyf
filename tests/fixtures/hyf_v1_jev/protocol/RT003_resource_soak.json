@@ -1,0 +1,61 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "RT003_resource_soak",
+  "requirements": [
+    "HYF-RUN-007",
+    "HYF-RUN-010"
+  ],
+  "family": "protocol",
+  "boundary": "process",
+  "operation": "process.soak",
+  "purpose": "Resource checks are separate from live latency claims.",
+  "implementation_status": "planned",
+  "required_from_step": "S125",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "recipe": "bounded repeated mixed successful/failed requests with fixed seed; compare owned resource counts before and after shutdown",
+    "seed": 101
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/process/orphan_children",
+      "value": 0
+    },
+    {
+      "operator": "equals",
+      "path": "/process/owned_resources_released",
+      "value": true
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

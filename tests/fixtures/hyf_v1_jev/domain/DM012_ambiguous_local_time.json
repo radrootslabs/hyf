@@ -1,0 +1,64 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "DM012_ambiguous_local_time",
+  "requirements": [
+    "HYF-DATA-007"
+  ],
+  "family": "domain",
+  "boundary": "domain",
+  "operation": "date.resolve",
+  "purpose": "An ambiguous local time stays unresolved under the explicit test policy.",
+  "implementation_status": "planned",
+  "required_from_step": "S026",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "local_time": "2026-11-01T01:30:00",
+    "timezone": "Test/RepeatedHour",
+    "fold_disambiguation": null,
+    "test_policy": "require explicit disambiguation of repeated local time",
+    "injected_timezone_rules": {
+      "rule_version": "synthetic-repeat-1",
+      "local_transition": "2026-11-01T02:00:00",
+      "offset_before": "-07:00",
+      "offset_after": "-08:00"
+    }
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/normalized/state",
+      "value": "unresolved"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality.",
+    "Test/RepeatedHour is an injected synthetic timezone rule table, not a production IANA zone or a claim about current regional daylight-saving law."
+  ]
+}

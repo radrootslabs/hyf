@@ -1,0 +1,101 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "MT023_ranking_outage",
+  "requirements": [
+    "HYF-JEV-008",
+    "HYF-RUN-008"
+  ],
+  "family": "domain",
+  "boundary": "application",
+  "operation": "buyer_request.match",
+  "purpose": "Outage labels advisory degradation without rewriting feasibility.",
+  "implementation_status": "planned",
+  "required_from_step": "S100",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "need": {
+      "id": "need-1",
+      "revision": "n1",
+      "product": "tomatoes",
+      "quantity": {
+        "value": "50",
+        "unit": "kg"
+      },
+      "partial_fulfillment": "disallowed"
+    },
+    "snapshots": [
+      {
+        "id": "lot-1",
+        "revision": "l1",
+        "supplier": "farm-1",
+        "product": "tomatoes",
+        "unreserved_quantity": {
+          "state": "known",
+          "value": "50",
+          "unit": "kg"
+        }
+      }
+    ],
+    "other_applicable_mandatory_checks": "pass",
+    "coverage": {
+      "scope": "supplied_only",
+      "truncated": false
+    },
+    "provider_failure": "deadline",
+    "all_mandatory_checks": "pass",
+    "safe_deterministic_preference_available": true
+  },
+  "provider_script": [
+    {
+      "kind": "failure",
+      "category": "deadline",
+      "expected_calls": 1
+    }
+  ],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/assessment/eligibility",
+      "value": "eligible"
+    },
+    {
+      "operator": "equals",
+      "path": "/execution/status",
+      "value": "degraded"
+    },
+    {
+      "operator": "equals",
+      "path": "/execution/reservations",
+      "value": 0
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

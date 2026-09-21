@@ -1,0 +1,57 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "DM011_missing_zone",
+  "requirements": [
+    "HYF-DATA-007"
+  ],
+  "family": "domain",
+  "boundary": "domain",
+  "operation": "date.resolve",
+  "purpose": "A local expression without a zone cannot become an unambiguous instant.",
+  "implementation_status": "planned",
+  "required_from_step": "S025",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": "deliver tomorrow at 08:00",
+    "source_local_time": "2026-09-21T23:30:00",
+    "timezone": null,
+    "required_output": "unambiguous delivery instant"
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/normalized/state",
+      "value": "unresolved"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

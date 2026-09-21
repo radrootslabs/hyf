@@ -1,0 +1,61 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "PR008_stderr_separation",
+  "requirements": [
+    "HYF-RUN-001",
+    "HYF-RUN-002",
+    "HYF-RUN-007"
+  ],
+  "family": "protocol",
+  "boundary": "process",
+  "operation": "stdio.session",
+  "purpose": "Diagnostics cannot corrupt RPC framing.",
+  "implementation_status": "planned",
+  "required_from_step": "S102",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "recipe": "emit synthetic diagnostic during valid operation"
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/wire/stdout_non_json_diagnostics",
+      "value": 0
+    },
+    {
+      "operator": "equals",
+      "path": "/process/diagnostic_on_stderr",
+      "value": true
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

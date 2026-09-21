@@ -974,7 +974,7 @@ def test_semantic_fixture_manifest_declares_repo_local_family() raises:
         manifest["repo_local_families"]["domain"].string_value(),
         "tests/fixtures/hyf_v1_jev/domain",
     )
-    assert_equal(manifest["installation_status"].string_value(), "planned")
+    assert_equal(manifest["installation_status"].string_value(), "installed")
     assert_equal(Int(manifest["declared_case_count"].int_value()), 116)
     assert_equal(Int(manifest["declared_raw_payload_count"].int_value()), 5)
 
@@ -1167,6 +1167,35 @@ def test_outcome_composition_rejects_contradictions() raises:
                 _outcome_is_contradictory(doc),
                 "contradictory outcome not detected: " + rel.string_value(),
             )
+
+
+def test_semantic_fixture_corpus_is_installed_and_planned() raises:
+    var fixture_dir = _dir_of_current_file() / "fixtures" / "hyf_v1_jev"
+    var manifest = loads((fixture_dir / "manifest.json").read_text())
+    assert_equal(manifest["installation_status"].string_value(), "installed")
+    assert_equal(manifest["family_kind"].string_value(), "semantic_acceptance")
+
+    var cases = manifest["cases"].array_items()
+    assert_equal(len(cases), 116)
+    for entry in cases:
+        assert_true(entry["mandatory"].bool_value())
+        var case_path = fixture_dir / entry["path"].string_value()
+        assert_true(exists(case_path), "missing case: " + entry["path"].string_value())
+        var doc = loads(case_path.read_text())
+        assert_equal(doc["case_id"].string_value(), entry["case_id"].string_value())
+        assert_equal(doc["implementation_status"].string_value(), "planned")
+        assert_equal(
+            doc["required_from_step"].string_value(),
+            entry["required_from_step"].string_value(),
+        )
+        assert_true(len(doc["requirements"].array_items()) > 0)
+        assert_true(_has_key(doc, "provenance"))
+        assert_true(len(doc["then"].array_items()) > 0)
+
+    var raw_files = manifest["raw_files"].array_items()
+    assert_equal(len(raw_files), 5)
+    for raw in raw_files:
+        assert_true(exists(fixture_dir / raw.string_value()))
 
 
 def main() raises:

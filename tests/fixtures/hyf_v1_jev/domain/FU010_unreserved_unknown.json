@@ -1,0 +1,78 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "FU010_unreserved_unknown",
+  "requirements": [
+    "HYF-FARM-004"
+  ],
+  "family": "domain",
+  "boundary": "application",
+  "operation": "farm_update.interpret",
+  "purpose": "Harvested total does not prove available stock.",
+  "implementation_status": "planned",
+  "required_from_step": "S068",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": {
+      "id": "source-FU010_unreserved_unknown",
+      "revision": "r1",
+      "farm": "farm-1",
+      "text": "Harvested 80 lb of tomatoes."
+    },
+    "taxonomy": [
+      "tomatoes",
+      "carrots",
+      "basil"
+    ]
+  },
+  "provider_script": [
+    {
+      "kind": "semantic_port",
+      "expected_task": "quantity_roles",
+      "scripted_answer": {
+        "quantity_role": "harvested_total"
+      },
+      "expected_calls": 1
+    }
+  ],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/claims/0/unreserved_quantity/state",
+      "value": "unknown"
+    },
+    {
+      "operator": "equals",
+      "path": "/execution/business_writes",
+      "value": 0
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

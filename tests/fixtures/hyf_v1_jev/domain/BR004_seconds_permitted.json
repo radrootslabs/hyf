@@ -1,0 +1,67 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "BR004_seconds_permitted",
+  "requirements": [
+    "HYF-BUY-002"
+  ],
+  "family": "domain",
+  "boundary": "application",
+  "operation": "buyer_request.interpret",
+  "purpose": "Preserve the stated buyer semantics and make unresolved information visible.",
+  "implementation_status": "planned",
+  "required_from_step": "S076",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": {
+      "id": "BR004_seconds_permitted",
+      "revision": "r1",
+      "text": "Sauce tomatoes; seconds are fine."
+    }
+  },
+  "provider_script": [
+    {
+      "kind": "semantic_port",
+      "expected_task": "buyer_intent",
+      "scripted_answer": {
+        "seconds": "permitted"
+      },
+      "expected_calls": 1
+    }
+  ],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/need/grade/seconds",
+      "value": "permitted"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

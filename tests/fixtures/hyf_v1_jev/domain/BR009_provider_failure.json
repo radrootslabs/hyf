@@ -1,0 +1,71 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "BR009_provider_failure",
+  "requirements": [
+    "HYF-BUY-003",
+    "HYF-JEV-008"
+  ],
+  "family": "domain",
+  "boundary": "application",
+  "operation": "buyer_request.interpret",
+  "purpose": "Inference outage is not unavailable supply.",
+  "implementation_status": "planned",
+  "required_from_step": "S080",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": {
+      "id": "br9",
+      "revision": "r1",
+      "text": "Need tomatoes."
+    },
+    "provider_failure": "deadline"
+  },
+  "provider_script": [
+    {
+      "kind": "failure",
+      "category": "deadline",
+      "expected_calls": 1
+    }
+  ],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/review/unconfirmed",
+      "value": true
+    },
+    {
+      "operator": "equals",
+      "path": "/execution/reported_market_unavailable",
+      "value": false
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

@@ -22,9 +22,723 @@
   },
   "projection_adapter": "tests/fixtures/hyf_v1_jev/projection.json",
   "owning_repository": "radrootslabs/hyf",
-  "installation_status": "planned",
+  "installation_status": "installed",
   "installed_at_step": "S008",
   "declared_case_count": 116,
   "declared_raw_payload_count": 5,
-  "activation_policy": "Each mandatory case activates at its required_from_step; planned cases are not counted as passing behavior."
+  "activation_policy": "Each mandatory case activates at its required_from_step; planned cases are not counted as passing behavior.",
+  "case_dirs": [
+    "domain",
+    "provider",
+    "protocol",
+    "security",
+    "journeys"
+  ],
+  "raw_dir": "raw",
+  "cases": [
+    {
+      "case_id": "DM001_exact_quantity",
+      "path": "domain/DM001_exact_quantity.json",
+      "required_from_step": "S019",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM002_unknown_not_zero",
+      "path": "domain/DM002_unknown_not_zero.json",
+      "required_from_step": "S018",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM003_mass_conversion",
+      "path": "domain/DM003_mass_conversion.json",
+      "required_from_step": "S020",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM004_approximation_retained",
+      "path": "domain/DM004_approximation_retained.json",
+      "required_from_step": "S022",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM005_missing_pack_weight",
+      "path": "domain/DM005_missing_pack_weight.json",
+      "required_from_step": "S021",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM006_wrong_product_pack",
+      "path": "domain/DM006_wrong_product_pack.json",
+      "required_from_step": "S021",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM007_dimension_mismatch",
+      "path": "domain/DM007_dimension_mismatch.json",
+      "required_from_step": "S020",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM008_money_unknown",
+      "path": "domain/DM008_money_unknown.json",
+      "required_from_step": "S023",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM009_currency_mismatch",
+      "path": "domain/DM009_currency_mismatch.json",
+      "required_from_step": "S087",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM010_relative_date_replay",
+      "path": "domain/DM010_relative_date_replay.json",
+      "required_from_step": "S025",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM011_missing_zone",
+      "path": "domain/DM011_missing_zone.json",
+      "required_from_step": "S025",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM012_ambiguous_local_time",
+      "path": "domain/DM012_ambiguous_local_time.json",
+      "required_from_step": "S026",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM013_record_not_harvest",
+      "path": "domain/DM013_record_not_harvest.json",
+      "required_from_step": "S027",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM014_unicode_evidence",
+      "path": "domain/DM014_unicode_evidence.json",
+      "required_from_step": "S017",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM015_wrong_revision_evidence",
+      "path": "domain/DM015_wrong_revision_evidence.json",
+      "required_from_step": "S017",
+      "mandatory": true
+    },
+    {
+      "case_id": "DM016_numeric_overflow",
+      "path": "domain/DM016_numeric_overflow.json",
+      "required_from_step": "S019",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU001_multiple_crops",
+      "path": "domain/FU001_multiple_crops.json",
+      "required_from_step": "S067",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU002_forecast",
+      "path": "domain/FU002_forecast.json",
+      "required_from_step": "S067",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU003_negation",
+      "path": "domain/FU003_negation.json",
+      "required_from_step": "S067",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU004_quantity_association",
+      "path": "domain/FU004_quantity_association.json",
+      "required_from_step": "S068",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU005_addition",
+      "path": "domain/FU005_addition.json",
+      "required_from_step": "S069",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU006_remaining",
+      "path": "domain/FU006_remaining.json",
+      "required_from_step": "S069",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU007_total",
+      "path": "domain/FU007_total.json",
+      "required_from_step": "S069",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU008_unknown_product",
+      "path": "domain/FU008_unknown_product.json",
+      "required_from_step": "S067",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU009_optional_price",
+      "path": "domain/FU009_optional_price.json",
+      "required_from_step": "S072",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU010_unreserved_unknown",
+      "path": "domain/FU010_unreserved_unknown.json",
+      "required_from_step": "S068",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU011_ambiguous_withdrawal",
+      "path": "domain/FU011_ambiguous_withdrawal.json",
+      "required_from_step": "S070",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU012_linked_clarification",
+      "path": "journeys/FU012_linked_clarification.json",
+      "required_from_step": "S073",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU013_stale_clarification",
+      "path": "journeys/FU013_stale_clarification.json",
+      "required_from_step": "S073",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU014_provider_timeout",
+      "path": "domain/FU014_provider_timeout.json",
+      "required_from_step": "S074",
+      "mandatory": true
+    },
+    {
+      "case_id": "FU015_invalid_answer",
+      "path": "domain/FU015_invalid_answer.json",
+      "required_from_step": "S074",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR001_multiple_lines",
+      "path": "domain/BR001_multiple_lines.json",
+      "required_from_step": "S075",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR002_fulfillment_negation",
+      "path": "domain/BR002_fulfillment_negation.json",
+      "required_from_step": "S076",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR003_delivery_preference",
+      "path": "domain/BR003_delivery_preference.json",
+      "required_from_step": "S076",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR004_seconds_permitted",
+      "path": "domain/BR004_seconds_permitted.json",
+      "required_from_step": "S076",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR005_substitution_not_stated",
+      "path": "domain/BR005_substitution_not_stated.json",
+      "required_from_step": "S076",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR006_conflicting_conditions",
+      "path": "domain/BR006_conflicting_conditions.json",
+      "required_from_step": "S078",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR007_missing_quantity",
+      "path": "domain/BR007_missing_quantity.json",
+      "required_from_step": "S079",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR008_no_reparse",
+      "path": "domain/BR008_no_reparse.json",
+      "required_from_step": "S081",
+      "mandatory": true
+    },
+    {
+      "case_id": "BR009_provider_failure",
+      "path": "domain/BR009_provider_failure.json",
+      "required_from_step": "S080",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT001_shortage",
+      "path": "domain/MT001_shortage.json",
+      "required_from_step": "S089",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT002_unknown_quantity",
+      "path": "domain/MT002_unknown_quantity.json",
+      "required_from_step": "S088",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT003_exact_available",
+      "path": "domain/MT003_exact_available.json",
+      "required_from_step": "S088",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT004_wrong_product_high_score",
+      "path": "domain/MT004_wrong_product_high_score.json",
+      "required_from_step": "S083",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT005_fail_dominates_unknown",
+      "path": "domain/MT005_fail_dominates_unknown.json",
+      "required_from_step": "S035",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT006_unknown_dominates_pass",
+      "path": "domain/MT006_unknown_dominates_pass.json",
+      "required_from_step": "S035",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT007_optional_missing",
+      "path": "domain/MT007_optional_missing.json",
+      "required_from_step": "S035",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT008_delivery_mismatch",
+      "path": "domain/MT008_delivery_mismatch.json",
+      "required_from_step": "S085",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT009_unknown_area",
+      "path": "domain/MT009_unknown_area.json",
+      "required_from_step": "S085",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT010_nonoverlap",
+      "path": "domain/MT010_nonoverlap.json",
+      "required_from_step": "S086",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT011_certification_unverified",
+      "path": "domain/MT011_certification_unverified.json",
+      "required_from_step": "S084",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT012_two_compatible_lots",
+      "path": "domain/MT012_two_compatible_lots.json",
+      "required_from_step": "S091",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT013_duplicate_lot",
+      "path": "domain/MT013_duplicate_lot.json",
+      "required_from_step": "S082",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT014_conflicting_revisions",
+      "path": "domain/MT014_conflicting_revisions.json",
+      "required_from_step": "S082",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT015_shared_lot_two_lines",
+      "path": "domain/MT015_shared_lot_two_lines.json",
+      "required_from_step": "S092",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT016_partial_allowed",
+      "path": "domain/MT016_partial_allowed.json",
+      "required_from_step": "S093",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT017_multi_supplier_unsupported",
+      "path": "domain/MT017_multi_supplier_unsupported.json",
+      "required_from_step": "S094",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT018_truncated_retrieval",
+      "path": "domain/MT018_truncated_retrieval.json",
+      "required_from_step": "S094",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT019_alternative_plans",
+      "path": "domain/MT019_alternative_plans.json",
+      "required_from_step": "S094",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT020_unknown_not_midpoint",
+      "path": "domain/MT020_unknown_not_midpoint.json",
+      "required_from_step": "S095",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT021_score_normalization",
+      "path": "domain/MT021_score_normalization.json",
+      "required_from_step": "S097",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT022_stable_ties",
+      "path": "domain/MT022_stable_ties.json",
+      "required_from_step": "S098",
+      "mandatory": true
+    },
+    {
+      "case_id": "MT023_ranking_outage",
+      "path": "domain/MT023_ranking_outage.json",
+      "required_from_step": "S100",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV001_valid_all_types",
+      "path": "provider/PV001_valid_all_types.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV002_missing_answer",
+      "path": "provider/PV002_missing_answer.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV003_extra_answer",
+      "path": "provider/PV003_extra_answer.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV004_wrong_type",
+      "path": "provider/PV004_wrong_type.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV005_unknown_choice",
+      "path": "provider/PV005_unknown_choice.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV006_bad_distribution_sum",
+      "path": "provider/PV006_bad_distribution_sum.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV007_score_out_of_range",
+      "path": "provider/PV007_score_out_of_range.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV008_wrong_legend",
+      "path": "provider/PV008_wrong_legend.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV009_model_mismatch",
+      "path": "provider/PV009_model_mismatch.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV010_noul_out_of_range",
+      "path": "provider/PV010_noul_out_of_range.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV011_missing_level",
+      "path": "provider/PV011_missing_level.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV012_confidence_out_of_range",
+      "path": "provider/PV012_confidence_out_of_range.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV013_auth_no_retry",
+      "path": "provider/PV013_auth_no_retry.json",
+      "required_from_step": "S062",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV014_validation_no_retry",
+      "path": "provider/PV014_validation_no_retry.json",
+      "required_from_step": "S062",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV015_capacity_retry",
+      "path": "provider/PV015_capacity_retry.json",
+      "required_from_step": "S062",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV016_overload_retry",
+      "path": "provider/PV016_overload_retry.json",
+      "required_from_step": "S062",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV017_no_remaining_budget",
+      "path": "provider/PV017_no_remaining_budget.json",
+      "required_from_step": "S062",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV018_unexpected_call",
+      "path": "provider/PV018_unexpected_call.json",
+      "required_from_step": "S058",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV019_missing_call",
+      "path": "provider/PV019_missing_call.json",
+      "required_from_step": "S058",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV020_wrong_request_state",
+      "path": "provider/PV020_wrong_request_state.json",
+      "required_from_step": "S058",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV021_invalid_json_bytes",
+      "path": "provider/PV021_invalid_json_bytes.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PV022_nan_bytes",
+      "path": "provider/PV022_nan_bytes.json",
+      "required_from_step": "S047",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR001_persistent",
+      "path": "protocol/PR001_persistent.json",
+      "required_from_step": "S102",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR002_valid_invalid_valid",
+      "path": "protocol/PR002_valid_invalid_valid.json",
+      "required_from_step": "S103",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR003_fragmented",
+      "path": "protocol/PR003_fragmented.json",
+      "required_from_step": "S101",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR004_coalesced",
+      "path": "protocol/PR004_coalesced.json",
+      "required_from_step": "S101",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR005_escaped_newline",
+      "path": "protocol/PR005_escaped_newline.json",
+      "required_from_step": "S101",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR006_size_limit",
+      "path": "protocol/PR006_size_limit.json",
+      "required_from_step": "S103",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR007_partial_eof",
+      "path": "protocol/PR007_partial_eof.json",
+      "required_from_step": "S101",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR008_stderr_separation",
+      "path": "protocol/PR008_stderr_separation.json",
+      "required_from_step": "S102",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR009_shutdown_cleanup",
+      "path": "protocol/PR009_shutdown_cleanup.json",
+      "required_from_step": "S110",
+      "mandatory": true
+    },
+    {
+      "case_id": "PR010_one_inflight",
+      "path": "protocol/PR010_one_inflight.json",
+      "required_from_step": "S102",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC001_cross_tenant",
+      "path": "security/SC001_cross_tenant.json",
+      "required_from_step": "S114",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC002_consumer_not_auth",
+      "path": "security/SC002_consumer_not_auth.json",
+      "required_from_step": "S114",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC003_instruction_in_source",
+      "path": "security/SC003_instruction_in_source.json",
+      "required_from_step": "S115",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC004_state_minimization",
+      "path": "security/SC004_state_minimization.json",
+      "required_from_step": "S050",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC005_secret_redaction",
+      "path": "security/SC005_secret_redaction.json",
+      "required_from_step": "S116",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC006_external_plaintext",
+      "path": "security/SC006_external_plaintext.json",
+      "required_from_step": "S061",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC007_wrong_tls_host",
+      "path": "security/SC007_wrong_tls_host.json",
+      "required_from_step": "S061",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC008_untrusted_tls_ca",
+      "path": "security/SC008_untrusted_tls_ca.json",
+      "required_from_step": "S061",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC009_redirect_secret",
+      "path": "security/SC009_redirect_secret.json",
+      "required_from_step": "S061",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC010_request_endpoint_override",
+      "path": "security/SC010_request_endpoint_override.json",
+      "required_from_step": "S054",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC011_offline_secret_env",
+      "path": "security/SC011_offline_secret_env.json",
+      "required_from_step": "S122",
+      "mandatory": true
+    },
+    {
+      "case_id": "SC012_provider_disabled",
+      "path": "security/SC012_provider_disabled.json",
+      "required_from_step": "S108",
+      "mandatory": true
+    },
+    {
+      "case_id": "JR001_farm_review_handoff",
+      "path": "journeys/JR001_farm_review_handoff.json",
+      "required_from_step": "S111",
+      "mandatory": true
+    },
+    {
+      "case_id": "JR002_buyer_match_revalidate",
+      "path": "journeys/JR002_buyer_match_revalidate.json",
+      "required_from_step": "S112",
+      "mandatory": true
+    },
+    {
+      "case_id": "JR003_duplicate_acceptance",
+      "path": "journeys/JR003_duplicate_acceptance.json",
+      "required_from_step": "S113",
+      "mandatory": true
+    },
+    {
+      "case_id": "JR004_stale_acceptance",
+      "path": "journeys/JR004_stale_acceptance.json",
+      "required_from_step": "S113",
+      "mandatory": true
+    },
+    {
+      "case_id": "JR005_stock_race",
+      "path": "journeys/JR005_stock_race.json",
+      "required_from_step": "S113",
+      "mandatory": true
+    },
+    {
+      "case_id": "RT001_shared_budget",
+      "path": "protocol/RT001_shared_budget.json",
+      "required_from_step": "S055",
+      "mandatory": true
+    },
+    {
+      "case_id": "RT002_circuit_liveness",
+      "path": "protocol/RT002_circuit_liveness.json",
+      "required_from_step": "S057",
+      "mandatory": true
+    },
+    {
+      "case_id": "RT003_resource_soak",
+      "path": "protocol/RT003_resource_soak.json",
+      "required_from_step": "S125",
+      "mandatory": true
+    },
+    {
+      "case_id": "RT004_no_cache_or_isolated_cache",
+      "path": "security/RT004_no_cache_or_isolated_cache.json",
+      "required_from_step": "S117",
+      "mandatory": true
+    }
+  ],
+  "raw_files": [
+    "raw/provider_invalid_json.txt",
+    "raw/provider_nan.txt",
+    "raw/provider_invalid_http.txt",
+    "raw/stdio_invalid_frame.txt",
+    "raw/stdio_invalid_utf8.bin"
+  ],
+  "fixture_schema": "schemas/hyf_v1_jev/fixture.schema.json"
 }

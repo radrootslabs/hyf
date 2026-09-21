@@ -1,0 +1,58 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "SC010_request_endpoint_override",
+  "requirements": [
+    "HYF-SEC-005",
+    "HYF-SEC-002"
+  ],
+  "family": "security",
+  "boundary": "security",
+  "operation": "security.boundary",
+  "purpose": "Untrusted input cannot choose infrastructure.",
+  "implementation_status": "planned",
+  "required_from_step": "S054",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "untrusted_input": {
+      "provider_endpoint": "https://example.invalid"
+    },
+    "trusted_endpoint": "configured TypeSafe endpoint"
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/security/endpoint_changed_by_request",
+      "value": false
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

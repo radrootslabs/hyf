@@ -1,0 +1,107 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "PV015_capacity_retry",
+  "requirements": [
+    "HYF-RUN-005",
+    "HYF-JEV-008"
+  ],
+  "family": "provider",
+  "boundary": "transport",
+  "operation": "provider.execute",
+  "purpose": "Retry only the declared transient category within the supplied test budget.",
+  "implementation_status": "planned",
+  "required_from_step": "S062",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "http_status_sequence": [
+      429,
+      200
+    ],
+    "test_retry_policy": {
+      "max_attempts": 2,
+      "remaining_budget_ms": 1000,
+      "backoff_ms": 10
+    },
+    "successful_response": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "supply_status": {
+          "type": "choice",
+          "choice": "offered",
+          "probabilities": {
+            "offered": 1.0,
+            "forecast": 0.0,
+            "unavailable": 0.0,
+            "unclear": 0.0
+          },
+          "confidence": 1.0
+        },
+        "seconds_explicitly_permitted": {
+          "type": "noul",
+          "noul": 1.0
+        },
+        "culinary_fit": {
+          "type": "score",
+          "score": 2.0,
+          "legend": {
+            "0": "Unsuitable for the stated culinary use.",
+            "1": "Usable for the stated culinary use with a clear limitation.",
+            "2": "Directly suitable for the stated culinary use."
+          },
+          "probabilities": {
+            "0": 0.0,
+            "1": 0.0,
+            "2": 1.0
+          },
+          "confidence": 1.0
+        }
+      },
+      "usage": {
+        "input_tokens": 123,
+        "output_tokens": 45
+      }
+    }
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/execution/attempts",
+      "value": 2
+    },
+    {
+      "operator": "equals",
+      "path": "/execution/first_error_category",
+      "value": "capacity"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

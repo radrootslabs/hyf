@@ -1,0 +1,63 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "DM014_unicode_evidence",
+  "requirements": [
+    "HYF-DATA-002"
+  ],
+  "family": "domain",
+  "boundary": "domain",
+  "operation": "evidence.validate",
+  "purpose": "Unicode offsets must select the intended original bytes/text.",
+  "implementation_status": "planned",
+  "required_from_step": "S017",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": "Tomates 🍅: 12 kg; basilic épuisé.",
+    "selected_text": "12 kg",
+    "source_revision": "r1",
+    "reference_revision": "r1",
+    "span_recipe": "locate exact UTF-8 byte range of selected_text if byte binding chosen"
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/validation/evidence_valid",
+      "value": true
+    },
+    {
+      "operator": "equals",
+      "path": "/evidence/selected_text",
+      "value": "12 kg"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

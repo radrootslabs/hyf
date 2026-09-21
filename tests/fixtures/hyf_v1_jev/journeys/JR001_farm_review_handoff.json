@@ -1,0 +1,78 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "JR001_farm_review_handoff",
+  "requirements": [
+    "HYF-FARM-005",
+    "HYF-FARM-006",
+    "HYF-FARM-009"
+  ],
+  "family": "journeys",
+  "boundary": "journey",
+  "operation": "farm_update.interpret",
+  "purpose": "Complete farm journey keeps confirmation and mutation outside Hyf.",
+  "implementation_status": "planned",
+  "required_from_step": "S111",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": "About 80 lb tomatoes. Basil sold out.",
+    "clarification": "60 lb tomatoes unreserved; withdraw basil listing b1.",
+    "authorized_targets": [
+      "b1"
+    ],
+    "host_steps": [
+      "capture",
+      "interpret",
+      "clarify",
+      "review",
+      "confirm",
+      "apply expected-version command"
+    ]
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/execution/hyf_business_writes",
+      "value": 0
+    },
+    {
+      "operator": "equals",
+      "path": "/authority_simulation/accepted_changes_require_confirmation",
+      "value": true
+    },
+    {
+      "operator": "equals",
+      "path": "/evidence/original_preserved",
+      "value": true
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

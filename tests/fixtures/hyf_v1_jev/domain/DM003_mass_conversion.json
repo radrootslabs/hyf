@@ -1,0 +1,69 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "DM003_mass_conversion",
+  "requirements": [
+    "HYF-DATA-004",
+    "HYF-DATA-003"
+  ],
+  "family": "domain",
+  "boundary": "domain",
+  "operation": "quantity.normalize",
+  "purpose": "Use exact fixture conversion and declared decimal scale.",
+  "implementation_status": "planned",
+  "required_from_step": "S020",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "quantity": {
+      "value": "80",
+      "unit": "lb",
+      "qualifier": "exact"
+    },
+    "test_conversion": {
+      "from": "lb",
+      "to": "kg",
+      "factor": "0.45359237"
+    }
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/normalized/value",
+      "value": "36.28738960"
+    },
+    {
+      "operator": "equals",
+      "path": "/normalized/unit",
+      "value": "kg"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "Explicit synthetic conversion rule supplies the factor; production rule authority is separate.",
+    "Projection uses eight fractional digits for this exact fixture; actual wire formatting binds separately."
+  ]
+}

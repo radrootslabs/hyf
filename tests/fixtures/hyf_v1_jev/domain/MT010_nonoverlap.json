@@ -1,0 +1,90 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "MT010_nonoverlap",
+  "requirements": [
+    "HYF-MATCH-001",
+    "HYF-DATA-007"
+  ],
+  "family": "domain",
+  "boundary": "application",
+  "operation": "buyer_request.match",
+  "purpose": "Weekend similarity does not satisfy a specific Friday window.",
+  "implementation_status": "planned",
+  "required_from_step": "S086",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "need": {
+      "id": "need-1",
+      "revision": "n1",
+      "product": "tomatoes",
+      "quantity": {
+        "value": "50",
+        "unit": "kg"
+      },
+      "partial_fulfillment": "disallowed"
+    },
+    "snapshots": [
+      {
+        "id": "lot-1",
+        "revision": "l1",
+        "supplier": "farm-1",
+        "product": "tomatoes",
+        "unreserved_quantity": {
+          "state": "known",
+          "value": "50",
+          "unit": "kg"
+        }
+      }
+    ],
+    "other_applicable_mandatory_checks": "pass",
+    "coverage": {
+      "scope": "supplied_only",
+      "truncated": false
+    },
+    "requested_window": [
+      "2026-09-25T08:00:00-07:00",
+      "2026-09-25T10:00:00-07:00"
+    ],
+    "offered_window": [
+      "2026-09-26T08:00:00-07:00",
+      "2026-09-26T10:00:00-07:00"
+    ]
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/assessment/window_check",
+      "value": "fail"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

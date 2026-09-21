@@ -1,0 +1,69 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "JR002_buyer_match_revalidate",
+  "requirements": [
+    "HYF-BUY-004",
+    "HYF-MATCH-011",
+    "HYF-REL-004"
+  ],
+  "family": "journeys",
+  "boundary": "journey",
+  "operation": "buyer_request.match",
+  "purpose": "Typed intent survives interpretation through an explicitly non-reserving match.",
+  "implementation_status": "planned",
+  "required_from_step": "S112",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "buyer_text": "Need 25 kg tomatoes delivered Friday; seconds fine.",
+    "host_steps": [
+      "interpret",
+      "review typed need",
+      "supply snapshots",
+      "match",
+      "reread inventory",
+      "reserve through authority"
+    ]
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/execution/hyf_reservations",
+      "value": 0
+    },
+    {
+      "operator": "equals",
+      "path": "/authority_simulation/revalidation_required",
+      "value": true
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

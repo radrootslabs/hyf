@@ -1,0 +1,2 @@
+# Raw malformed byte payloads are intentional fixtures, not text.
+tests/fixtures/hyf_v1_jev/raw/** binary

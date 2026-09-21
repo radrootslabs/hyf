@@ -1,0 +1,90 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "PV020_wrong_request_state",
+  "requirements": [
+    "HYF-TEST-006",
+    "HYF-JEV-009"
+  ],
+  "family": "provider",
+  "boundary": "harness",
+  "operation": "harness.script",
+  "purpose": "Returning a canned answer without validating outbound state is forbidden.",
+  "implementation_status": "planned",
+  "required_from_step": "S058",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "expected_request": {
+      "model": "jev-1.13.0",
+      "state": {
+        "farm_update": "Roma tomatoes available now; basil sold out.",
+        "focus_product": "Roma tomatoes",
+        "buyer_request": "Tomatoes for sauce; seconds are permitted."
+      },
+      "questions": {
+        "supply_status": {
+          "type": "choice",
+          "instructions": "For focus_product only, what supply status is explicitly reported in farm_update?",
+          "criteria": {
+            "offered": "Produce is reported available to offer.",
+            "forecast": "Only possible future supply is reported.",
+            "unavailable": "Produce is reported sold out or withdrawn.",
+            "unclear": "The text does not establish its supply status."
+          }
+        },
+        "seconds_explicitly_permitted": {
+          "type": "noul",
+          "instructions": "Does buyer_request explicitly permit cosmetic seconds?"
+        },
+        "culinary_fit": {
+          "type": "score",
+          "instructions": "For this already evidence-sufficient test case, evaluate only the culinary suitability of focus_product for buyer_request; exclude quantity, dates, price, delivery and transactions.",
+          "criteria": [
+            "Unsuitable for the stated culinary use.",
+            "Usable for the stated culinary use with a clear limitation.",
+            "Directly suitable for the stated culinary use."
+          ]
+        }
+      }
+    },
+    "actual_request_patch": {
+      "state.focus_product": "carrots"
+    }
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/validation/script_matched",
+      "value": false
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

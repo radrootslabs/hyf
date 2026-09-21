@@ -1,0 +1,111 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "MT022_stable_ties",
+  "requirements": [
+    "HYF-MATCH-009"
+  ],
+  "family": "domain",
+  "boundary": "domain",
+  "operation": "ranking.compose",
+  "purpose": "Stable test tie policy must not follow incidental input ordering.",
+  "implementation_status": "planned",
+  "required_from_step": "S098",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "need": {
+      "id": "need-1",
+      "revision": "n1",
+      "product": "tomatoes",
+      "quantity": {
+        "value": "50",
+        "unit": "kg"
+      },
+      "partial_fulfillment": "disallowed"
+    },
+    "snapshots": [
+      {
+        "id": "lot-1",
+        "revision": "l1",
+        "supplier": "farm-1",
+        "product": "tomatoes",
+        "unreserved_quantity": {
+          "state": "known",
+          "value": "50",
+          "unit": "kg"
+        }
+      }
+    ],
+    "other_applicable_mandatory_checks": "pass",
+    "coverage": {
+      "scope": "supplied_only",
+      "truncated": false
+    },
+    "fixed_candidate_scores": [
+      {
+        "id": "b",
+        "score": "1"
+      },
+      {
+        "id": "a",
+        "score": "1"
+      }
+    ],
+    "test_tie_policy": "lexicographic id ascending",
+    "input_permutations": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "b",
+        "a"
+      ]
+    ]
+  },
+  "provider_script": [],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/ranking/orders",
+      "value": [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "a",
+          "b"
+        ]
+      ]
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

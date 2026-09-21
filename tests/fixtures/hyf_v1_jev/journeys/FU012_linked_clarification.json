@@ -1,0 +1,85 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "FU012_linked_clarification",
+  "requirements": [
+    "HYF-FARM-006",
+    "HYF-DATA-010"
+  ],
+  "family": "journeys",
+  "boundary": "application",
+  "operation": "farm_update.interpret",
+  "purpose": "Explicit follow-up refines a field without overwriting original source.",
+  "implementation_status": "planned",
+  "required_from_step": "S073",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "original": {
+      "id": "m1",
+      "revision": "r1",
+      "text": "About 80 lb tomatoes."
+    },
+    "clarification": {
+      "id": "m2",
+      "revision": "r1",
+      "answers_field": "m1:r1/unreserved_quantity",
+      "text": "60 lb remain unreserved."
+    }
+  },
+  "provider_script": [
+    {
+      "kind": "semantic_port",
+      "expected_task": "clarification_value",
+      "scripted_answer": {
+        "value": "60",
+        "unit": "lb"
+      },
+      "expected_calls": 1
+    }
+  ],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/evidence/original_text",
+      "value": "About 80 lb tomatoes."
+    },
+    {
+      "operator": "equals",
+      "path": "/claims/0/unreserved_quantity/value",
+      "value": "60"
+    },
+    {
+      "operator": "equals",
+      "path": "/execution/business_writes",
+      "value": 0
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "fixture_format_version": 1,
+  "case_id": "FU004_quantity_association",
+  "requirements": [
+    "HYF-FARM-001",
+    "HYF-DATA-002"
+  ],
+  "family": "domain",
+  "boundary": "application",
+  "operation": "farm_update.interpret",
+  "purpose": "Do not swap product-specific amounts.",
+  "implementation_status": "planned",
+  "required_from_step": "S068",
+  "mandatory": true,
+  "context": {
+    "source_time": "2026-09-21T09:00:00-07:00",
+    "evaluated_at": "2026-09-21T10:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "tenant": "test-tenant-1",
+    "seed": 101,
+    "versions": {
+      "schema": "test-projection-1",
+      "taxonomy": "test-only-produce-1",
+      "normalization": "test-only-norm-1",
+      "review_policy": "test-only-review-1",
+      "ranking_policy": "test-only-ranking-1",
+      "question_bundle": "test-only-questions-1",
+      "model": "jev-1.13.0"
+    }
+  },
+  "given": {
+    "source": {
+      "id": "source-FU004_quantity_association",
+      "revision": "r1",
+      "farm": "farm-1",
+      "text": "Tomatoes 12 kg, carrots 8 kg."
+    },
+    "taxonomy": [
+      "tomatoes",
+      "carrots",
+      "basil"
+    ]
+  },
+  "provider_script": [
+    {
+      "kind": "semantic_port",
+      "expected_task": "quantity_roles",
+      "scripted_answer": {
+        "tomatoes": {
+          "value": "12",
+          "unit": "kg"
+        },
+        "carrots": {
+          "value": "8",
+          "unit": "kg"
+        }
+      },
+      "expected_calls": 1
+    }
+  ],
+  "then": [
+    {
+      "operator": "equals",
+      "path": "/claims/by_product/tomatoes/quantity/value",
+      "value": "12"
+    },
+    {
+      "operator": "equals",
+      "path": "/claims/by_product/carrots/quantity/value",
+      "value": "8"
+    }
+  ],
+  "prohibited": [
+    "No authoritative business mutation or reservation is performed by Hyf."
+  ],
+  "provenance": {
+    "kind": "synthetic",
+    "author": "hyf_v1_jev handoff",
+    "review_status": "implementation/domain review required; not a live-model label"
+  },
+  "assumptions": [
+    "This is a semantic test projection, not an already implemented public wire payload.",
+    "Test-only rules and scripted model outputs do not define production thresholds or certify model quality."
+  ]
+}

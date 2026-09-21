@@ -204,3 +204,20 @@ def test_data_minimized_state_projection() raises:
         huge += "xxxxxxxxxx"
     with assert_raises():
         _ = minimal_state(huge, "", "")
+
+
+from hyf_provider.jev_retry import retry_delay_ms, retry_policy, should_retry
+
+
+def test_retry_classification_and_bounded_scheduling() raises:
+    var policy = retry_policy(3, 100, 500, 1000)
+    assert_equal(retry_delay_ms(policy, 0), 100)
+    assert_equal(retry_delay_ms(policy, 1), 200)
+    assert_equal(retry_delay_ms(policy, 2), 400)
+    assert_equal(retry_delay_ms(policy, 5), 500)
+    assert_true(should_retry(policy, 0, 0, True))
+    assert_true(not should_retry(policy, 0, 0, False))
+    assert_true(not should_retry(policy, 3, 0, True))
+    assert_true(not should_retry(policy, 0, 950, True))
+    with assert_raises():
+        _ = retry_policy(1, 0, 10, 100)

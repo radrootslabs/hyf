@@ -255,3 +255,26 @@ def test_time_types_distinguish_source_and_evaluation() raises:
         _ = date_only(2026, 13, 1)
     with assert_raises():
         _ = timestamp(1, "")
+
+
+from hyf_core.normalization.dates import (
+    resolve_relative_expression,
+    resolve_weekday,
+    weekday_index,
+)
+
+
+def test_source_anchored_relative_date_replay() raises:
+    var monday = date_only(2026, 9, 21)
+    assert_equal(weekday_index(monday), 0)
+    var friday = resolve_relative_expression("Friday", monday)
+    assert_equal(friday.resolution, "resolved")
+    assert_equal(friday.date.year, 2026)
+    assert_equal(friday.date.month, 9)
+    assert_equal(friday.date.day, 25)
+    var same = resolve_weekday(monday, "Monday", "on_or_after")
+    assert_equal(same.date.day, 21)
+    var next = resolve_weekday(monday, "Monday", "next")
+    assert_equal(next.date.day, 28)
+    # Replay at a later evaluation time uses the same source reference.
+    assert_equal(resolve_relative_expression("Friday", monday).date.day, 25)

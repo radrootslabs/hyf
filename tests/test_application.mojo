@@ -262,3 +262,24 @@ def test_buyer_quantity_and_price_normalization() raises:
     assert_true(not price_is_known(price))
     assert_true(not unknown_price_is_free())
     assert_true(not unsupported_conversion_is_zero())
+
+
+from hyf_application.buyer_contradictions import (
+    contradictions_are_visible,
+    detect_contradictions,
+)
+from hyf_core.domain.demand import Condition, condition
+
+
+def test_buyer_contradiction_detection() raises:
+    var conditions = List[Condition]()
+    conditions.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
+    conditions.append(condition("fulfillment", "excluded", Optional[String]("delivery")))
+    var contradictions = detect_contradictions(conditions)
+    assert_equal(len(contradictions), 1)
+    assert_true(contradictions_are_visible())
+
+    var clean = List[Condition]()
+    clean.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
+    clean.append(condition("fulfillment", "excluded", Optional[String]("pickup")))
+    assert_equal(len(detect_contradictions(clean)), 0)

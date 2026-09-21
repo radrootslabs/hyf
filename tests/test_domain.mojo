@@ -307,3 +307,19 @@ def test_local_time_ambiguity_and_window_boundaries() raises:
     assert_true(window_contains(20717, 20721, "exclusive", 20720))
     with assert_raises():
         _ = window_contains(1, 2, "half-open", 1)
+
+
+from hyf_core.domain.freshness import (
+    freshness,
+    record_recency_implies_harvest_age,
+)
+
+
+def test_freshness_separates_record_harvest_and_verification() raises:
+    var value = freshness(5, 240, 60)
+    assert_equal(value.record_age_minutes, 5)
+    assert_equal(value.harvest_age_minutes, 240)
+    assert_equal(value.verification_age_minutes, 60)
+    assert_true(not record_recency_implies_harvest_age())
+    with assert_raises():
+        _ = freshness(-1, 0, 0)

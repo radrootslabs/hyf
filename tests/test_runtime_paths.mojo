@@ -230,6 +230,9 @@ from hyf_runtime.config import (
 
 
 def _typesafe_config(enabled: Bool, base_url: String) -> HyfLoadedRuntimeConfig:
+    var runtime = HyfExecutionRuntimeConfig()
+    runtime.default_execution_mode = "deterministic"
+    runtime.allow_assisted = True
     return HyfLoadedRuntimeConfig(
         artifact_present=True,
         loaded=True,
@@ -238,9 +241,7 @@ def _typesafe_config(enabled: Bool, base_url: String) -> HyfLoadedRuntimeConfig:
         load_error="",
         effective=HyfRuntimeConfig(
             service=HyfServiceRuntimeConfig(transport="stdio"),
-            runtime=HyfExecutionRuntimeConfig(
-                default_execution_mode="deterministic", allow_assisted=True
-            ),
+            runtime=runtime.copy(),
             assisted=HyfAssistedRuntimeConfig(
                 provider="typesafe",
                 max_local=HyfMaxLocalProviderRuntimeConfig(),
@@ -262,3 +263,19 @@ def test_typesafe_profile_is_configured_and_pins_https_model() raises:
     assert_equal(config.effective.assisted.typesafe.model, "jev-1.13.0")
     var disabled = _typesafe_config(False, "https://api.typesafe.ai")
     assert_true(not assisted_runtime_configured(disabled))
+
+
+from hyf_runtime.config import default_loaded_runtime_config, operation_enabled, provider_disabled
+
+
+def test_operation_enablement_and_kill_switch() raises:
+    var config = default_loaded_runtime_config()
+    assert_true(not operation_enabled(config, "farm_update.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.match"))
+    assert_true(not provider_disabled(config))
+    config.effective.runtime.enable_buyer_request_match = True
+    assert_true(operation_enabled(config, "buyer_request.match"))
+    config.effective.runtime.disable_provider = True
+    assert_true(provider_disabled(config))
+    assert_true(not operation_enabled(config, "buyer_request.match"))

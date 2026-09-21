@@ -16,10 +16,18 @@ struct HyfServiceRuntimeConfig(Defaultable, Copyable, Movable):
 struct HyfExecutionRuntimeConfig(Defaultable, Copyable, Movable):
     var default_execution_mode: String
     var allow_assisted: Bool
+    var enable_farm_update_interpret: Bool
+    var enable_buyer_request_interpret: Bool
+    var enable_buyer_request_match: Bool
+    var disable_provider: Bool
 
     def __init__(out self):
         self.default_execution_mode = "deterministic"
         self.allow_assisted = False
+        self.enable_farm_update_interpret = False
+        self.enable_buyer_request_interpret = False
+        self.enable_buyer_request_match = False
+        self.disable_provider = False
 
 
 @fieldwise_init
@@ -113,6 +121,22 @@ def assisted_runtime_configured(config: HyfLoadedRuntimeConfig) -> Bool:
     if config.effective.assisted.provider == "typesafe":
         return config.effective.assisted.typesafe.enabled
     return False
+
+
+def operation_enabled(config: HyfLoadedRuntimeConfig, operation: String) -> Bool:
+    if config.effective.runtime.disable_provider:
+        return False
+    if operation == "farm_update.interpret":
+        return config.effective.runtime.enable_farm_update_interpret
+    if operation == "buyer_request.interpret":
+        return config.effective.runtime.enable_buyer_request_interpret
+    if operation == "buyer_request.match":
+        return config.effective.runtime.enable_buyer_request_match
+    return False
+
+
+def provider_disabled(config: HyfLoadedRuntimeConfig) -> Bool:
+    return config.effective.runtime.disable_provider
 
 
 def typesafe_provider_configured(config: HyfLoadedRuntimeConfig) -> Bool:

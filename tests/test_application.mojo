@@ -283,3 +283,33 @@ def test_buyer_contradiction_detection() raises:
     clean.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
     clean.append(condition("fulfillment", "excluded", Optional[String]("pickup")))
     assert_equal(len(detect_contradictions(clean)), 0)
+
+
+from hyf_application.buyer_needs import (
+    BuyerNeedOutput,
+    assemble_buyer_need,
+    buyer_need_creates_order,
+    needs_reparse_rewritten_text,
+)
+from hyf_core.domain.demand import DemandLine, demand_line
+from hyf_core.domain.execution import execution_meta
+from hyf_core.domain.product import resolved_product
+from hyf_core.domain.review import review_clear
+
+
+def test_assemble_reviewable_typed_buyer_need() raises:
+    var tomatoes = resolved_product("tomatoes", "tomato")
+    var conditions = List[Condition]()
+    conditions.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
+    var lines = List[DemandLine]()
+    lines.append(demand_line("l1", tomatoes, "known", 25, 0, conditions))
+    var output = assemble_buyer_need(
+        lines, review_clear(), execution_meta("complete", 0, None, None, None)
+    )
+    assert_equal(len(output.demand_lines), 1)
+    assert_true(not needs_reparse_rewritten_text())
+    assert_true(not buyer_need_creates_order())
+    with assert_raises():
+        _ = assemble_buyer_need(
+            List[DemandLine](), review_clear(), execution_meta("complete", 0, None, None, None)
+        )

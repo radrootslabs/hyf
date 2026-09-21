@@ -90,3 +90,41 @@ def resolve_relative_expression(
             ambiguity="none",
         )
     return resolve_weekday(reference, lowered, "next")
+
+
+from std.collections import List
+
+
+@fieldwise_init
+struct LocalTimeResolution(Copyable, Movable):
+    var resolution: String
+    var ambiguity: String
+    var offset_minutes: Int
+
+
+def resolve_local_time(candidate_offsets: List[Int]) raises -> LocalTimeResolution:
+    if len(candidate_offsets) == 0:
+        return LocalTimeResolution(
+            resolution="unresolved", ambiguity="missing_zone", offset_minutes=0
+        )
+    if len(candidate_offsets) > 1:
+        return LocalTimeResolution(
+            resolution="unresolved",
+            ambiguity="ambiguous_local",
+            offset_minutes=0,
+        )
+    return LocalTimeResolution(
+        resolution="resolved",
+        ambiguity="none",
+        offset_minutes=candidate_offsets[0],
+    )
+
+
+def window_contains(
+    start_day: Int, end_day: Int, boundary: String, point_day: Int
+) raises -> Bool:
+    if boundary == "inclusive":
+        return point_day >= start_day and point_day <= end_day
+    if boundary == "exclusive":
+        return point_day >= start_day and point_day < end_day
+    raise Error("window boundary must be 'inclusive' or 'exclusive'")

@@ -278,3 +278,32 @@ def test_source_anchored_relative_date_replay() raises:
     assert_equal(next.date.day, 28)
     # Replay at a later evaluation time uses the same source reference.
     assert_equal(resolve_relative_expression("Friday", monday).date.day, 25)
+
+
+from hyf_core.normalization.dates import (
+    LocalTimeResolution,
+    resolve_local_time,
+    window_contains,
+)
+
+
+def test_local_time_ambiguity_and_window_boundaries() raises:
+    var offsets = List[Int]()
+    offsets.append(-420)
+    offsets.append(-480)
+    var ambiguous = resolve_local_time(offsets)
+    assert_equal(ambiguous.resolution, "unresolved")
+    assert_equal(ambiguous.ambiguity, "ambiguous_local")
+
+    var empty = List[Int]()
+    assert_equal(resolve_local_time(empty).ambiguity, "missing_zone")
+
+    var single = List[Int]()
+    single.append(-420)
+    assert_equal(resolve_local_time(single).resolution, "resolved")
+
+    assert_true(window_contains(20717, 20721, "exclusive", 20721) == False)
+    assert_true(window_contains(20717, 20721, "inclusive", 20721))
+    assert_true(window_contains(20717, 20721, "exclusive", 20720))
+    with assert_raises():
+        _ = window_contains(1, 2, "half-open", 1)

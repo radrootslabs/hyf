@@ -207,3 +207,17 @@ def test_farm_inference_failure_never_confirms_stock() raises:
     assert_true(not inference_failure_confirms_stock())
     with assert_raises():
         _ = farm_inference_failure("")
+
+
+from hyf_application.buyer_lines import DemandLineDraft, discover_demand_lines
+
+
+def test_buyer_discovers_multiple_demand_lines() raises:
+    var phrases = List[String]()
+    phrases.append("tomatoes")
+    phrases.append("basil")
+    var lines = discover_demand_lines(phrases)
+    assert_equal(len(lines), 2)
+    assert_equal(lines[0].product_phrase, "tomatoes")
+    assert_equal(lines[1].product_phrase, "basil")
+    assert_equal(lines[0].line_id, "line-1")

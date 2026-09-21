@@ -348,3 +348,22 @@ def test_tls_and_redirect_policy() raises:
                 "http://127.0.0.1:" + String(port) + "/v1/systemone", "{}"
             )
     stub.wait()
+
+
+from hyf_provider.jev_client import failure_kind_for_status, retry_decision
+
+
+def test_bounded_retry_and_budget_behavior() raises:
+    assert_equal(failure_kind_for_status(401), "authentication")
+    assert_equal(failure_kind_for_status(429), "rate_limit")
+    assert_equal(failure_kind_for_status(500), "internal_server")
+    assert_equal(failure_kind_for_status(529), "overloaded")
+    var policy = retry_policy(2, 50, 200, 400)
+    assert_true(retry_decision(policy, 0, 0, 429))
+    assert_true(retry_decision(policy, 0, 0, 500))
+    assert_true(not retry_decision(policy, 0, 0, 401))
+    assert_true(not retry_decision(policy, 0, 0, 422))
+    assert_true(not retry_decision(policy, 2, 0, 429))
+    assert_true(not retry_decision(policy, 0, 390, 429))
+    with assert_raises():
+        _ = retry_decision(policy, 0, 0, 200)

@@ -1,6 +1,8 @@
 from flare.http import HttpClient
 from flare.tls import TlsConfig, TlsVerify
 from json import Value, dumps
+from hyf_provider.jev_failures import map_jev_failure
+from hyf_provider.jev_retry import RetryPolicy, should_retry
 
 
 @fieldwise_init
@@ -84,3 +86,31 @@ def assert_tls_verification_required(config: TlsConfig) raises:
 
 def redirects_forward_credentials() -> Bool:
     return False
+
+
+def failure_kind_for_status(status: Int) -> String:
+    if status == 401:
+        return "authentication"
+    if status == 400 or status == 422 or status == 404:
+        return "validation"
+    if status == 408:
+        return "request_timeout"
+    if status == 429:
+        return "rate_limit"
+    if status == 529:
+        return "overloaded"
+    if status == 500 or status == 502 or status == 503 or status == 504:
+        return "internal_server"
+    return "unexpected_status"
+
+
+def retry_decision(
+    policy: RetryPolicy, attempt: Int, elapsed_ms: Int, status: Int
+) raises -> Bool:
+    if status >= 200 and status < 300:
+        raise Error("retry_decision requires a failure status")
+    var kind = failure_kind_for_status(status)
+    var failure = map_jev_failure(
+        kind if kind != "unexpected_status" else "transport"
+    )
+    return should_retry(policy, attempt, elapsed_ms, failure.retryable)

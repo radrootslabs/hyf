@@ -108,3 +108,13 @@ def check_window(
 
 def weekend_similarity_satisfies_specific_window() -> Bool:
     return False
+
+
+def check_price(ceiling: Price, offered: Price) raises -> ConstraintAssessment:
+    if not price_is_known(ceiling):
+        return constraint_assessment("price", "pass", True, "price_optional")
+    if not price_is_known(offered):
+        return constraint_assessment("price", "unknown", True, "price_unknown")
+    if price_compare(offered, ceiling) <= 0:
+        return constraint_assessment("price", "pass", True, "price_within_ceiling")
+    return constraint_assessment("price", "fail", True, "price_above_ceiling")

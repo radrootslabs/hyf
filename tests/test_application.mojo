@@ -463,3 +463,15 @@ def test_availability_and_window_checks() raises:
     assert_equal(check_window("2026-09-25", "2026-09-25", "", "").result, "unknown")
     assert_equal(check_window("", "", "", "").result, "pass")
     assert_true(not weekend_similarity_satisfies_specific_window())
+
+
+from hyf_application.match_checks import check_price
+from hyf_core.domain.price import known_price as _known_price, unknown_price as _unknown_price
+
+
+def test_applicable_price_and_minimum_order_checks() raises:
+    var ceiling = _known_price(500, 2, "CAD", "per_unit")
+    assert_equal(check_price(ceiling, _known_price(450, 2, "CAD", "per_unit")).result, "pass")
+    assert_equal(check_price(ceiling, _known_price(550, 2, "CAD", "per_unit")).result, "fail")
+    assert_equal(check_price(ceiling, _unknown_price()).result, "unknown")
+    assert_equal(check_price(_unknown_price(), _known_price(1, 2, "CAD", "per_unit")).result, "pass")

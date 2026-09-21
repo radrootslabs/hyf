@@ -73,3 +73,29 @@ def test_evidence_rejects_out_of_range_and_revision_mismatch() raises:
     var field = record_field_evidence("s1", "r1", "lot-1", "unreserved_quantity")
     assert_equal(field.kind, "record_field")
     assert_equal(field.record_id.value(), "lot-1")
+
+
+from hyf_core.domain.field import (
+    DecodedField,
+    field_is_known,
+    field_known_or,
+    known_approximate_field,
+    known_field,
+    unresolved_field,
+    validate_field_consistency,
+)
+
+
+def test_field_known_zero_distinct_from_unknown_and_false() raises:
+    var zero = known_field("0", "span")
+    assert_true(field_is_known(zero))
+    assert_equal(field_known_or(zero, "?"), "0")
+    var false_value = known_field("false", "model")
+    assert_true(field_is_known(false_value))
+    var unknown = unresolved_field("span")
+    assert_true(not field_is_known(unknown))
+    assert_equal(field_known_or(unknown, "?"), "?")
+    validate_field_consistency(zero)
+    validate_field_consistency(unknown)
+    var approximate = known_approximate_field("80", "span")
+    assert_equal(approximate.qualifier, "approximate")

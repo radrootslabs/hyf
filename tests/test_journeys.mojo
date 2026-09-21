@@ -60,3 +60,17 @@ def test_buyer_interpretation_match_journey_is_not_a_reservation() raises:
     assert_equal(matched["limitations"]["scope"].string_value(), "supplied_only")
     assert_equal(matched["limitations"]["supported_mode"].string_value(), "single_supplier_compatible_lots")
     assert_true(matched["limitations"]["truncated"].bool_value() == False)
+
+
+def test_duplicate_and_stale_authority_responses() raises:
+    var simulation = new_authority_simulation()
+    apply_expected_version(simulation, "s2", "r2", "r2")
+    assert_equal(simulation.accepted_changes, 1)
+    with assert_raises():
+        apply_expected_version(simulation, "s2", "r2", "r2")
+    assert_equal(simulation.duplicate_rejections, 1)
+    with assert_raises():
+        apply_expected_version(simulation, "s3", "r1", "r2")
+    assert_equal(simulation.stale_rejections, 1)
+    # A match is not a lock on stock: the authority still revalidates.
+    assert_true(simulation.requires_confirmation)

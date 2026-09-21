@@ -626,3 +626,19 @@ def test_semantic_suitability_gated_on_evidence() raises:
     assert_equal(gated_semantic_suitability(3, 0, 1).result, "unknown")
     assert_equal(gated_semantic_suitability(3, 0, 1).reason, "evidence_insufficient")
     assert_true(not unknown_evidence_is_midpoint_score())
+
+
+from hyf_application.match_semantic import (
+    culinary_score_affects_feasibility,
+    culinary_use_score,
+)
+from hyf_assist.evaluator import typed_score
+
+
+def test_culinary_use_semantic_scoring_gated() raises:
+    var answer = typed_score("culinary_fit", 2, 3, 1.0)
+    assert_equal(culinary_use_score(answer, 3, 1, 1), 1.0)
+    assert_equal(culinary_use_score(typed_score("culinary_fit", 1, 3, 1.0), 3, 1, 1), 0.5)
+    with assert_raises():
+        _ = culinary_use_score(answer, 3, 0, 1)
+    assert_true(not culinary_score_affects_feasibility())

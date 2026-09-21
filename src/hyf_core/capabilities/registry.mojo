@@ -192,3 +192,39 @@ def execute_registered_business_capability(
         )
 
     return failed_capability(capability_not_implemented_error(capability_id))
+
+
+@fieldwise_init
+struct CapabilityExposure(Copyable, Movable):
+    var capability_id: String
+    var implementation_supported: Bool
+    var provider_configured: Bool
+    var assistance_permitted: Bool
+    var provider_ready: Bool
+    var exposed: Bool
+
+
+def capability_assisted_supported(capability_id: String) -> Bool:
+    return capability_id == "query_rewrite"
+
+
+def capability_exposure(
+    capability_id: String,
+    provider_configured: Bool,
+    assistance_permitted: Bool,
+    provider_ready: Bool,
+) -> CapabilityExposure:
+    var supported = capability_assisted_supported(capability_id)
+    return CapabilityExposure(
+        capability_id=String(capability_id),
+        implementation_supported=supported,
+        provider_configured=provider_configured,
+        assistance_permitted=assistance_permitted,
+        provider_ready=provider_ready,
+        exposed=(
+            supported
+            and provider_configured
+            and assistance_permitted
+            and provider_ready
+        ),
+    )

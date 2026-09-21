@@ -1331,3 +1331,22 @@ def test_projection_assertions_enforce_exactness_and_reject_unknown_operators() 
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from hyf_core.capabilities.registry import (
+    capability_assisted_supported,
+    capability_exposure,
+)
+
+
+def test_capability_exposure_separates_support_permission_readiness() raises:
+    assert_true(capability_assisted_supported("query_rewrite"))
+    assert_true(not capability_assisted_supported("semantic_rank"))
+    var supported_but_blocked = capability_exposure("query_rewrite", False, True, False)
+    assert_true(supported_but_blocked.implementation_supported)
+    assert_true(not supported_but_blocked.provider_configured)
+    assert_true(not supported_but_blocked.exposed)
+    var fully_ready = capability_exposure("query_rewrite", True, True, True)
+    assert_true(fully_ready.exposed)
+    var permission_denied = capability_exposure("query_rewrite", True, False, True)
+    assert_true(not permission_denied.exposed)

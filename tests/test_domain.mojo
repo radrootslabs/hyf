@@ -163,3 +163,24 @@ def test_unit_conversion_rejects_dimension_mismatch_and_unknown_denominator() ra
     with assert_raises():
         _ = apply_conversion(new_quantity(1, 0, "kg", "mass", "exact"), kg_rule)
     _ = pounds
+
+
+from hyf_core.domain.pack import apply_pack_conversion, pack_rule
+
+
+def test_pack_conversion_known_and_rejections() raises:
+    var boxes = new_quantity(20, 0, "box", "count", "exact")
+    var rule = pack_rule("tomato.roma", "box", "kg", 5, 0, "pack-1")
+    var mass = apply_pack_conversion("tomato.roma", boxes, rule)
+    assert_equal(mass.value, 100)
+    assert_equal(mass.unit, "kg")
+    assert_equal(mass.dimension, "mass")
+
+    with assert_raises():
+        _ = apply_pack_conversion("carrot", boxes, rule)
+    with assert_raises():
+        _ = apply_pack_conversion(
+            "tomato.roma", new_quantity(1, 0, "kg", "mass", "exact"), rule
+        )
+    with assert_raises():
+        _ = pack_rule("tomato.roma", "box", "mystery", 5, 0, "pack-1")

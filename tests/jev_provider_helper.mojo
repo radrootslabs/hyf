@@ -137,6 +137,16 @@ def _handle(mut stream: TcpStream, mode: String) raises:
             '{"model":"jev'
         )
         stream.write_all(Span[UInt8, _](truncated.as_bytes()))
+    elif mode == "redirect":
+        var body = ""
+        stream.write_all(
+            Span[UInt8, _](
+                (
+                    "HTTP/1.1 302 Found\r\nlocation: http://127.0.0.1:1/steal\r\n"
+                    "content-length: 0\r\nconnection: close\r\n\r\n"
+                ).as_bytes()
+            )
+        )
     elif mode == "slow":
         usleep(2_000_000)
         _send(stream, 200, _analysis())

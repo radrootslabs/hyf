@@ -321,3 +321,30 @@ def test_jev_endpoint_policy_and_loopback_client() raises:
     assert_equal(outcome.status, 200)
     assert_true(outcome.body_text.find("jev-1.13.0") >= 0)
     stub.wait()
+
+
+from flare.tls import TlsVerify
+from flare.tls import TlsConfig
+from hyf_provider.jev_client import (
+    assert_tls_verification_required,
+    production_tls_config,
+    redirects_forward_credentials,
+)
+
+
+def test_tls_and_redirect_policy() raises:
+    var config = production_tls_config()
+    assert_equal(config.verify, TlsVerify.REQUIRED)
+    assert_tls_verification_required(config)
+    with assert_raises():
+        assert_tls_verification_required(TlsConfig.insecure())
+    assert_true(not redirects_forward_credentials())
+
+    var port = reserve_jev_port()
+    var stub = spawn_jev_stub(port, "redirect", 1)
+    with assert_raises():
+        with HttpClient(timeout_ms=5000, max_redirects=0) as client:
+            _ = client.post(
+                "http://127.0.0.1:" + String(port) + "/v1/systemone", "{}"
+            )
+    stub.wait()

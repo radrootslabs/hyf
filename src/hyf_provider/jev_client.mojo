@@ -1,4 +1,5 @@
 from flare.http import HttpClient
+from flare.tls import TlsConfig, TlsVerify
 from json import Value, dumps
 
 
@@ -70,3 +71,16 @@ def post_jev_systemone(
     with HttpClient(timeout_ms=timeout_ms, max_redirects=0) as client:
         var response = client.post(url, dumps(body))
         return JevHttpOutcome(status=response.status, body_text=response.text())
+
+
+def production_tls_config() -> TlsConfig:
+    return TlsConfig()
+
+
+def assert_tls_verification_required(config: TlsConfig) raises:
+    if config.verify != TlsVerify.REQUIRED:
+        raise Error("external provider transport must verify TLS certificates")
+
+
+def redirects_forward_credentials() -> Bool:
+    return False

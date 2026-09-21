@@ -211,3 +211,23 @@ def test_allocation_conservation_and_ordering_properties() raises:
     assert_equal(ranked[0], "a")
     assert_equal(ranked[1], "b")
     assert_equal(ranked[2], "c")
+
+
+from hyf_application.guard_seed import (
+    correct_compare,
+    correct_eligibility,
+    correct_revision_check,
+    seeded_comparison_inversion,
+    seeded_revision_check_bypass,
+    seeded_unknown_to_pass,
+)
+
+
+def test_seeded_guard_faults_are_detected() raises:
+    # unknown must not become eligible
+    assert_true(seeded_unknown_to_pass(False, True) != correct_eligibility(False, True))
+    # comparison inversion must be observable
+    assert_true(seeded_comparison_inversion(1, 2) != correct_compare(1, 2))
+    # revision bypass must be observable
+    assert_true(seeded_revision_check_bypass("r1", "r2"))
+    assert_true(not correct_revision_check("r1", "r2"))

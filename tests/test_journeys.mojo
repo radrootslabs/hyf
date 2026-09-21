@@ -143,3 +143,33 @@ def test_optional_cache_scope_resolved_explicitly() raises:
     assert_true(cache_scope_is_documented())
     assert_true(cache_key_requires_tenant_source_and_versions())
     assert_true(not cache_reserves_stock())
+
+
+from hyf_core.domain.eligibility import (
+    ConstraintAssessment,
+    compose_eligibility,
+    constraint_assessment,
+)
+from hyf_core.domain.quantity import new_quantity, quantity_add, quantity_compare
+
+
+def test_quantity_and_eligibility_properties() raises:
+    for value in range(0, 100):
+        var base = new_quantity(value, 0, "kg", "mass", "exact")
+        assert_equal(quantity_compare(base, base), 0)
+        var zero = new_quantity(0, 0, "kg", "mass", "exact")
+        assert_equal(quantity_add(base, zero).value, value)
+
+    for unknown_count in range(0, 4):
+        for fail_count in range(0, 3):
+            var checks = List[ConstraintAssessment]()
+            for _ in range(fail_count):
+                checks.append(constraint_assessment("x", "fail", True, "quantity_insufficient"))
+            for _ in range(unknown_count):
+                checks.append(constraint_assessment("y", "unknown", True, "stock_unknown"))
+            var expected = "eligible"
+            if fail_count > 0:
+                expected = "ineligible"
+            elif unknown_count > 0:
+                expected = "conditional"
+            assert_equal(compose_eligibility(checks), expected)

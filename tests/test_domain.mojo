@@ -402,3 +402,22 @@ def test_review_state_optional_price_does_not_block_withdrawal_does() raises:
     assert_equal(len(blocked.clarifications), 1)
     var extended = review_add(blocked, "quantity.unreserved", "stock_unknown")
     assert_equal(len(extended.clarifications), 2)
+
+
+from hyf_core.domain.clarification import (
+    apply_clarification,
+    clarification_evidence,
+    clarification_is_stale,
+)
+
+
+def test_clarification_refines_without_overwriting_original() raises:
+    var original = known_field("80", "span")
+    var evidence = clarification_evidence(
+        "quantity.unreserved", "farm-source-1", "r2", "60 lb unreserved"
+    )
+    var refined = apply_clarification(original, evidence, "60")
+    assert_equal(original.value.value(), "80")
+    assert_equal(refined.value.value(), "60")
+    assert_true(not clarification_is_stale(evidence, "r2"))
+    assert_true(clarification_is_stale(evidence, "r3"))

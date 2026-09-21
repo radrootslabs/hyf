@@ -36,6 +36,7 @@ check-build = "mkdir -p .pixi/build && mojo build -I src src/main.mojo -o .pixi/
 check-format = "sh tools/check_format.sh"
 test-architecture = "sh tools/check_architecture.sh --self-test"
 smoke-max-local = "mojo -I src -I tests tests/max_local_operator_smoke.mojo"
+smoke-jev = "mojo -I src -I tests tests/smoke_jev.mojo"
 test-runtime-contract = { depends-on = [
   "test-runtime",
   "test-repo-local-process",

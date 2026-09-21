@@ -113,3 +113,18 @@ def test_source_instruction_injection_is_data() raises:
     )
     assert_equal(source.text, injected)
     assert_true(source_text_is_data_not_instruction())
+
+
+from hyf_runtime.redaction import (
+    contains_credential_marker,
+    redact_diagnostic,
+)
+from hyf_stdio.errors import internal_error_message
+
+
+def test_secret_and_telemetry_redaction() raises:
+    var redacted = redact_diagnostic("line1\nline2\rline3")
+    assert_true(redacted.find("\n") < 0)
+    assert_true(redacted.find("\\n") >= 0)
+    assert_true(not contains_credential_marker(internal_error_message()))
+    assert_true(contains_credential_marker("apikey_abc"))

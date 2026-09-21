@@ -354,3 +354,38 @@ def test_match_input_scope_and_lot_validation() raises:
     with assert_raises():
         _ = validate_supplied_lots(dupes)
     assert_true(not caller_name_is_authentication())
+
+
+from hyf_application.match_index import (
+    duplicate_records_double_stock,
+    index_supplied_lots,
+)
+
+
+def test_index_supplied_lots_rejects_duplicates_and_conflicts() raises:
+    var ids = List[String]()
+    ids.append("lot-1")
+    ids.append("lot-2")
+    var revisions = List[String]()
+    revisions.append("l1")
+    revisions.append("l1")
+    assert_equal(len(index_supplied_lots(ids, revisions)), 2)
+
+    var dup_ids = List[String]()
+    dup_ids.append("lot-1")
+    dup_ids.append("lot-1")
+    var dup_revs = List[String]()
+    dup_revs.append("l1")
+    dup_revs.append("l1")
+    with assert_raises():
+        _ = index_supplied_lots(dup_ids, dup_revs)
+
+    var conflict_ids = List[String]()
+    conflict_ids.append("lot-1")
+    conflict_ids.append("lot-1")
+    var conflict_revs = List[String]()
+    conflict_revs.append("l1")
+    conflict_revs.append("l2")
+    with assert_raises():
+        _ = index_supplied_lots(conflict_ids, conflict_revs)
+    assert_true(not duplicate_records_double_stock())

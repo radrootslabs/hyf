@@ -7,6 +7,7 @@ from std.testing import TestSuite, assert_equal, assert_true
 from fixture_validator import (
     FixtureValidationIssue,
     validate_requirement_traceability,
+    validate_step_states,
 )
 
 
@@ -89,6 +90,28 @@ def test_requirement_traceability_accepts_registry_and_rejects_dangling() raises
                 len(_validate(base)) > 0,
                 "traceability accepted corruption: " + mutation,
             )
+
+
+def test_step_state_contract_is_valid_and_rejects_corruption() raises:
+    var path = _dir_of_current_file() / "requirements" / "hyf_v1_jev.step_states.json"
+    assert_equal(len(validate_step_states(path.__fspath__())), 0)
+
+    with TemporaryDirectory() as temp_dir:
+        var base = Path(temp_dir)
+        _write(
+            base / "states.json",
+            '{"states":["PASSED","PASSED","NOT_RUN","NOT_APPLICABLE"],'
+            '"passed_requires_executed_evidence":true,"rules":["x"]}',
+        )
+        assert_true(len(validate_step_states((base / "states.json").__fspath__())) > 0)
+    with TemporaryDirectory() as temp_dir:
+        var base = Path(temp_dir)
+        _write(
+            base / "states.json",
+            '{"states":["PASSED","NOT_RUN","NOT_APPLICABLE"],'
+            '"passed_requires_executed_evidence":false,"rules":["x"]}',
+        )
+        assert_true(len(validate_step_states((base / "states.json").__fspath__())) > 0)
 
 
 def main() raises:

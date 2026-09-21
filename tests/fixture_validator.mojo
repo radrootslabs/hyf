@@ -319,3 +319,68 @@ def validate_requirement_traceability(
                 )
 
     return issues^
+
+
+def validate_step_states(path: String) raises -> List[FixtureValidationIssue]:
+    var issues = List[FixtureValidationIssue]()
+    var doc = loads(Path(path).read_text())
+    if not _has_key(doc, "states"):
+        issues.append(
+            FixtureValidationIssue(
+                case_id="", rule="missing_states", detail="no states declared"
+            )
+        )
+        return issues^
+
+    var states = List[String]()
+    for entry in doc["states"].array_items():
+        var state = entry.string_value()
+        var duplicate = False
+        for prior in states:
+            if prior == state:
+                duplicate = True
+        if duplicate:
+            issues.append(
+                FixtureValidationIssue(
+                    case_id="", rule="duplicate_state", detail=state
+                )
+            )
+        states.append(String(state))
+
+    for required in ["PASSED", "NOT_RUN", "NOT_APPLICABLE"]:
+        var found = False
+        for state in states:
+            if state == required:
+                found = True
+        if not found:
+            issues.append(
+                FixtureValidationIssue(
+                    case_id="", rule="missing_state", detail=required
+                )
+            )
+
+    if (
+        not _has_key(doc, "passed_requires_executed_evidence")
+        or not doc["passed_requires_executed_evidence"].bool_value()
+    ):
+        issues.append(
+            FixtureValidationIssue(
+                case_id="",
+                rule="passed_without_evidence",
+                detail="PASSED must require executed evidence",
+            )
+        )
+
+    if (
+        not _has_key(doc, "rules")
+        or len(doc["rules"].array_items()) == 0
+    ):
+        issues.append(
+            FixtureValidationIssue(
+                case_id="",
+                rule="missing_state_rules",
+                detail="state rules must be documented",
+            )
+        )
+
+    return issues^

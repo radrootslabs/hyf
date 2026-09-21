@@ -1,0 +1,11 @@
+{
+  "states": ["PLANNED", "IN_PROGRESS", "PASSED", "FAILED", "BLOCKED", "NOT_RUN", "NOT_APPLICABLE"],
+  "terminal_states": ["PASSED", "FAILED", "BLOCKED", "NOT_APPLICABLE"],
+  "passed_requires_executed_evidence": true,
+  "rules": [
+    "A step is PASSED only when its verification commands executed and passed.",
+    "NOT_RUN and NOT_APPLICABLE are never PASSED.",
+    "BLOCKED names the blocking external gate or missing authority.",
+    "A step is not counted in the pass total unless it is PASSED."
+  ]
+}

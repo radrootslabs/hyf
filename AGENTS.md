@@ -13,3 +13,23 @@
 - if validation cannot run, report the blocker clearly instead of guessing past it
 - toolchain: Mojo via the locally installed Modular toolchain
 - prefer explicit typed models, deterministic behavior, and direct service boundaries over stringly or implicit behavior
+
+## hyf_v1_jev specification execution
+
+- Execute the owner-approved `hyf_v1_jev` handoff as a multi-RCLD sequence: one
+  active slice at a time, one tested/reviewed/known-good commit per step. Do not
+  merge, skip, reorder, broaden or auto-split steps.
+- The durable governing document, decision register, step ledger and step
+  evidence live under the parent monorepo `docs/` tree, not in this capsule:
+  `docs/execution/rcl/hyf-v1-jev-multi-rcld-sequence.md`,
+  `docs/execution/evidence/hyf_v1_jev/`.
+- Per step record a report; allowed result states are `PLANNED`, `IN_PROGRESS`,
+  `PASSED`, `FAILED`, `BLOCKED`, `NOT_RUN`, `NOT_APPLICABLE`. A step is `PASSED`
+  only with executed evidence; never label an unrun source/model/provider check
+  as passed.
+- A deviation requires repository evidence recorded in the deviation ledger
+  before proceeding; never silently skip or reorder.
+- Conditional Cargo is `N/A — Mojo core` unless a real relevant Rust workspace
+  is discovered.
+- Stage only owned paths; never `git add -A`; never stage `secrets.txt`.
+- Use `pixi run --frozen` for repo-owned tasks to avoid incidental lock rewrite.

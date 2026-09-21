@@ -34,6 +34,10 @@ test-soak = "mojo -I src -I tests tests/test_soak.mojo"
 test-spec = "mojo -I src -I tests tests/test_traceability.mojo"
 check-build = "mkdir -p .pixi/build && mojo build -I src src/main.mojo -o .pixi/build/hyfd"
 check-format = "sh tools/check_format.sh"
+check-release = { depends-on = [
+  "test",
+  "check-build",
+] }
 test-architecture = "sh tools/check_architecture.sh --self-test"
 smoke-max-local = "mojo -I src -I tests tests/max_local_operator_smoke.mojo"
 smoke-jev = "mojo -I src -I tests tests/smoke_jev.mojo"

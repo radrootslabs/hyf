@@ -122,6 +122,7 @@ def test_authorized_change_target_resolution() raises:
 
 
 from hyf_application.farm_fulfillment import interpret_fulfillment
+from hyf_core.domain.supply_change import ProposedSupplyChange
 from hyf_core.domain.time import date_only
 
 
@@ -135,3 +136,28 @@ def test_farm_fulfillment_and_timing_claims() raises:
     assert_equal(no_zone.ambiguity, "missing_zone")
     var none = interpret_fulfillment("pickup", "", monday, "America/Vancouver")
     assert_equal(none.window_expression, "")
+
+
+from hyf_application.farm_review_output import (
+    ambiguous_withdrawal_blocks_apply,
+    assemble_farm_output,
+    missing_optional_price_blocks_draft,
+)
+from hyf_core.domain.execution import execution_meta
+from hyf_core.domain.review import review_required
+
+
+def test_farm_review_output_is_proposal_only() raises:
+    var products = List[String]()
+    products.append("roma tomatoes")
+    var statuses = interpret_product_statuses(products, "offered")
+    var changes = List[ProposedSupplyChange]()
+    var review = review_required("withdrawal.target", "ambiguous_target")
+    var execution = execution_meta("complete", 0, None, None, None)
+    var output = assemble_farm_output(statuses, changes, review, execution)
+    assert_equal(len(output.claims), 1)
+    assert_true(output.review.required)
+    assert_true(output.original_source_preserved)
+    assert_equal(output.hyf_business_writes, 0)
+    assert_true(not missing_optional_price_blocks_draft())
+    assert_true(ambiguous_withdrawal_blocks_apply())

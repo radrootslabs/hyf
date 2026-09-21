@@ -421,3 +421,31 @@ def test_clarification_refines_without_overwriting_original() raises:
     assert_equal(refined.value.value(), "60")
     assert_true(not clarification_is_stale(evidence, "r2"))
     assert_true(clarification_is_stale(evidence, "r3"))
+
+
+from hyf_core.domain.demand import (
+    Condition,
+    DemandLine,
+    condition,
+    condition_is_exclusion,
+    demand_line,
+    missing_information_is_prohibition,
+)
+
+
+def test_demand_lines_and_condition_strength() raises:
+    var tomatoes = resolved_product("tomatoes", "tomato")
+    var lines = List[DemandLine]()
+    var conditions_a = List[Condition]()
+    conditions_a.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
+    conditions_a.append(condition("fulfillment_excluded", "excluded", Optional[String]("pickup")))
+    lines.append(demand_line("l1", tomatoes, "known", 25, 0, conditions_a))
+    var conditions_b = List[Condition]()
+    conditions_b.append(condition("grade", "permitted", Optional[String]("seconds")))
+    lines.append(demand_line("l2", tomatoes, "unknown", 0, 0, conditions_b))
+    assert_equal(len(lines), 2)
+    assert_true(condition_is_exclusion(lines[0].conditions[1]))
+    assert_true(not condition_is_exclusion(lines[0].conditions[0]))
+    assert_true(not missing_information_is_prohibition())
+    with assert_raises():
+        _ = condition("grade", "maybe", Optional[String]("x"))

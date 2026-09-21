@@ -264,3 +264,18 @@ def test_bounded_parser_fuzz_never_crashes() raises:
             _ = _json_loads2(candidate)
         except:
             pass
+
+
+from hyf_runtime.offline import (
+    credential_required_for_offline_tests,
+    external_network_required,
+    loopback_only_provider_endpoints,
+    offline_environment_is_sanitized,
+)
+
+
+def test_offline_environment_isolation() raises:
+    assert_true(not external_network_required())
+    assert_true(loopback_only_provider_endpoints())
+    assert_true(not credential_required_for_offline_tests())
+    assert_true(offline_environment_is_sanitized())

@@ -14,7 +14,8 @@ def test_farm_review_confirmation_journey_keeps_mutation_outside_hyf() raises:
     var input = _loads(
         '{"source":{"source_id":"s1","revision":"r1","text":"About 80 lb tomatoes. Basil sold out.",'
         '"source_time":"2026-09-21T09:00:00-07:00","timezone":"America/Vancouver",'
-        '"actor_id":"farm-1","farm_id":"farm-1"}}'
+        '"actor_id":"farm-1","farm_id":"farm-1"},'
+        '"taxonomy":{"products":["tomatoes","basil"],"units":["lb"],"dates":[]}}'
     )
     var interpretation = execute_farm_update_interpret(input)
     assert_true(interpretation["review"]["required"].bool_value())

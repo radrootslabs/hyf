@@ -549,3 +549,28 @@ def test_bounded_single_line_allocation() raises:
         enforce_plan_bound(4, bounds)
     with assert_raises():
         _ = planner_bounds(0, 3)
+
+
+from hyf_application.match_plan import (
+    allocate_multiple_lines,
+    shared_lot_allows_concurrent_over_allocation,
+)
+
+
+def test_conservation_across_multiple_demand_lines() raises:
+    var capacities = List[LotCapacity]()
+    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0))
+    var lines = List[String]()
+    lines.append("line-1")
+    lines.append("line-2")
+    var required = List[Int]()
+    required.append(30)
+    required.append(30)
+    var plan = allocate_multiple_lines("p1", "farm-1", lines, required, capacities)
+    # 50 kg lot cannot satisfy two 30 kg lines: total allocated is capped at 50.
+    var total = 0
+    for entry in plan.allocations:
+        total += entry.value
+    assert_equal(total, 50)
+    assert_equal(len(plan_conservation_violations(plan, capacities)), 0)
+    assert_true(not shared_lot_allows_concurrent_over_allocation())

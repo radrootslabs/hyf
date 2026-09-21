@@ -69,3 +69,43 @@ def planner_bounds(max_candidates: Int, max_plans: Int) raises -> PlannerBounds:
 def enforce_plan_bound(plan_count: Int, bounds: PlannerBounds) raises:
     if plan_count > bounds.max_plans:
         raise Error("plan enumeration exceeds the bound")
+
+
+def allocate_multiple_lines(
+    plan_id: String,
+    supplier_id: String,
+    line_ids: List[String],
+    required_values: List[Int],
+    lots: List[LotCapacity],
+) raises -> MatchPlan:
+    if len(line_ids) != len(required_values):
+        raise Error("line ids and requirements must align")
+    var remaining = List[Int]()
+    for lot in lots:
+        remaining.append(lot.value)
+    var allocations = List[Allocation]()
+    for index in range(len(line_ids)):
+        var needed = required_values[index]
+        for lot_index in range(len(lots)):
+            if needed <= 0:
+                break
+            if remaining[lot_index] <= 0:
+                continue
+            var capacity = remaining[lot_index]
+            var take = needed if needed < capacity else capacity
+            allocations.append(
+                allocation(
+                    lots[lot_index].lot_id,
+                    lots[lot_index].revision,
+                    line_ids[index],
+                    take,
+                    lots[lot_index].scale,
+                )
+            )
+            remaining[lot_index] -= take
+            needed -= take
+    return match_plan(plan_id, supplier_id, allocations)
+
+
+def shared_lot_allows_concurrent_over_allocation() -> Bool:
+    return False

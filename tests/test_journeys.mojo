@@ -231,3 +231,36 @@ def test_seeded_guard_faults_are_detected() raises:
     # revision bypass must be observable
     assert_true(seeded_revision_check_bypass("r1", "r2"))
     assert_true(not correct_revision_check("r1", "r2"))
+
+
+from hyf_stdio.codec import decode_request
+from json import loads as _json_loads2
+
+
+def test_bounded_parser_fuzz_never_crashes() raises:
+    var inputs = List[String]()
+    inputs.append("")
+    inputs.append("{")
+    inputs.append("[]")
+    inputs.append("null")
+    inputs.append('{"version":"one"}')
+    inputs.append('{"version":1,"request_id":"","capability":""}')
+    inputs.append('{"version":1,"request_id":"r","capability":"x","input":"not-object"}')
+    inputs.append('{"version":1,"request_id":"r","capability":"x","input":{},"extra":1}')
+    var handled = 0
+    for candidate in inputs:
+        try:
+            _ = decode_request(candidate)
+        except:
+            handled += 1
+    assert_equal(handled, len(inputs))
+
+    var malformed_json = List[String]()
+    malformed_json.append("{")
+    malformed_json.append("NaN")
+    malformed_json.append('[1,2,3,')
+    for candidate in malformed_json:
+        try:
+            _ = _json_loads2(candidate)
+        except:
+            pass

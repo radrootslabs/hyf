@@ -40,35 +40,60 @@ check() {
 
 self_test() {
   test_status=0
-  bindir="$tmp/bin"
-  mkdir -p "$bindir"
 
-  # Negative control 1: a formatter that crashes must be reported as a
-  # formatter error, not silently treated as a formatting diff.
+  # A missing/broken formatter must fail the self-test, never make it pass.
+  if ! command -v mojo >/dev/null 2>&1; then
+    echo "self-test failed: no Mojo formatter available" >&2
+    return 1
+  fi
+
+  # Positive control: an already-formatted input must pass the check.
+  positive="$tmp/positive"
+  mkdir -p "$positive"
+  printf 'def main():\n    pass\n' > "$positive/x.mojo"
+  if ! mojo format -q "$positive" >/dev/null 2>&1; then
+    echo "self-test failed: cannot produce a formatted positive case" >&2
+    return 1
+  fi
+  if ! sh "$0" "$positive" >/dev/null 2>&1; then
+    echo "self-test failed: formatted input did not pass" >&2
+    test_status=1
+  fi
+
+  # Unformatted control: must be classified as `unformatted`.
+  unformatted="$tmp/unformatted"
+  mkdir -p "$unformatted"
+  printf 'def main( ):   \n    pass\n' > "$unformatted/x.mojo"
+  if output="$(sh "$0" "$unformatted" 2>&1)"; then rc=0; else rc=$?; fi
+  if [ "$rc" -eq 0 ] || ! printf '%s' "$output" | grep -q 'unformatted:'; then
+    echo "self-test failed: unformatted input not classified" >&2
+    test_status=1
+  fi
+
+  # Crashing formatter control: must be classified as `formatter-error`.
+  bindir="$tmp/bin-crash"
+  mkdir -p "$bindir"
   printf '#!/bin/sh\nexit 42\n' > "$bindir/mojo"
   chmod +x "$bindir/mojo"
-  src="$tmp/crash_input"
-  mkdir -p "$src"
-  printf 'def main():\n    pass\n' > "$src/x.mojo"
-  if out="$(PATH="$bindir:$PATH" sh "$0" "$src" 2>&1)"; then
+  if output="$(PATH="$bindir:$PATH" sh "$0" "$unformatted" 2>&1)"; then
     rc=0
   else
     rc=$?
   fi
-  if [ "$rc" -eq 0 ] || ! printf '%s' "$out" | grep -q 'formatter-error'; then
-    echo "self-test failed: formatter crash was not reported" >&2
+  if [ "$rc" -eq 0 ] || ! printf '%s' "$output" | grep -q 'formatter-error:'; then
+    echo "self-test failed: crashing formatter not classified" >&2
     test_status=1
   fi
 
-  # Negative control 2: a known-unformatted input must fail the check.
-  if command -v mojo >/dev/null 2>&1; then
-    src2="$tmp/unformatted_input"
-    mkdir -p "$src2"
-    printf 'def main( ):   \n    pass\n' > "$src2/x.mojo"
-    if sh "$0" "$src2" >/dev/null 2>&1; then
-      echo "self-test failed: unformatted input was not detected" >&2
-      test_status=1
-    fi
+  # Missing formatter control: must be classified as `formatter-error`.
+  if output="$(PATH="/usr/bin:/bin" sh "$0" "$positive" 2>&1)"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [ "$rc" -eq 0 ] || ! printf '%s' "$output" | grep -q 'formatter-error:'; then
+    echo "self-test failed: missing formatter not classified" >&2
+    test_status=1
   fi
 
   if [ "$test_status" -eq 0 ]; then

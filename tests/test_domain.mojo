@@ -389,3 +389,16 @@ def test_supply_change_operations_and_scoped_withdrawal() raises:
     assert_equal(correction.operation, "unresolved")
     with assert_raises():
         _ = proposed_change("galaxy", Optional[String]("x"), "addition", None)
+
+
+from hyf_core.domain.review import review_add, review_clear, review_required
+
+
+def test_review_state_optional_price_does_not_block_withdrawal_does() raises:
+    var clear = review_clear()
+    assert_true(not clear.required)
+    var blocked = review_required("withdrawal.target", "ambiguous_target")
+    assert_true(blocked.required)
+    assert_equal(len(blocked.clarifications), 1)
+    var extended = review_add(blocked, "quantity.unreserved", "stock_unknown")
+    assert_equal(len(extended.clarifications), 2)

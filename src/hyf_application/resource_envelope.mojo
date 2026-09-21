@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct ResourceEnvelope(Copyable, Movable):
     var max_candidates: Int

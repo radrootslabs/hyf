@@ -87,7 +87,7 @@ def normalize_free_text(text: String, mut signals: List[String]) -> String:
     replaced = replaced.replace("]", " ")
     replaced = replaced.replace("{", " ")
     replaced = replaced.replace("}", " ")
-    replaced = replaced.replace("\"", " ")
+    replaced = replaced.replace('"', " ")
     replaced = replaced.replace("'", " ")
     replaced = replaced.replace("-", " ")
     if replaced != normalized:
@@ -173,9 +173,7 @@ def extract_text_input(input: Value, capability_name: String) raises -> String:
             raise Error(capability_name + " input text must not be empty")
         return collapsed^
     else:
-        raise Error(
-            capability_name + " input requires 'text' or 'query'"
-        )
+        raise Error(capability_name + " input requires 'text' or 'query'")
 
 
 def parse_query_rewrite_request(input: Value) raises -> QueryRewriteRequest:

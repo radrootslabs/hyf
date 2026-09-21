@@ -17,11 +17,7 @@ def known_price(
         raise Error("price scale must be between 0 and 9")
     if currency.strip() == "":
         raise Error("known price requires a currency")
-    if (
-        basis != "per_unit"
-        and basis != "per_pack"
-        and basis != "per_order"
-    ):
+    if basis != "per_unit" and basis != "per_pack" and basis != "per_order":
         raise Error("price basis must be per_unit, per_pack or per_order")
     if amount < 0:
         raise Error("price amount must be non-negative")

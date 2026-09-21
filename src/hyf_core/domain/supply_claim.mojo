@@ -26,7 +26,13 @@ def supply_claim(
 ) raises -> SupplyClaim:
     if claim_id.strip() == "":
         raise Error("claim id must not be empty")
-    var allowed = ["offered", "forecast", "unavailable", "correction", "unclear"]
+    var allowed = [
+        "offered",
+        "forecast",
+        "unavailable",
+        "correction",
+        "unclear",
+    ]
     var known = False
     for candidate in allowed:
         if candidate == status:

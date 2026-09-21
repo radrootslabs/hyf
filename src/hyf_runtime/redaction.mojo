@@ -1,5 +1,3 @@
-
-
 comptime MAX_REDACTED_CHARS = 512
 
 

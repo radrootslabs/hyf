@@ -25,7 +25,11 @@ def supply_snapshot(
     unreserved_scale: Int,
     unit: String,
 ) raises -> SupplySnapshot:
-    if lot_id.strip() == "" or revision.strip() == "" or supplier_id.strip() == "":
+    if (
+        lot_id.strip() == ""
+        or revision.strip() == ""
+        or supplier_id.strip() == ""
+    ):
         raise Error("snapshot requires lot id, revision and supplier id")
     if unreserved_state != "known" and unreserved_state != "unknown":
         raise Error("unreserved state must be 'known' or 'unknown'")

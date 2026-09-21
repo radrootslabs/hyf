@@ -28,7 +28,9 @@ def question_stage(
     )
 
 
-def _reaches(stages: List[QuestionStage], start: String, target: String) -> Bool:
+def _reaches(
+    stages: List[QuestionStage], start: String, target: String
+) -> Bool:
     var stack = List[String]()
     stack.append(String(start))
     var visited = List[String]()

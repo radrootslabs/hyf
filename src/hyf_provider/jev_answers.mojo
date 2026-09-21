@@ -2,7 +2,12 @@ from std.collections import List
 
 from json import Value
 
-from hyf_assist.evaluator import TypedAnswer, typed_choice, typed_noul, typed_score
+from hyf_assist.evaluator import (
+    TypedAnswer,
+    typed_choice,
+    typed_noul,
+    typed_score,
+)
 
 
 def _has_key(value: Value, key: String) -> Bool:
@@ -93,7 +98,9 @@ def parse_score_answer(
             raise Error("provider_answer_wrong_legend")
     if _has_key(value, "probabilities"):
         var probabilities = value["probabilities"]
-        if not probabilities.is_object() or len(probabilities.object_keys()) != len(rubric):
+        if not probabilities.is_object() or len(
+            probabilities.object_keys()
+        ) != len(rubric):
             raise Error("provider_answer_missing_level")
         var total = 0.0
         for level in range(len(rubric)):
@@ -128,11 +135,15 @@ def parse_jev_response(
             raise Error("provider_answer_missing")
         var answer = answers[question.id]
         if question.kind == "choice":
-            result.append(parse_choice_answer(question.id, answer, question.choices))
+            result.append(
+                parse_choice_answer(question.id, answer, question.choices)
+            )
         elif question.kind == "noul":
             result.append(parse_noul_answer(question.id, answer))
         elif question.kind == "score":
-            result.append(parse_score_answer(question.id, answer, question.rubric))
+            result.append(
+                parse_score_answer(question.id, answer, question.rubric)
+            )
         else:
             raise Error("provider_answer_wrong_type")
 

@@ -30,7 +30,7 @@ def _require_config_path() raises -> String:
             return value^
         if arg.startswith(_CONFIG_EQUALS_PREFIX):
             var value = String(
-                String(arg[byte = _CONFIG_EQUALS_PREFIX_BYTE_LENGTH :]).strip()
+                String(arg[byte=_CONFIG_EQUALS_PREFIX_BYTE_LENGTH:]).strip()
             )
             if value == "":
                 raise Error("--config requires a path")
@@ -41,12 +41,8 @@ def _require_config_path() raises -> String:
 
 def _smoke_request_json() -> String:
     return (
-        '{"version":1,'
-        '"request_id":"max-local-operator-smoke-1",'
-        '"trace_id":"max-local-operator-smoke-1",'
-        '"capability":"query_rewrite",'
-        '"context":{"execution_mode_preference":"assisted","return_provenance":true,"deadline_ms":15000},'
-        '"input":{"query":"local apples pickup this weekend"}}'
+        '{"version":1,"request_id":"max-local-operator-smoke-1","trace_id":"max-local-operator-smoke-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true,"deadline_ms":15000},"input":{"query":"local'
+        ' apples pickup this weekend"}}'
     )
 
 
@@ -59,7 +55,10 @@ def _assert_successful_provider_response(response: Value) raises:
         raise Error("MAX-local smoke did not use provider_runtime")
     if response["meta"]["provider"].string_value() != "max_local":
         raise Error("MAX-local smoke did not use max_local provider")
-    if response["meta"]["route"].string_value() != max_local_query_rewrite_route():
+    if (
+        response["meta"]["route"].string_value()
+        != max_local_query_rewrite_route()
+    ):
         raise Error("MAX-local smoke route did not match derived route")
     if response["output"]["rewritten_text"].string_value() == "":
         raise Error("MAX-local smoke returned empty rewritten_text")

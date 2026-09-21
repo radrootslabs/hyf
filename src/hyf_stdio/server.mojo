@@ -320,14 +320,18 @@ def run_stdio_server() raises:
     )
 
 
-def handle_frame(frame: String, runtime_context: RuntimeStartupContext) raises -> String:
+def handle_frame(
+    frame: String, runtime_context: RuntimeStartupContext
+) raises -> String:
     if frame_too_large(frame):
         return encode_error(
             WireErrorResponse(
                 version=hyf_protocol_version(),
                 request_id="",
                 trace_id=None,
-                error=invalid_request_error("request frame exceeds the size limit"),
+                error=invalid_request_error(
+                    "request frame exceeds the size limit"
+                ),
             )
         )
     return handle_request_line_with_runtime_context(frame, runtime_context)

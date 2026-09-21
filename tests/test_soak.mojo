@@ -27,7 +27,9 @@ def test_bounded_process_soak_200_frames() raises:
         var context = _context(temp_dir)
         var frames = List[String]()
         for _ in range(200):
-            frames.append(load_scenario_request_json("scenarios/status_ok.json"))
+            frames.append(
+                load_scenario_request_json("scenarios/status_ok.json")
+            )
         var responses = run_stdio_session(frames, context)
         assert_equal(len(responses), 200)
         for response in responses:
@@ -54,7 +56,10 @@ def test_candidate_and_plan_resource_envelope() raises:
 
 from hyf_runtime.config import default_loaded_runtime_config, operation_enabled
 from hyf_runtime.jev_composition import compose_jev
-from hyf_application.authority_sim import apply_expected_version, new_authority_simulation
+from hyf_application.authority_sim import (
+    apply_expected_version,
+    new_authority_simulation,
+)
 
 
 def test_provider_disablement_and_rollback_preserve_state() raises:

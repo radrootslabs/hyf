@@ -30,8 +30,13 @@ from hyf_application.context import (
 
 def test_interpretation_source_context_validation() raises:
     var source = interpretation_source(
-        "farm-source-1", "r1", "Got about 80 lb of Roma tomatoes.",
-        "2026-09-21T09:00:00-07:00", "America/Vancouver", "farm-1", "farm-1",
+        "farm-source-1",
+        "r1",
+        "Got about 80 lb of Roma tomatoes.",
+        "2026-09-21T09:00:00-07:00",
+        "America/Vancouver",
+        "farm-1",
+        "farm-1",
     )
     assert_equal(source.revision, "r1")
     assert_true(context_is_trusted_host_supplied())
@@ -72,7 +77,9 @@ from hyf_application.farm_quantity import (
 
 
 def test_quantity_association_per_product_without_swap() raises:
-    var tomatoes = associate_quantity("roma tomatoes", 80, 0, "lb", "approximate")
+    var tomatoes = associate_quantity(
+        "roma tomatoes", 80, 0, "lb", "approximate"
+    )
     var basil = associate_quantity("basil", 0, 0, "bunch", "exact")
     assert_equal(tomatoes.product_phrase, "roma tomatoes")
     assert_equal(tomatoes.quantity_value, 80)
@@ -98,7 +105,9 @@ def test_supply_update_operation_semantics() raises:
     assert_equal(interpret_update_operation("sold out"), "withdrawal")
     assert_equal(interpret_update_operation("actually"), "correction")
     assert_equal(interpret_update_operation("maybe"), "unresolved")
-    var addition = interpret_update_change("another", "listing", Optional[String]("b1"))
+    var addition = interpret_update_change(
+        "another", "listing", Optional[String]("b1")
+    )
     assert_equal(addition.operation, "addition")
     var ambiguous = interpret_update_change("sold out", "listing", None)
     assert_equal(ambiguous.operation, "unresolved")
@@ -111,10 +120,14 @@ from hyf_application.farm_targets import resolve_change_target
 def test_authorized_change_target_resolution() raises:
     var authorized = List[String]()
     authorized.append("b1")
-    var resolved = resolve_change_target("withdrawal", Optional[String]("b1"), authorized)
+    var resolved = resolve_change_target(
+        "withdrawal", Optional[String]("b1"), authorized
+    )
     assert_equal(resolved.operation, "withdrawal")
     assert_equal(resolved.target_id.value(), "b1")
-    var unauthorized = resolve_change_target("withdrawal", Optional[String]("b9"), authorized)
+    var unauthorized = resolve_change_target(
+        "withdrawal", Optional[String]("b9"), authorized
+    )
     assert_equal(unauthorized.operation, "unresolved")
     assert_true(unauthorized.unresolved)
     var ambiguous = resolve_change_target("withdrawal", None, authorized)
@@ -129,7 +142,9 @@ from hyf_core.domain.time import date_only
 
 def test_farm_fulfillment_and_timing_claims() raises:
     var monday = date_only(2026, 9, 21)
-    var delivery = interpret_fulfillment("delivery", "Friday", monday, "America/Vancouver")
+    var delivery = interpret_fulfillment(
+        "delivery", "Friday", monday, "America/Vancouver"
+    )
     assert_equal(delivery.resolved_date, "2026-9-25")
     assert_equal(delivery.ambiguity, "none")
     assert_true(not delivery.area_verified)
@@ -173,8 +188,12 @@ from hyf_application.farm_clarification import (
 
 def test_farm_clarification_is_revisioned_new_evidence() raises:
     var refined = apply_farm_clarification(
-        "80", "quantity.unreserved", "farm-source-1", "r2",
-        "60 lb unreserved", "60",
+        "80",
+        "quantity.unreserved",
+        "farm-source-1",
+        "r2",
+        "60 lb unreserved",
+        "60",
     )
     assert_equal(refined.value.value(), "60")
     assert_equal(refined.method, "clarification")
@@ -238,9 +257,13 @@ def test_buyer_condition_strength_and_negation() raises:
     assert_equal(interpret_condition_strength("ideally"), "preferred")
     assert_equal(interpret_condition_strength("not"), "excluded")
     assert_equal(interpret_condition_strength("fine"), "permitted")
-    var required = interpret_buyer_condition("fulfillment", "required", Optional[String]("delivery"))
+    var required = interpret_buyer_condition(
+        "fulfillment", "required", Optional[String]("delivery")
+    )
     assert_equal(required.strength, "mandatory")
-    var excluded = interpret_buyer_condition("fulfillment", "not", Optional[String]("pickup"))
+    var excluded = interpret_buyer_condition(
+        "fulfillment", "not", Optional[String]("pickup")
+    )
     assert_equal(excluded.strength, "excluded")
     assert_true(not delivery_exclusion_means_pickup())
     assert_true(not missing_information_is_prohibition())
@@ -273,15 +296,23 @@ from hyf_core.domain.demand import Condition, condition
 
 def test_buyer_contradiction_detection() raises:
     var conditions = List[Condition]()
-    conditions.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
-    conditions.append(condition("fulfillment", "excluded", Optional[String]("delivery")))
+    conditions.append(
+        condition("fulfillment", "mandatory", Optional[String]("delivery"))
+    )
+    conditions.append(
+        condition("fulfillment", "excluded", Optional[String]("delivery"))
+    )
     var contradictions = detect_contradictions(conditions)
     assert_equal(len(contradictions), 1)
     assert_true(contradictions_are_visible())
 
     var clean = List[Condition]()
-    clean.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
-    clean.append(condition("fulfillment", "excluded", Optional[String]("pickup")))
+    clean.append(
+        condition("fulfillment", "mandatory", Optional[String]("delivery"))
+    )
+    clean.append(
+        condition("fulfillment", "excluded", Optional[String]("pickup"))
+    )
     assert_equal(len(detect_contradictions(clean)), 0)
 
 
@@ -300,7 +331,9 @@ from hyf_core.domain.review import review_clear
 def test_assemble_reviewable_typed_buyer_need() raises:
     var tomatoes = resolved_product("tomatoes", "tomato")
     var conditions = List[Condition]()
-    conditions.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
+    conditions.append(
+        condition("fulfillment", "mandatory", Optional[String]("delivery"))
+    )
     var lines = List[DemandLine]()
     lines.append(demand_line("l1", tomatoes, "known", 25, 0, conditions))
     var output = assemble_buyer_need(
@@ -311,7 +344,9 @@ def test_assemble_reviewable_typed_buyer_need() raises:
     assert_true(not buyer_need_creates_order())
     with assert_raises():
         _ = assemble_buyer_need(
-            List[DemandLine](), review_clear(), execution_meta("complete", 0, None, None, None)
+            List[DemandLine](),
+            review_clear(),
+            execution_meta("complete", 0, None, None, None),
         )
 
 
@@ -426,8 +461,12 @@ def test_grade_and_required_attribute_checks() raises:
     var verified = List[String]()
     verified.append("organic")
     assert_equal(check_required_attributes(required, verified).result, "pass")
-    assert_equal(check_required_attributes(required, List[String]()).result, "unknown")
-    assert_equal(check_required_attributes(List[String](), verified).result, "pass")
+    assert_equal(
+        check_required_attributes(required, List[String]()).result, "unknown"
+    )
+    assert_equal(
+        check_required_attributes(List[String](), verified).result, "pass"
+    )
     assert_true(not model_confidence_verifies_certification())
 
 
@@ -458,23 +497,49 @@ from hyf_application.match_checks import (
 def test_availability_and_window_checks() raises:
     assert_equal(check_availability("known").result, "pass")
     assert_equal(check_availability("unknown").result, "unknown")
-    assert_equal(check_window("2026-09-25", "2026-09-25", "2026-09-25", "2026-09-25").result, "pass")
-    assert_equal(check_window("2026-09-25", "2026-09-25", "2026-09-27", "2026-09-27").result, "fail")
-    assert_equal(check_window("2026-09-25", "2026-09-25", "", "").result, "unknown")
+    assert_equal(
+        check_window(
+            "2026-09-25", "2026-09-25", "2026-09-25", "2026-09-25"
+        ).result,
+        "pass",
+    )
+    assert_equal(
+        check_window(
+            "2026-09-25", "2026-09-25", "2026-09-27", "2026-09-27"
+        ).result,
+        "fail",
+    )
+    assert_equal(
+        check_window("2026-09-25", "2026-09-25", "", "").result, "unknown"
+    )
     assert_equal(check_window("", "", "", "").result, "pass")
     assert_true(not weekend_similarity_satisfies_specific_window())
 
 
 from hyf_application.match_checks import check_price
-from hyf_core.domain.price import known_price as _known_price, unknown_price as _unknown_price
+from hyf_core.domain.price import (
+    known_price as _known_price,
+    unknown_price as _unknown_price,
+)
 
 
 def test_applicable_price_and_minimum_order_checks() raises:
     var ceiling = _known_price(500, 2, "CAD", "per_unit")
-    assert_equal(check_price(ceiling, _known_price(450, 2, "CAD", "per_unit")).result, "pass")
-    assert_equal(check_price(ceiling, _known_price(550, 2, "CAD", "per_unit")).result, "fail")
+    assert_equal(
+        check_price(ceiling, _known_price(450, 2, "CAD", "per_unit")).result,
+        "pass",
+    )
+    assert_equal(
+        check_price(ceiling, _known_price(550, 2, "CAD", "per_unit")).result,
+        "fail",
+    )
     assert_equal(check_price(ceiling, _unknown_price()).result, "unknown")
-    assert_equal(check_price(_unknown_price(), _known_price(1, 2, "CAD", "per_unit")).result, "pass")
+    assert_equal(
+        check_price(
+            _unknown_price(), _known_price(1, 2, "CAD", "per_unit")
+        ).result,
+        "pass",
+    )
 
 
 from hyf_application.match_checks import check_quantity
@@ -488,24 +553,37 @@ def test_per_lot_quantity_feasibility() raises:
     assert_equal(check_quantity(required, enough, True, False).result, "pass")
     assert_equal(check_quantity(required, short, True, False).result, "fail")
     assert_equal(check_quantity(required, short, True, True).result, "pass")
-    assert_equal(check_quantity(required, short, False, False).result, "unknown")
+    assert_equal(
+        check_quantity(required, short, False, False).result, "unknown"
+    )
 
 
 from hyf_application.match_checks import (
     compose_applicable_checks,
     scores_affect_feasibility,
 )
-from hyf_core.domain.eligibility import ConstraintAssessment, constraint_assessment
+from hyf_core.domain.eligibility import (
+    ConstraintAssessment,
+    constraint_assessment,
+)
 
 
 def test_compose_applicable_checks_before_ranking() raises:
     var checks = List[ConstraintAssessment]()
-    checks.append(constraint_assessment("product", "pass", True, "product_match"))
-    checks.append(constraint_assessment("quantity", "fail", True, "quantity_insufficient"))
-    checks.append(constraint_assessment("window", "unknown", True, "window_mismatch"))
+    checks.append(
+        constraint_assessment("product", "pass", True, "product_match")
+    )
+    checks.append(
+        constraint_assessment("quantity", "fail", True, "quantity_insufficient")
+    )
+    checks.append(
+        constraint_assessment("window", "unknown", True, "window_mismatch")
+    )
     assert_equal(compose_applicable_checks(checks), "ineligible")
     var only_unknown = List[ConstraintAssessment]()
-    only_unknown.append(constraint_assessment("quantity", "unknown", True, "stock_unknown"))
+    only_unknown.append(
+        constraint_assessment("quantity", "unknown", True, "stock_unknown")
+    )
     assert_equal(compose_applicable_checks(only_unknown), "conditional")
     assert_true(not scores_affect_feasibility())
 
@@ -515,7 +593,11 @@ from hyf_application.match_plan import (
     group_lots_by_supplier,
     multi_supplier_is_supported,
 )
-from hyf_core.domain.plan import LotCapacity, MatchPlan, plan_conservation_violations
+from hyf_core.domain.plan import (
+    LotCapacity,
+    MatchPlan,
+    plan_conservation_violations,
+)
 
 
 def test_supplier_grouping_and_bounded_allocation() raises:
@@ -530,15 +612,23 @@ def test_supplier_grouping_and_bounded_allocation() raises:
     assert_equal(grouped[0], "farm-1")
 
     var capacities = List[LotCapacity]()
-    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=30, scale=0))
-    capacities.append(LotCapacity(lot_id="lot-2", revision="l1", value=40, scale=0))
+    capacities.append(
+        LotCapacity(lot_id="lot-1", revision="l1", value=30, scale=0)
+    )
+    capacities.append(
+        LotCapacity(lot_id="lot-2", revision="l1", value=40, scale=0)
+    )
     var plan = allocate_single_line("p1", "line-1", "farm-1", 50, 0, capacities)
     assert_equal(len(plan.allocations), 2)
     assert_equal(len(plan_conservation_violations(plan, capacities)), 0)
     assert_true(not multi_supplier_is_supported())
 
 
-from hyf_application.match_plan import PlannerBounds, enforce_plan_bound, planner_bounds
+from hyf_application.match_plan import (
+    PlannerBounds,
+    enforce_plan_bound,
+    planner_bounds,
+)
 
 
 def test_bounded_single_line_allocation() raises:
@@ -559,14 +649,18 @@ from hyf_application.match_plan import (
 
 def test_conservation_across_multiple_demand_lines() raises:
     var capacities = List[LotCapacity]()
-    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0))
+    capacities.append(
+        LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0)
+    )
     var lines = List[String]()
     lines.append("line-1")
     lines.append("line-2")
     var required = List[Int]()
     required.append(30)
     required.append(30)
-    var plan = allocate_multiple_lines("p1", "farm-1", lines, required, capacities)
+    var plan = allocate_multiple_lines(
+        "p1", "farm-1", lines, required, capacities
+    )
     # 50 kg lot cannot satisfy two 30 kg lines: total allocated is capped at 50.
     var total = 0
     for entry in plan.allocations:
@@ -576,7 +670,10 @@ def test_conservation_across_multiple_demand_lines() raises:
     assert_true(not shared_lot_allows_concurrent_over_allocation())
 
 
-from hyf_application.match_plan import partial_outcome, partial_discloses_deficit
+from hyf_application.match_plan import (
+    partial_outcome,
+    partial_discloses_deficit,
+)
 
 
 def test_explicit_partial_fulfillment_outcome() raises:
@@ -600,10 +697,16 @@ from hyf_application.match_plan import (
 
 def test_alternative_plans_and_planner_limitations() raises:
     var capacities = List[LotCapacity]()
-    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0))
+    capacities.append(
+        LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0)
+    )
     var plans = List[MatchPlan]()
-    plans.append(allocate_single_line("p1", "line-1", "farm-1", 25, 0, capacities))
-    plans.append(allocate_single_line("p2", "line-1", "farm-1", 30, 0, capacities))
+    plans.append(
+        allocate_single_line("p1", "line-1", "farm-1", 25, 0, capacities)
+    )
+    plans.append(
+        allocate_single_line("p2", "line-1", "farm-1", 30, 0, capacities)
+    )
     var unsupported = List[String]()
     unsupported.append("multi_supplier")
     var offer = alternative_plans(plans, unsupported)
@@ -624,7 +727,9 @@ def test_semantic_suitability_gated_on_evidence() raises:
     assert_true(evidence_sufficient(2, 1))
     assert_equal(gated_semantic_suitability(3, 2, 1).result, "pass")
     assert_equal(gated_semantic_suitability(3, 0, 1).result, "unknown")
-    assert_equal(gated_semantic_suitability(3, 0, 1).reason, "evidence_insufficient")
+    assert_equal(
+        gated_semantic_suitability(3, 0, 1).reason, "evidence_insufficient"
+    )
     assert_true(not unknown_evidence_is_midpoint_score())
 
 
@@ -638,7 +743,9 @@ from hyf_assist.evaluator import typed_score
 def test_culinary_use_semantic_scoring_gated() raises:
     var answer = typed_score("culinary_fit", 2, 3, 1.0)
     assert_equal(culinary_use_score(answer, 3, 1, 1), 1.0)
-    assert_equal(culinary_use_score(typed_score("culinary_fit", 1, 3, 1.0), 3, 1, 1), 0.5)
+    assert_equal(
+        culinary_use_score(typed_score("culinary_fit", 1, 3, 1.0), 3, 1, 1), 0.5
+    )
     with assert_raises():
         _ = culinary_use_score(answer, 3, 0, 1)
     assert_true(not culinary_score_affects_feasibility())
@@ -681,10 +788,16 @@ from hyf_application.match_ranking import (
 
 def test_deterministic_ranking_and_tie_breaks() raises:
     var capacities = List[LotCapacity]()
-    capacities.append(LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0))
+    capacities.append(
+        LotCapacity(lot_id="lot-1", revision="l1", value=50, scale=0)
+    )
     var plans = List[MatchPlan]()
-    plans.append(allocate_single_line("plan-b", "line-1", "farm-1", 25, 0, capacities))
-    plans.append(allocate_single_line("plan-a", "line-1", "farm-1", 25, 0, capacities))
+    plans.append(
+        allocate_single_line("plan-b", "line-1", "farm-1", 25, 0, capacities)
+    )
+    plans.append(
+        allocate_single_line("plan-a", "line-1", "farm-1", 25, 0, capacities)
+    )
     var scores = List[Int]()
     scores.append(50)
     scores.append(50)
@@ -738,10 +851,10 @@ from json import loads as _json_loads
 
 def test_farm_update_operation_returns_proposal_output() raises:
     var input = _json_loads(
-        '{"source":{"source_id":"s1","revision":"r1","text":"Got about 80 lb of Roma tomatoes.",'
-        '"source_time":"2026-09-21T09:00:00-07:00","timezone":"America/Vancouver",'
-        '"actor_id":"farm-1","farm_id":"farm-1"},'
-        '"taxonomy":{"products":["roma tomatoes"],"units":["lb"],"dates":[]}}'
+        '{"source":{"source_id":"s1","revision":"r1","text":"Got about 80 lb of'
+        " Roma"
+        ' tomatoes.","source_time":"2026-09-21T09:00:00-07:00","timezone":"America/Vancouver","actor_id":"farm-1","farm_id":"farm-1"},"taxonomy":{"products":["roma'
+        ' tomatoes"],"units":["lb"],"dates":[]}}'
     )
     var output = execute_farm_update_interpret(input)
     assert_equal(len(output["claims"].array_items()), 1)
@@ -760,7 +873,8 @@ from hyf_application.buyer_operation import (
 
 def test_buyer_request_operations_return_proposals() raises:
     var source = _json_loads(
-        '{"source":{"source_id":"b1","revision":"r1","text":"Need 25 kg of tomatoes.",'
+        '{"source":{"source_id":"b1","revision":"r1","text":"Need 25 kg of'
+        ' tomatoes.",'
         '"source_time":"2026-09-21T09:05:00-07:00","timezone":"America/Vancouver",'
         '"actor_id":"buyer-1","farm_id":"buyer-1"}}'
     )
@@ -770,6 +884,8 @@ def test_buyer_request_operations_return_proposals() raises:
         '{"need":{"need_id":"n1"},"snapshots":[{"lot_id":"lot-1"}]}'
     )
     var matched = execute_buyer_request_match(match_input)
-    assert_equal(matched["limitations"]["scope"].string_value(), "supplied_only")
+    assert_equal(
+        matched["limitations"]["scope"].string_value(), "supplied_only"
+    )
     with assert_raises():
         _ = execute_buyer_request_match(_json_loads("{}"))

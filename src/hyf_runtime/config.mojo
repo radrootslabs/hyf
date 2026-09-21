@@ -5,7 +5,7 @@ from morph.toml import from_toml
 
 
 @fieldwise_init
-struct HyfServiceRuntimeConfig(Defaultable, Copyable, Movable):
+struct HyfServiceRuntimeConfig(Copyable, Defaultable, Movable):
     var transport: String
 
     def __init__(out self):
@@ -13,7 +13,7 @@ struct HyfServiceRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
-struct HyfExecutionRuntimeConfig(Defaultable, Copyable, Movable):
+struct HyfExecutionRuntimeConfig(Copyable, Defaultable, Movable):
     var default_execution_mode: String
     var allow_assisted: Bool
     var enable_farm_update_interpret: Bool
@@ -31,7 +31,7 @@ struct HyfExecutionRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
-struct HyfMaxLocalProviderRuntimeConfig(Defaultable, Copyable, Movable):
+struct HyfMaxLocalProviderRuntimeConfig(Copyable, Defaultable, Movable):
     var enabled: Bool
     var base_url: String
     var health_url: String
@@ -47,7 +47,7 @@ struct HyfMaxLocalProviderRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
-struct HyfTypesafeProviderRuntimeConfig(Defaultable, Copyable, Movable):
+struct HyfTypesafeProviderRuntimeConfig(Copyable, Defaultable, Movable):
     var enabled: Bool
     var base_url: String
     var model: String
@@ -61,7 +61,7 @@ struct HyfTypesafeProviderRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
-struct HyfAssistedRuntimeConfig(Defaultable, Copyable, Movable):
+struct HyfAssistedRuntimeConfig(Copyable, Defaultable, Movable):
     var provider: String
     var max_local: HyfMaxLocalProviderRuntimeConfig
     var typesafe: HyfTypesafeProviderRuntimeConfig
@@ -73,7 +73,7 @@ struct HyfAssistedRuntimeConfig(Defaultable, Copyable, Movable):
 
 
 @fieldwise_init
-struct HyfRuntimeConfig(Defaultable, Copyable, Movable):
+struct HyfRuntimeConfig(Copyable, Defaultable, Movable):
     var service: HyfServiceRuntimeConfig
     var runtime: HyfExecutionRuntimeConfig
     var assisted: HyfAssistedRuntimeConfig
@@ -123,7 +123,9 @@ def assisted_runtime_configured(config: HyfLoadedRuntimeConfig) -> Bool:
     return False
 
 
-def operation_enabled(config: HyfLoadedRuntimeConfig, operation: String) -> Bool:
+def operation_enabled(
+    config: HyfLoadedRuntimeConfig, operation: String
+) -> Bool:
     if config.effective.runtime.disable_provider:
         return False
     if operation == "farm_update.interpret":
@@ -186,7 +188,8 @@ def _validate_runtime_config(config: HyfRuntimeConfig) raises:
 
     if config.runtime.default_execution_mode != "deterministic":
         raise Error(
-            "runtime.default_execution_mode must be 'deterministic' in the foundation wave"
+            "runtime.default_execution_mode must be 'deterministic' in the"
+            " foundation wave"
         )
 
     if config.assisted.provider != "":
@@ -200,7 +203,8 @@ def _validate_runtime_config(config: HyfRuntimeConfig) raises:
             and config.assisted.provider != "typesafe"
         ):
             raise Error(
-                "assisted.provider must be 'max_local' or 'typesafe' when runtime.allow_assisted is true"
+                "assisted.provider must be 'max_local' or 'typesafe' when"
+                " runtime.allow_assisted is true"
             )
 
     if (
@@ -213,22 +217,26 @@ def _validate_runtime_config(config: HyfRuntimeConfig) raises:
     if config.assisted.typesafe.enabled:
         if not config.runtime.allow_assisted:
             raise Error(
-                "runtime.allow_assisted must be true when assisted.typesafe.enabled is true"
+                "runtime.allow_assisted must be true when"
+                " assisted.typesafe.enabled is true"
             )
         if config.assisted.provider != "typesafe":
             raise Error(
-                "assisted.provider must be 'typesafe' when assisted.typesafe.enabled is true"
+                "assisted.provider must be 'typesafe' when"
+                " assisted.typesafe.enabled is true"
             )
         _validate_typesafe_provider_config(config.assisted.typesafe)
 
     if config.assisted.max_local.enabled:
         if not config.runtime.allow_assisted:
             raise Error(
-                "runtime.allow_assisted must be true when assisted.max_local.enabled is true"
+                "runtime.allow_assisted must be true when"
+                " assisted.max_local.enabled is true"
             )
         if config.assisted.provider != "max_local":
             raise Error(
-                "assisted.provider must be 'max_local' when assisted.max_local.enabled is true"
+                "assisted.provider must be 'max_local' when"
+                " assisted.max_local.enabled is true"
             )
         _validate_max_local_provider_config(config.assisted.max_local)
 
@@ -240,7 +248,9 @@ def _require_non_empty(value: String, context: String) raises:
 
 def _require_no_boundary_whitespace(value: String, context: String) raises:
     if String(value) != String(value).strip():
-        raise Error(context + " must not include leading or trailing whitespace")
+        raise Error(
+            context + " must not include leading or trailing whitespace"
+        )
 
 
 def _require_http_url(value: String, context: String) raises:
@@ -255,15 +265,9 @@ def _strip_toml_key_quotes(value: String) -> String:
 
     var bytes = stripped.as_bytes()
     var last_index = stripped.byte_length() - 1
-    if (
-        bytes[0] == UInt8(ord('"'))
-        and bytes[last_index] == UInt8(ord('"'))
-    ):
+    if bytes[0] == UInt8(ord('"')) and bytes[last_index] == UInt8(ord('"')):
         return String(stripped[byte=1:last_index])
-    if (
-        bytes[0] == UInt8(ord("'"))
-        and bytes[last_index] == UInt8(ord("'"))
-    ):
+    if bytes[0] == UInt8(ord("'")) and bytes[last_index] == UInt8(ord("'")):
         return String(stripped[byte=1:last_index])
     return stripped^
 
@@ -271,9 +275,7 @@ def _strip_toml_key_quotes(value: String) -> String:
 def _normalize_toml_key_path(key: String) -> String:
     var normalized = String("")
     for raw_part in key.split("."):
-        var part = _strip_toml_key_quotes(
-            String(String(raw_part).strip())
-        )
+        var part = _strip_toml_key_quotes(String(String(raw_part).strip()))
         if normalized == "":
             normalized = part
         else:
@@ -325,7 +327,7 @@ def _inline_table_contains_route_key(value: String) -> Bool:
     if close_index < 0 or close_index <= open_index:
         close_index = table.byte_length()
 
-    var body = String(table[byte=open_index + 1:close_index])
+    var body = String(table[byte = open_index + 1 : close_index])
     var field_start = 0
     while field_start <= body.byte_length():
         var comma_index = _toml_delimiter_index_outside_quotes(
@@ -366,12 +368,9 @@ def _reject_removed_max_local_route_config(config_text: String) raises:
             if close_index < 0:
                 in_max_local = False
                 continue
-            var table_name = String(
-                String(line[byte=1:close_index]).strip()
-            )
+            var table_name = String(String(line[byte=1:close_index]).strip())
             in_max_local = (
-                _normalize_toml_key_path(table_name)
-                == "assisted.max_local"
+                _normalize_toml_key_path(table_name) == "assisted.max_local"
             )
             continue
         var equals_index = line.find("=")
@@ -380,7 +379,7 @@ def _reject_removed_max_local_route_config(config_text: String) raises:
         var key = _normalize_toml_key_path(
             String(String(line[byte=0:equals_index]).strip())
         )
-        var value = String(String(line[byte=equals_index + 1:]).strip())
+        var value = String(String(line[byte = equals_index + 1 :]).strip())
         if (
             (in_max_local and key == "route")
             or key == "assisted.max_local.route"
@@ -390,12 +389,13 @@ def _reject_removed_max_local_route_config(config_text: String) raises:
             )
         ):
             raise Error(
-                "assisted.max_local.route has been removed; provider route is derived by HYF"
+                "assisted.max_local.route has been removed; provider route is"
+                " derived by HYF"
             )
 
 
 def _validate_typesafe_provider_config(
-    config: HyfTypesafeProviderRuntimeConfig
+    config: HyfTypesafeProviderRuntimeConfig,
 ) raises:
     _require_non_empty(config.base_url, "assisted.typesafe.base_url")
     _require_no_boundary_whitespace(
@@ -406,11 +406,13 @@ def _validate_typesafe_provider_config(
     _require_non_empty(config.model, "assisted.typesafe.model")
     _require_no_boundary_whitespace(config.model, "assisted.typesafe.model")
     if config.request_timeout_ms <= 0:
-        raise Error("assisted.typesafe.request_timeout_ms must be greater than zero")
+        raise Error(
+            "assisted.typesafe.request_timeout_ms must be greater than zero"
+        )
 
 
 def _validate_max_local_provider_config(
-    config: HyfMaxLocalProviderRuntimeConfig
+    config: HyfMaxLocalProviderRuntimeConfig,
 ) raises:
     _require_non_empty(config.base_url, "assisted.max_local.base_url")
     _require_no_boundary_whitespace(
@@ -423,8 +425,8 @@ def _validate_max_local_provider_config(
     )
     _require_http_url(config.health_url, "assisted.max_local.health_url")
     _require_non_empty(config.model, "assisted.max_local.model")
-    _require_no_boundary_whitespace(
-        config.model, "assisted.max_local.model"
-    )
+    _require_no_boundary_whitespace(config.model, "assisted.max_local.model")
     if config.request_timeout_ms <= 0:
-        raise Error("assisted.max_local.request_timeout_ms must be greater than zero")
+        raise Error(
+            "assisted.max_local.request_timeout_ms must be greater than zero"
+        )

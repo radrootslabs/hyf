@@ -17,7 +17,9 @@ from hyf_assist.evaluator import (
 def test_evaluator_boundary_is_typed_and_scriptable() raises:
     var answers = List[TypedAnswer]()
     answers.append(typed_choice("supply_status", "offered", 1.0))
-    var response = SemanticEvaluatorResponse(model="test-model", answers=answers^)
+    var response = SemanticEvaluatorResponse(
+        model="test-model", answers=answers^
+    )
     assert_equal(response.model, "test-model")
     assert_equal(len(response.answers), 1)
     assert_equal(response.answers[0].kind, "choice")
@@ -83,7 +85,8 @@ def test_scripted_evaluator_is_strict_and_bounded() raises:
     assert_equal(evaluator.call_count, 1)
     with assert_raises():
         _ = scripted_evaluate(
-            evaluator, SemanticEvaluatorRequest(state="s", question_bundle="qb1")
+            evaluator,
+            SemanticEvaluatorRequest(state="s", question_bundle="qb1"),
         )
     with assert_raises():
         _ = scripted_evaluate(

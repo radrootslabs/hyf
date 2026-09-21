@@ -81,7 +81,7 @@ def _require_input_value(json: Value) raises -> Value:
 
 
 @fieldwise_init
-struct WireRequest(Deserializable, Copyable, Movable):
+struct WireRequest(Copyable, Deserializable, Movable):
     var version: Int
     var request_id: String
     var trace_id: Optional[String]

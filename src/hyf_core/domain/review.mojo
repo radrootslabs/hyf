@@ -21,15 +21,21 @@ def review_required(field: String, reason: String) raises -> ReviewState:
     if field.strip() == "" or reason.strip() == "":
         raise Error("clarification requires field and reason")
     var clarifications = List[Clarification]()
-    clarifications.append(Clarification(field=String(field), reason=String(reason)))
+    clarifications.append(
+        Clarification(field=String(field), reason=String(reason))
+    )
     return ReviewState(required=True, clarifications=clarifications^)
 
 
-def review_add(state: ReviewState, field: String, reason: String) raises -> ReviewState:
+def review_add(
+    state: ReviewState, field: String, reason: String
+) raises -> ReviewState:
     if field.strip() == "" or reason.strip() == "":
         raise Error("clarification requires field and reason")
     var clarifications = List[Clarification]()
     for existing in state.clarifications:
         clarifications.append(existing.copy())
-    clarifications.append(Clarification(field=String(field), reason=String(reason)))
+    clarifications.append(
+        Clarification(field=String(field), reason=String(reason))
+    )
     return ReviewState(required=True, clarifications=clarifications^)

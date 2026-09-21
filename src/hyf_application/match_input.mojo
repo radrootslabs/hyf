@@ -1,7 +1,9 @@
 from std.collections import List
 
 
-def validate_match_scope(trusted_tenant: String, snapshot_tenant: String) raises:
+def validate_match_scope(
+    trusted_tenant: String, snapshot_tenant: String
+) raises:
     if String(trusted_tenant).strip().byte_length() == 0:
         raise Error("match requires a trusted tenant")
     if snapshot_tenant != trusted_tenant:

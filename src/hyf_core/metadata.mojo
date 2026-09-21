@@ -23,6 +23,7 @@ struct HyfBuildIdentity(Copyable, Movable):
     var deterministic_execution_available: Bool
     var assisted_execution_available: Bool
 
+
 def current_package_surface() raises -> HyfPackageSurface:
     return HyfPackageSurface(
         package_name=hyf_package_name(),

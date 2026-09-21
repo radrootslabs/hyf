@@ -20,7 +20,9 @@ def known_field(value: String, method: String) raises -> DecodedField:
     )
 
 
-def known_approximate_field(value: String, method: String) raises -> DecodedField:
+def known_approximate_field(
+    value: String, method: String
+) raises -> DecodedField:
     var field = known_field(value, method)
     field.qualifier = "approximate"
     return field^

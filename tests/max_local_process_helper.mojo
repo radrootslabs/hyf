@@ -61,7 +61,7 @@ def _request_path(request: String) -> String:
     var first_space = first_line.find(" ")
     if first_space < 0:
         return ""
-    var rest = String(first_line[byte=first_space + 1:])
+    var rest = String(first_line[byte = first_space + 1 :])
     var second_space = rest.find(" ")
     if second_space < 0:
         return ""

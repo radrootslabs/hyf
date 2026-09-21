@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct Freshness(Copyable, Movable):
     var record_age_minutes: Int

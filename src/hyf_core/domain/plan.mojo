@@ -50,7 +50,9 @@ def match_plan(
     for entry in allocations:
         copied.append(entry.copy())
     return MatchPlan(
-        plan_id=String(plan_id), supplier_id=String(supplier_id), allocations=copied^
+        plan_id=String(plan_id),
+        supplier_id=String(supplier_id),
+        allocations=copied^,
     )
 
 
@@ -96,7 +98,10 @@ def plan_conservation_violations(
             if lot.lot_id + "@" + lot.revision == lot_keys[index]:
                 capacity_value = lot.value
                 capacity_scale = lot.scale
-        var scale = capacity_scale if capacity_scale > allocated_scale[index] else allocated_scale[index]
+        var scale = (
+            capacity_scale if capacity_scale
+            > allocated_scale[index] else allocated_scale[index]
+        )
         if capacity_value < 0:
             violations.append(lot_keys[index] + ": unknown capacity")
             continue

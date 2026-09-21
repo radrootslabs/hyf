@@ -18,7 +18,8 @@ def match_explanation(
         + covered
         + "] within scope "
         + scope
-        + ". This is a suggestion within the supplied records, not a reservation."
+        + ". This is a suggestion within the supplied records, not a"
+        " reservation."
     )
 
 

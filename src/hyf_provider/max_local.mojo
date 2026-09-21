@@ -43,7 +43,7 @@ struct MaxLocalQueryRewriteOutcome(Copyable, Movable):
 
 
 def _query_rewrite_success_outcome(
-    result: MaxLocalQueryRewriteResult
+    result: MaxLocalQueryRewriteResult,
 ) -> MaxLocalQueryRewriteOutcome:
     return MaxLocalQueryRewriteOutcome(
         result=Optional[MaxLocalQueryRewriteResult](result.copy()),
@@ -72,9 +72,7 @@ def max_local_query_rewrite_failure_from_reason(
             kind="transport", reason="invalid_url"
         )
     if reason == "timeout":
-        return MaxLocalQueryRewriteFailure(
-            kind="transport", reason="timeout"
-        )
+        return MaxLocalQueryRewriteFailure(kind="transport", reason="timeout")
     if reason == "connection_failed":
         return MaxLocalQueryRewriteFailure(
             kind="transport", reason="connection_failed"
@@ -107,9 +105,7 @@ def max_local_query_rewrite_failure_from_reason(
         return MaxLocalQueryRewriteFailure(
             kind="provider_payload", reason="provider_missing_content"
         )
-    return MaxLocalQueryRewriteFailure(
-        kind="provider", reason="provider_error"
-    )
+    return MaxLocalQueryRewriteFailure(kind="provider", reason="provider_error")
 
 
 def _load_chat_completion_response_json(text: String) raises -> Value:
@@ -175,9 +171,7 @@ def try_execute_query_rewrite_via_max_local_provider(
                 )
             )
         except e:
-            var failure = max_local_query_rewrite_failure_from_reason(
-                String(e)
-            )
+            var failure = max_local_query_rewrite_failure_from_reason(String(e))
             return _query_rewrite_failure_outcome(
                 String(failure.kind), String(failure.reason)
             )

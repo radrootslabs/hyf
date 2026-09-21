@@ -21,7 +21,9 @@ struct DemandLine(Copyable, Movable):
     var conditions: List[Condition]
 
 
-def condition(kind: String, strength: String, value: Optional[String]) raises -> Condition:
+def condition(
+    kind: String, strength: String, value: Optional[String]
+) raises -> Condition:
     if kind.strip() == "":
         raise Error("condition kind must not be empty")
     var strengths = ["mandatory", "preferred", "excluded", "permitted"]
@@ -33,7 +35,9 @@ def condition(kind: String, strength: String, value: Optional[String]) raises ->
         raise Error("unknown condition strength: " + strength)
     if strength != "excluded" and not value:
         raise Error("non-excluded condition requires a value")
-    return Condition(kind=String(kind), strength=String(strength), value=value.copy())
+    return Condition(
+        kind=String(kind), strength=String(strength), value=value.copy()
+    )
 
 
 def demand_line(

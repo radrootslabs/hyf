@@ -8,7 +8,9 @@ struct DemandLineDraft(Copyable, Movable):
     var quantity_state: String
 
 
-def discover_demand_lines(product_phrases: List[String]) raises -> List[DemandLineDraft]:
+def discover_demand_lines(
+    product_phrases: List[String],
+) raises -> List[DemandLineDraft]:
     var lines = List[DemandLineDraft]()
     var index = 1
     for phrase in product_phrases:

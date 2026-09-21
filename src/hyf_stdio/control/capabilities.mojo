@@ -39,9 +39,7 @@ def build_capabilities_output_with_runtime_context(
     var control_routes = List[String]()
     control_routes.append("sys.status")
     control_routes.append("sys.capabilities")
-    output.set(
-        "control_routes", _string_array(control_routes)
-    )
+    output.set("control_routes", _string_array(control_routes))
 
     var capabilities = loads("[]")
     for capability in canonical_business_capabilities():
@@ -50,18 +48,16 @@ def build_capabilities_output_with_runtime_context(
         value.set("kind", Value("business"))
         value.set(
             "deterministic_execution",
-            Value("enabled")
-            if capability.deterministic_enabled
-            else Value("disabled"),
+            Value("enabled") if capability.deterministic_enabled else Value(
+                "disabled"
+            ),
         )
         value.set(
             "implementation_status",
-            Value("implemented")
-            if capability.implemented
-            else (
-                Value("not_implemented")
-                if capability.deterministic_enabled
-                else Value("disabled")
+            Value("implemented") if capability.implemented else (
+                Value(
+                    "not_implemented"
+                ) if capability.deterministic_enabled else Value("disabled")
             ),
         )
         value.set("callable", Value(capability.callable))
@@ -96,9 +92,7 @@ def build_capabilities_output_with_runtime_context(
     output.set(
         "assisted_runtime_capabilities", assisted_runtime_capabilities.copy()
     )
-    output.set(
-        "provider_runtime_capabilities", assisted_runtime_capabilities
-    )
+    output.set("provider_runtime_capabilities", assisted_runtime_capabilities)
     output.set(
         "request_context_contract",
         build_request_context_contract_value(),

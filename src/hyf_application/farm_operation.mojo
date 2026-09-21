@@ -63,9 +63,7 @@ def execute_farm_update_interpret(input: Value) raises -> Value:
         if _has_key(taxonomy, "dates"):
             dates = _string_list(taxonomy["dates"])
 
-    var candidates = discover_candidates(
-        parsed.text, products, units, dates
-    )
+    var candidates = discover_candidates(parsed.text, products, units, dates)
 
     var claims = loads("[]")
     var review_required = False

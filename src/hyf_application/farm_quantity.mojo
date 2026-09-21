@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct ProductQuantityAssociation(Copyable, Movable):
     var product_phrase: String

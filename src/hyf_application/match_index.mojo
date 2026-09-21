@@ -14,7 +14,10 @@ def index_supplied_lots(
     for index in range(len(lot_ids)):
         var lot = String(lot_ids[index])
         var rev = String(revisions[index])
-        if String(lot).strip().byte_length() == 0 or String(rev).strip().byte_length() == 0:
+        if (
+            String(lot).strip().byte_length() == 0
+            or String(rev).strip().byte_length() == 0
+        ):
             raise Error("supplied lot requires id and revision")
         var key = lot + "@" + rev
         for existing in keys:

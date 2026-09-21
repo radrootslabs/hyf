@@ -61,9 +61,7 @@ def _transport_failure_outcome(
     return MaxLocalTransportOutcome(
         response=Optional[MaxLocalTransportResponse](None),
         failure=Optional[MaxLocalTransportFailure](
-            MaxLocalTransportFailure(
-                kind=String(kind), reason=String(reason)
-            )
+            MaxLocalTransportFailure(kind=String(kind), reason=String(reason))
         ),
     )
 

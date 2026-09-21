@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct BuyerInferenceOutcome(Copyable, Movable):
     var status: String
@@ -12,7 +10,10 @@ def buyer_inference_failure(reason: String) raises -> BuyerInferenceOutcome:
     if String(reason).strip().byte_length() == 0:
         raise Error("buyer inference failure requires a reason")
     return BuyerInferenceOutcome(
-        status="failed", resolved_lines=0, unresolved_lines=1, reason=String(reason)
+        status="failed",
+        resolved_lines=0,
+        unresolved_lines=1,
+        reason=String(reason),
     )
 
 
@@ -20,7 +21,10 @@ def buyer_inference_degraded(reason: String) raises -> BuyerInferenceOutcome:
     if String(reason).strip().byte_length() == 0:
         raise Error("buyer inference degradation requires a reason")
     return BuyerInferenceOutcome(
-        status="degraded", resolved_lines=0, unresolved_lines=1, reason=String(reason)
+        status="degraded",
+        resolved_lines=0,
+        unresolved_lines=1,
+        reason=String(reason),
     )
 
 

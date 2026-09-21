@@ -143,7 +143,8 @@ def execute_buyer_request_match(input: Value) raises -> Value:
                 "product",
                 "pass" if required_phrase == lot_phrase else "fail",
                 True,
-                "product_match" if required_phrase == lot_phrase else "product_mismatch",
+                "product_match" if required_phrase
+                == lot_phrase else "product_mismatch",
             )
         )
         var available_state = "unknown"
@@ -154,7 +155,8 @@ def execute_buyer_request_match(input: Value) raises -> Value:
                 "availability",
                 "pass" if available_state == "known" else "unknown",
                 True,
-                "availability_known" if available_state == "known" else "stock_unknown",
+                "availability_known" if available_state
+                == "known" else "stock_unknown",
             )
         )
         if available_state == "known" and required_value > 0:
@@ -168,7 +170,8 @@ def execute_buyer_request_match(input: Value) raises -> Value:
                     "quantity",
                     comparison,
                     True,
-                    "quantity_sufficient" if comparison == "pass" else "quantity_insufficient",
+                    "quantity_sufficient" if comparison
+                    == "pass" else "quantity_insufficient",
                 )
             )
         assessments.append(_assessment_value(lot_id, checks))

@@ -46,4 +46,6 @@ def scripted_evaluate(
     var answers = List[TypedAnswer]()
     for answer in evaluator.answers:
         answers.append(answer.copy())
-    return SemanticEvaluatorResponse(model=String(evaluator.model), answers=answers^)
+    return SemanticEvaluatorResponse(
+        model=String(evaluator.model), answers=answers^
+    )

@@ -204,7 +204,8 @@ def parse_request_context(json: Value) raises -> RequestContext:
             and context.execution_mode_preference != "assisted"
         ):
             raise Error(
-                "request context execution_mode_preference must be 'deterministic' or 'assisted'"
+                "request context execution_mode_preference must be"
+                " 'deterministic' or 'assisted'"
             )
 
     if _has_key(json, "deadline_ms"):
@@ -231,9 +232,7 @@ def parse_request_context(json: Value) raises -> RequestContext:
 
     if _has_key(json, "consistency"):
         context.consistency = get_string(json, "consistency")
-        _require_non_empty(
-            context.consistency, "request context consistency"
-        )
+        _require_non_empty(context.consistency, "request context consistency")
 
     if _has_key(json, "return_provenance"):
         context.return_provenance = get_bool(json, "return_provenance")

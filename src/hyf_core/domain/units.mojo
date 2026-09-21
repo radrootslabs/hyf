@@ -59,7 +59,9 @@ def conversion_rule(
     )
 
 
-def apply_conversion(quantity: Quantity, rule: ConversionRule) raises -> Quantity:
+def apply_conversion(
+    quantity: Quantity, rule: ConversionRule
+) raises -> Quantity:
     if quantity.unit != rule.from_unit:
         raise Error("conversion rule does not apply to unit " + quantity.unit)
     if quantity.dimension != unit_dimension(rule.to_unit):

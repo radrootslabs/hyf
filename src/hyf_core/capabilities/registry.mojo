@@ -178,6 +178,7 @@ def _dispatch_heuristic_registered_business_capability(
         return execute_explain_result(input, context)
     return failed_capability(capability_not_implemented_error(capability_id))
 
+
 def is_gated_operation(capability_id: String) -> Bool:
     for descriptor in gated_operation_descriptors():
         if descriptor.id == capability_id:
@@ -195,7 +196,9 @@ def execute_gated_operation(
             return successful_capability(execute_buyer_request_interpret(input))
         if capability_id == "buyer_request.match":
             return successful_capability(execute_buyer_request_match(input))
-        return failed_capability(capability_not_implemented_error(capability_id))
+        return failed_capability(
+            capability_not_implemented_error(capability_id)
+        )
     except e:
         return failed_capability(invalid_input_error(String(e)))
 
@@ -205,7 +208,9 @@ def execute_registered_business_capability(
 ) raises -> CapabilityResult:
     var capability = canonical_business_capability(capability_id)
     if not capability:
-        return failed_capability(capability_not_implemented_error(capability_id))
+        return failed_capability(
+            capability_not_implemented_error(capability_id)
+        )
 
     var descriptor = capability.value().copy()
     if (
@@ -213,7 +218,9 @@ def execute_registered_business_capability(
         or not descriptor.implemented
         or not descriptor.callable
     ):
-        return failed_capability(capability_not_implemented_error(capability_id))
+        return failed_capability(
+            capability_not_implemented_error(capability_id)
+        )
 
     if descriptor.deterministic_backend == "heuristic":
         return _dispatch_heuristic_registered_business_capability(
@@ -275,7 +282,9 @@ def gated_operation_descriptors() -> List[GatedOperationDescriptor]:
     )
     descriptors.append(
         GatedOperationDescriptor(
-            id="buyer_request.interpret", requires_assistance=False, exposed=False
+            id="buyer_request.interpret",
+            requires_assistance=False,
+            exposed=False,
         )
     )
     descriptors.append(
@@ -286,7 +295,9 @@ def gated_operation_descriptors() -> List[GatedOperationDescriptor]:
     return descriptors^
 
 
-def gated_operation_is_exposed(operation: String, exposure_enabled: Bool) -> Bool:
+def gated_operation_is_exposed(
+    operation: String, exposure_enabled: Bool
+) -> Bool:
     for descriptor in gated_operation_descriptors():
         if descriptor.id == operation:
             return exposure_enabled

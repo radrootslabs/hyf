@@ -1,4 +1,7 @@
-from hyf_core.domain.eligibility import ConstraintAssessment, constraint_assessment
+from hyf_core.domain.eligibility import (
+    ConstraintAssessment,
+    constraint_assessment,
+)
 
 
 def evidence_sufficient(evidence_count: Int, required: Int) -> Bool:
@@ -25,7 +28,10 @@ from hyf_assist.evaluator import TypedAnswer, normalize_score
 
 
 def culinary_use_score(
-    answer: TypedAnswer, levels: Int, evidence_count: Int, required_evidence: Int
+    answer: TypedAnswer,
+    levels: Int,
+    evidence_count: Int,
+    required_evidence: Int,
 ) raises -> Float64:
     if not evidence_sufficient(evidence_count, required_evidence):
         raise Error("evidence_insufficient")

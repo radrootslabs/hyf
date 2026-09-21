@@ -206,9 +206,7 @@ def _execute_query_rewrite_with_provider(
         var provider_config = max_local_provider_config_from_runtime(
             runtime_context.config
         )
-        var budget_ms = _effective_provider_budget_ms(
-            provider_config, context
-        )
+        var budget_ms = _effective_provider_budget_ms(provider_config, context)
         var budget_start_ns = perf_counter_ns()
         var provider_status = max_local_provider_status(
             _provider_config_with_timeout(provider_config, budget_ms)
@@ -233,9 +231,7 @@ def _execute_query_rewrite_with_provider(
             )
 
         var request = parse_query_rewrite_request(input)
-        remaining_ms = _remaining_provider_budget_ms(
-            budget_start_ns, budget_ms
-        )
+        remaining_ms = _remaining_provider_budget_ms(budget_start_ns, budget_ms)
         if remaining_ms <= 0:
             return _query_rewrite_fallback(
                 input,
@@ -296,9 +292,7 @@ def execute_runtime_aware_business_capability(
     var deterministic_context = context.copy()
     deterministic_context.execution_mode_preference = "deterministic"
     return _with_deterministic_assisted_fallback_meta(
-        execute_backend_capability(
-            capability_id, input, deterministic_context
-        ),
+        execute_backend_capability(capability_id, input, deterministic_context),
         "provider_runtime",
         "unsupported_capability",
     )

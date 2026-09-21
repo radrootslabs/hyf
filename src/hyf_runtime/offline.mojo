@@ -1,5 +1,3 @@
-
-
 def external_network_required() -> Bool:
     return False
 

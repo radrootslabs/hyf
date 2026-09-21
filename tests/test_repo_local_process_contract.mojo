@@ -74,7 +74,9 @@ def test_src_main_consumes_repo_local_env_without_outer_wrapper() raises:
                     runtime_status["config"]["artifact_path"].string_value(),
                 )
                 assert_equal(
-                    runtime_status["config"]["artifact_path_source"].string_value(),
+                    runtime_status["config"][
+                        "artifact_path_source"
+                    ].string_value(),
                     "canonical_runtime_path",
                 )
                 assert_equal(

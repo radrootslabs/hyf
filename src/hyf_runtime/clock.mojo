@@ -9,7 +9,9 @@ struct Clock(Copyable, Movable):
 
 
 def fixed_clock(wall_epoch_seconds: Int, monotonic_ns: Int) -> Clock:
-    return Clock(wall_epoch_seconds=wall_epoch_seconds, monotonic_ns=monotonic_ns)
+    return Clock(
+        wall_epoch_seconds=wall_epoch_seconds, monotonic_ns=monotonic_ns
+    )
 
 
 def advance(clock: Clock, monotonic_delta_ns: Int) -> Clock:

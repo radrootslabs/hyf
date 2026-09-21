@@ -61,13 +61,9 @@ def serialize_core_response_meta(meta: CoreResponseMeta) raises -> Value:
     if meta.schema_version:
         value.set("schema_version", Value(meta.schema_version.value()))
     if meta.prompt_version:
-        value.set(
-            "prompt_version", Value(String(meta.prompt_version.value()))
-        )
+        value.set("prompt_version", Value(String(meta.prompt_version.value())))
     if meta.fallback_kind:
-        value.set(
-            "fallback_kind", Value(String(meta.fallback_kind.value()))
-        )
+        value.set("fallback_kind", Value(String(meta.fallback_kind.value())))
     if meta.fallback_reason:
         value.set(
             "fallback_reason", Value(String(meta.fallback_reason.value()))

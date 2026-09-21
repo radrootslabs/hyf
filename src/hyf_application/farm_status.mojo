@@ -11,7 +11,13 @@ struct ProductStatus(Copyable, Movable):
 def interpret_product_statuses(
     products: List[String], evaluator_status: String
 ) raises -> List[ProductStatus]:
-    var allowed = ["offered", "forecast", "unavailable", "correction", "unclear"]
+    var allowed = [
+        "offered",
+        "forecast",
+        "unavailable",
+        "correction",
+        "unclear",
+    ]
     var status = String(evaluator_status)
     var known = False
     for candidate in allowed:

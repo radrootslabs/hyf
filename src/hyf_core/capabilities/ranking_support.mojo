@@ -125,8 +125,7 @@ def _parse_candidate(json: Value, context: String) raises -> SemanticCandidate:
         raise Error(context + " field 'delivery' must not be empty")
     if normalized_delivery != "pickup" and normalized_delivery != "delivery":
         raise Error(
-            context
-            + " field 'delivery' must be one of 'pickup' or 'delivery'"
+            context + " field 'delivery' must be one of 'pickup' or 'delivery'"
         )
 
     var distance_km = get_float(json, "distance_km")
@@ -135,9 +134,7 @@ def _parse_candidate(json: Value, context: String) raises -> SemanticCandidate:
 
     var freshness_minutes = get_int(json, "freshness_minutes")
     if freshness_minutes < 0:
-        raise Error(
-            context + " field 'freshness_minutes' must be non-negative"
-        )
+        raise Error(context + " field 'freshness_minutes' must be non-negative")
 
     return SemanticCandidate(
         id=collapse_whitespace(id),
@@ -170,7 +167,10 @@ def _parse_query_text(input: Value, capability_name: String) raises -> String:
     var text_value = input[field_name]
     if not text_value.is_string():
         raise Error(
-            capability_name + " input field '" + field_name + "' must be a string"
+            capability_name
+            + " input field '"
+            + field_name
+            + "' must be a string"
         )
 
     var collapsed = collapse_whitespace(text_value.string_value())
@@ -259,9 +259,7 @@ def parse_single_candidate(
         field_count += 1
 
     if field_count == 0:
-        raise Error(
-            capability_name + " input requires 'candidate' or 'result'"
-        )
+        raise Error(capability_name + " input requires 'candidate' or 'result'")
     if field_count > 1:
         raise Error(
             capability_name
@@ -278,9 +276,7 @@ def parse_single_candidate(
 
 def _normalize_candidate_text(candidate: SemanticCandidate) -> String:
     var signals = List[String]()
-    return normalize_free_text(
-        candidate.title + " " + candidate.farm, signals
-    )
+    return normalize_free_text(candidate.title + " " + candidate.farm, signals)
 
 
 def _display_term(term: String) -> String:

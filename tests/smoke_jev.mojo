@@ -26,5 +26,7 @@ def main() raises:
     )
     var outcome = post_jev_systemone(BASE_URL, body, 15000)
     if outcome.status < 200 or outcome.status >= 300:
-        raise Error("live Jev smoke failed with status " + String(outcome.status))
+        raise Error(
+            "live Jev smoke failed with status " + String(outcome.status)
+        )
     print("ok: live Jev smoke status " + String(outcome.status))

@@ -76,15 +76,13 @@ def assert_projection(actual: Value, assertions: List[Value]) raises:
         if operator == "present":
             if not _path_exists(actual, assertion["path"].string_value()):
                 raise Error(
-                    "expected present path: "
-                    + assertion["path"].string_value()
+                    "expected present path: " + assertion["path"].string_value()
                 )
             continue
         if operator == "absent":
             if _path_exists(actual, assertion["path"].string_value()):
                 raise Error(
-                    "expected absent path: "
-                    + assertion["path"].string_value()
+                    "expected absent path: " + assertion["path"].string_value()
                 )
             continue
 
@@ -92,14 +90,12 @@ def assert_projection(actual: Value, assertions: List[Value]) raises:
         if operator == "equals":
             if not _deep_equal(observed, assertion["value"]):
                 raise Error(
-                    "expected equality at "
-                    + assertion["path"].string_value()
+                    "expected equality at " + assertion["path"].string_value()
                 )
         elif operator == "not_equals":
             if _deep_equal(observed, assertion["value"]):
                 raise Error(
-                    "expected inequality at "
-                    + assertion["path"].string_value()
+                    "expected inequality at " + assertion["path"].string_value()
                 )
         elif operator == "contains":
             if not observed.is_array():
@@ -117,9 +113,7 @@ def assert_projection(actual: Value, assertions: List[Value]) raises:
                     + assertion["path"].string_value()
                 )
         elif operator == "tolerance":
-            if not _is_number(observed) or not _is_number(
-                assertion["value"]
-            ):
+            if not _is_number(observed) or not _is_number(assertion["value"]):
                 raise Error(
                     "tolerance requires numeric values at "
                     + assertion["path"].string_value()

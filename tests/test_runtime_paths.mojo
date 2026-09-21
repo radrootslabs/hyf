@@ -265,7 +265,11 @@ def test_typesafe_profile_is_configured_and_pins_https_model() raises:
     assert_true(not assisted_runtime_configured(disabled))
 
 
-from hyf_runtime.config import default_loaded_runtime_config, operation_enabled, provider_disabled
+from hyf_runtime.config import (
+    default_loaded_runtime_config,
+    operation_enabled,
+    provider_disabled,
+)
 
 
 def test_operation_enablement_and_kill_switch() raises:
@@ -281,7 +285,11 @@ def test_operation_enablement_and_kill_switch() raises:
     assert_true(not operation_enabled(config, "buyer_request.match"))
 
 
-from hyf_runtime.budget import budget_from_clock, budget_remaining_ms, budget_exhausted
+from hyf_runtime.budget import (
+    budget_from_clock,
+    budget_remaining_ms,
+    budget_exhausted,
+)
 
 
 def test_shared_budget_does_not_reset_per_stage() raises:

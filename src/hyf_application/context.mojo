@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct InterpretationSource(Copyable, Movable):
     var source_id: String

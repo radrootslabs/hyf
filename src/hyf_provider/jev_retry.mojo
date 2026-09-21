@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct RetryPolicy(Copyable, Movable):
     var max_retries: Int

@@ -29,9 +29,7 @@ def _has_key(value: Value, key: String) -> Bool:
     return False
 
 
-def _is_registered_operator(
-    operator: String, registered: List[String]
-) -> Bool:
+def _is_registered_operator(operator: String, registered: List[String]) -> Bool:
     for candidate in registered:
         if candidate == operator:
             return True
@@ -299,7 +297,9 @@ def validate_requirement_traceability(
         if duplicate:
             issues.append(
                 FixtureValidationIssue(
-                    case_id=sid, rule="duplicate_step", detail="duplicate step id"
+                    case_id=sid,
+                    rule="duplicate_step",
+                    detail="duplicate step id",
                 )
             )
         step_seen.append(String(sid))
@@ -371,10 +371,7 @@ def validate_step_states(path: String) raises -> List[FixtureValidationIssue]:
             )
         )
 
-    if (
-        not _has_key(doc, "rules")
-        or len(doc["rules"].array_items()) == 0
-    ):
+    if not _has_key(doc, "rules") or len(doc["rules"].array_items()) == 0:
         issues.append(
             FixtureValidationIssue(
                 case_id="",

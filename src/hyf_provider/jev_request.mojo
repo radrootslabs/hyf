@@ -17,7 +17,9 @@ def _score_criteria(question: Question) raises -> Value:
     return criteria^
 
 
-def build_jev_request_body(bundle: QuestionBundle, state: String) raises -> Value:
+def build_jev_request_body(
+    bundle: QuestionBundle, state: String
+) raises -> Value:
     if state.strip() == "":
         raise Error("jev request requires non-empty state")
     var body = loads("{}")

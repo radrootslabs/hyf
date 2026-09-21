@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct JevFailure(Copyable, Movable):
     var family: String

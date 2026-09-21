@@ -32,18 +32,24 @@ def _make_corpus(base: Path, mutation: String) raises:
     )
     if mutation == "duplicate_requirement":
         registry = registry.replace(
-            ']}]}',
-            ']},{"id":"HYF-TEST-001","verification_method":"x",'
-            '"implementation_steps":["S001"],"fixture_ids":["T001"]}]}',
+            "]}]}",
+            (
+                ']},{"id":"HYF-TEST-001","verification_method":"x",'
+                '"implementation_steps":["S001"],"fixture_ids":["T001"]}]}'
+            ),
         )
     elif mutation == "unknown_step":
         registry = registry.replace('["S001"]', '["S999"]')
     elif mutation == "dangling_fixture":
         registry = registry.replace('["T001"]', '["MISSING"]')
     elif mutation == "uncovered_requirement":
-        registry = registry.replace('"implementation_steps":["S001"]', '"implementation_steps":[]')
+        registry = registry.replace(
+            '"implementation_steps":["S001"]', '"implementation_steps":[]'
+        )
     elif mutation == "missing_verification_method":
-        registry = registry.replace('"fixture-schema and traceability checks"', '""')
+        registry = registry.replace(
+            '"fixture-schema and traceability checks"', '""'
+        )
     elif mutation == "dangling_dependency":
         steps = '{"steps":[{"id":"S001","dependencies":["S404"]}]}'
     elif mutation == "duplicate_step":
@@ -69,12 +75,13 @@ def test_requirement_traceability_accepts_registry_and_rejects_dangling() raises
     assert_equal(
         len(
             validate_requirement_traceability(
-                (root / "requirements" / "hyf_v1_jev.requirements.json")
-                .__fspath__(),
-                (root / "fixtures" / "hyf_v1_jev" / "manifest.json")
-                .__fspath__(),
-                (root / "requirements" / "hyf_v1_jev.steps.json")
-                .__fspath__(),
+                (
+                    root / "requirements" / "hyf_v1_jev.requirements.json"
+                ).__fspath__(),
+                (
+                    root / "fixtures" / "hyf_v1_jev" / "manifest.json"
+                ).__fspath__(),
+                (root / "requirements" / "hyf_v1_jev.steps.json").__fspath__(),
             )
         ),
         0,
@@ -99,25 +106,35 @@ def test_requirement_traceability_accepts_registry_and_rejects_dangling() raises
 
 
 def test_step_state_contract_is_valid_and_rejects_corruption() raises:
-    var path = _dir_of_current_file() / "requirements" / "hyf_v1_jev.step_states.json"
+    var path = (
+        _dir_of_current_file() / "requirements" / "hyf_v1_jev.step_states.json"
+    )
     assert_equal(len(validate_step_states(path.__fspath__())), 0)
 
     with SafeTempDir() as temp_dir:
         var base = Path(temp_dir)
         _write(
             base / "states.json",
-            '{"states":["PASSED","PASSED","NOT_RUN","NOT_APPLICABLE"],'
-            '"passed_requires_executed_evidence":true,"rules":["x"]}',
+            (
+                '{"states":["PASSED","PASSED","NOT_RUN","NOT_APPLICABLE"],'
+                '"passed_requires_executed_evidence":true,"rules":["x"]}'
+            ),
         )
-        assert_true(len(validate_step_states((base / "states.json").__fspath__())) > 0)
+        assert_true(
+            len(validate_step_states((base / "states.json").__fspath__())) > 0
+        )
     with SafeTempDir() as temp_dir:
         var base = Path(temp_dir)
         _write(
             base / "states.json",
-            '{"states":["PASSED","NOT_RUN","NOT_APPLICABLE"],'
-            '"passed_requires_executed_evidence":false,"rules":["x"]}',
+            (
+                '{"states":["PASSED","NOT_RUN","NOT_APPLICABLE"],'
+                '"passed_requires_executed_evidence":false,"rules":["x"]}'
+            ),
         )
-        assert_true(len(validate_step_states((base / "states.json").__fspath__())) > 0)
+        assert_true(
+            len(validate_step_states((base / "states.json").__fspath__())) > 0
+        )
 
 
 def main() raises:
@@ -151,8 +168,9 @@ def test_requirement_and_fixture_closure_audit() raises:
     var planned = 0
     for entry in manifest["cases"].array_items():
         var doc = loads(
-            (root / "fixtures" / "hyf_v1_jev" / entry["path"].string_value())
-            .read_text()
+            (
+                root / "fixtures" / "hyf_v1_jev" / entry["path"].string_value()
+            ).read_text()
         )
         var found_step = False
         for known in step_ids:

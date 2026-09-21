@@ -17,7 +17,9 @@ def preference_component(
         raise Error("preference score must be within [0, 1]")
     if weight < 0.0:
         raise Error("preference weight must be non-negative")
-    return PreferenceComponent(policy=String(policy), score=score, weight=weight)
+    return PreferenceComponent(
+        policy=String(policy), score=score, weight=weight
+    )
 
 
 def compose_preference(components: List[PreferenceComponent]) -> Int:

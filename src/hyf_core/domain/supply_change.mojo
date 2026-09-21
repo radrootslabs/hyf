@@ -40,7 +40,9 @@ def proposed_change(
 
     var resolved_operation = String(operation)
     var unresolved = False
-    if (operation == "withdrawal" or operation == "correction") and not target_id:
+    if (
+        operation == "withdrawal" or operation == "correction"
+    ) and not target_id:
         resolved_operation = "unresolved"
         unresolved = True
 

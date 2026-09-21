@@ -25,17 +25,26 @@ def compose_jev(config: HyfLoadedRuntimeConfig) raises -> JevComposition:
     var typesafe = config.effective.assisted.typesafe.copy()
     if provider_disabled(config):
         return JevComposition(
-            usable=False, base_url="", model="", request_timeout_ms=0,
+            usable=False,
+            base_url="",
+            model="",
+            request_timeout_ms=0,
             reason="provider_disabled",
         )
     if not assisted_execution_enabled(config):
         return JevComposition(
-            usable=False, base_url="", model="", request_timeout_ms=0,
+            usable=False,
+            base_url="",
+            model="",
+            request_timeout_ms=0,
             reason="disabled_by_runtime_config",
         )
     if not typesafe_provider_configured(config):
         return JevComposition(
-            usable=False, base_url="", model="", request_timeout_ms=0,
+            usable=False,
+            base_url="",
+            model="",
+            request_timeout_ms=0,
             reason="provider_unconfigured",
         )
     if not typesafe_api_key_present():

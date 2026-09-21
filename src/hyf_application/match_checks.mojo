@@ -1,15 +1,26 @@
 from std.collections import List
 
-from hyf_core.domain.eligibility import ConstraintAssessment, constraint_assessment
+from hyf_core.domain.eligibility import (
+    ConstraintAssessment,
+    constraint_assessment,
+)
 from hyf_core.domain.price import Price, price_compare, price_is_known
-from hyf_core.domain.product import ProductRef, product_is_resolved, product_matches
+from hyf_core.domain.product import (
+    ProductRef,
+    product_is_resolved,
+    product_matches,
+)
 from hyf_core.domain.quantity import Quantity, quantity_compare
 
 
 def check_product(
-    need_product: ProductRef, lot_product: ProductRef, substitution_permitted: Bool
+    need_product: ProductRef,
+    lot_product: ProductRef,
+    substitution_permitted: Bool,
 ) raises -> ConstraintAssessment:
-    if not product_is_resolved(need_product) or not product_is_resolved(lot_product):
+    if not product_is_resolved(need_product) or not product_is_resolved(
+        lot_product
+    ):
         return constraint_assessment(
             "product", "unknown", True, "product_unresolved"
         )
@@ -42,7 +53,9 @@ def check_required_attributes(
             return constraint_assessment(
                 "attribute", "unknown", True, "attribute_unverified"
             )
-    return constraint_assessment("attribute", "pass", True, "attribute_verified")
+    return constraint_assessment(
+        "attribute", "pass", True, "attribute_verified"
+    )
 
 
 def model_confidence_verifies_certification() -> Bool:
@@ -69,7 +82,9 @@ def check_fulfillment(
     )
 
 
-def check_area(area_required: String, area_known: String) raises -> ConstraintAssessment:
+def check_area(
+    area_required: String, area_known: String
+) raises -> ConstraintAssessment:
     if String(area_required).strip().byte_length() == 0:
         return constraint_assessment("area", "pass", True, "area_optional")
     if String(area_known).strip().byte_length() == 0:
@@ -100,7 +115,9 @@ def check_window(
     if String(required_start).strip().byte_length() == 0:
         return constraint_assessment("window", "pass", True, "window_optional")
     if String(offered_start).strip().byte_length() == 0:
-        return constraint_assessment("window", "unknown", True, "window_mismatch")
+        return constraint_assessment(
+            "window", "unknown", True, "window_mismatch"
+        )
     if offered_start <= required_end and required_start <= offered_end:
         return constraint_assessment("window", "pass", True, "window_overlap")
     return constraint_assessment("window", "fail", True, "window_mismatch")
@@ -116,7 +133,9 @@ def check_price(ceiling: Price, offered: Price) raises -> ConstraintAssessment:
     if not price_is_known(offered):
         return constraint_assessment("price", "unknown", True, "price_unknown")
     if price_compare(offered, ceiling) <= 0:
-        return constraint_assessment("price", "pass", True, "price_within_ceiling")
+        return constraint_assessment(
+            "price", "pass", True, "price_within_ceiling"
+        )
     return constraint_assessment("price", "fail", True, "price_above_ceiling")
 
 
@@ -127,14 +146,20 @@ def check_quantity(
     partial_allowed: Bool,
 ) raises -> ConstraintAssessment:
     if not available_known:
-        return constraint_assessment("quantity", "unknown", True, "stock_unknown")
+        return constraint_assessment(
+            "quantity", "unknown", True, "stock_unknown"
+        )
     if quantity_compare(available, required) >= 0:
-        return constraint_assessment("quantity", "pass", True, "quantity_sufficient")
+        return constraint_assessment(
+            "quantity", "pass", True, "quantity_sufficient"
+        )
     if partial_allowed:
         return constraint_assessment(
             "quantity", "pass", True, "partial_permitted"
         )
-    return constraint_assessment("quantity", "fail", True, "quantity_insufficient")
+    return constraint_assessment(
+        "quantity", "fail", True, "quantity_insufficient"
+    )
 
 
 from hyf_core.domain.eligibility import compose_eligibility

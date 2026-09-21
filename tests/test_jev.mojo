@@ -32,11 +32,19 @@ def test_jev_request_serialization_shape() raises:
     var body = build_jev_request_body(_bundle(), "Roma tomatoes available now")
     assert_equal(body["model"].string_value(), "jev-1.13.0")
     assert_equal(body["state"].string_value(), "Roma tomatoes available now")
-    assert_equal(body["questions"]["supply_status"]["type"].string_value(), "choice")
-    assert_true(body["questions"]["supply_status"]["criteria"]["offered"].is_null())
+    assert_equal(
+        body["questions"]["supply_status"]["type"].string_value(), "choice"
+    )
+    assert_true(
+        body["questions"]["supply_status"]["criteria"]["offered"].is_null()
+    )
     assert_equal(body["questions"]["seconds_ok"]["type"].string_value(), "noul")
-    assert_equal(body["questions"]["culinary_fit"]["type"].string_value(), "score")
-    assert_equal(len(body["questions"]["culinary_fit"]["criteria"].array_items()), 3)
+    assert_equal(
+        body["questions"]["culinary_fit"]["type"].string_value(), "score"
+    )
+    assert_equal(
+        len(body["questions"]["culinary_fit"]["criteria"].array_items()), 3
+    )
     with assert_raises():
         _ = build_jev_request_body(_bundle(), "")
 
@@ -50,7 +58,9 @@ from json import loads
 
 
 def test_parse_choice_and_noul_answers() raises:
-    var noul = parse_noul_answer("seconds_ok", loads('{"type":"noul","noul":0.9}'))
+    var noul = parse_noul_answer(
+        "seconds_ok", loads('{"type":"noul","noul":0.9}')
+    )
     assert_equal(noul.kind, "noul")
     assert_equal(noul.noul, 0.9)
     var choices = List[String]()
@@ -59,7 +69,9 @@ def test_parse_choice_and_noul_answers() raises:
     choices.append("unclear")
     var choice = parse_choice_answer(
         "supply_status",
-        loads('{"type":"choice","choice":"offered","probabilities":{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0}'),
+        loads(
+            '{"type":"choice","choice":"offered","probabilities":{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0}'
+        ),
         choices,
     )
     assert_equal(choice.choice, "offered")
@@ -68,12 +80,16 @@ def test_parse_choice_and_noul_answers() raises:
         _ = parse_noul_answer("q", loads('{"type":"noul","noul":1.5}'))
     with assert_raises():
         _ = parse_choice_answer(
-            "q", loads('{"type":"choice","choice":"bogus","confidence":1.0}'), choices
+            "q",
+            loads('{"type":"choice","choice":"bogus","confidence":1.0}'),
+            choices,
         )
     with assert_raises():
         _ = parse_choice_answer(
             "q",
-            loads('{"type":"choice","choice":"offered","probabilities":{"offered":0.5,"forecast":0.5,"unclear":0.5},"confidence":1.0}'),
+            loads(
+                '{"type":"choice","choice":"offered","probabilities":{"offered":0.5,"forecast":0.5,"unclear":0.5},"confidence":1.0}'
+            ),
             choices,
         )
     with assert_raises():
@@ -92,20 +108,26 @@ def test_parse_score_answer_validates_rubric_and_levels() raises:
     rubric.append("suitable")
     var answer = parse_score_answer(
         "culinary_fit",
-        loads('{"type":"score","score":2,"legend":{"0":"unsuitable","1":"limited","2":"suitable"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0}'),
+        loads(
+            '{"type":"score","score":2,"legend":{"0":"unsuitable","1":"limited","2":"suitable"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0}'
+        ),
         rubric,
     )
     assert_equal(answer.score, 2)
     with assert_raises():
         _ = parse_score_answer(
             "q",
-            loads('{"type":"score","score":5,"legend":{"0":"a","1":"b","2":"c"},"confidence":1.0}'),
+            loads(
+                '{"type":"score","score":5,"legend":{"0":"a","1":"b","2":"c"},"confidence":1.0}'
+            ),
             rubric,
         )
     with assert_raises():
         _ = parse_score_answer(
             "q",
-            loads('{"type":"score","score":1,"legend":{"0":"a"},"confidence":1.0}'),
+            loads(
+                '{"type":"score","score":1,"legend":{"0":"a"},"confidence":1.0}'
+            ),
             rubric,
         )
 
@@ -141,7 +163,9 @@ def test_parse_jev_response_validates_answer_set() raises:
     with assert_raises():
         _ = parse_jev_response(mismatch, _bundle())
 
-    var missing = loads('{"model":"jev-1.13.0","answers":{"supply_status":{"type":"choice","choice":"offered","confidence":1.0}}}')
+    var missing = loads(
+        '{"model":"jev-1.13.0","answers":{"supply_status":{"type":"choice","choice":"offered","confidence":1.0}}}'
+    )
     with assert_raises():
         _ = parse_jev_response(missing, _bundle())
 
@@ -158,7 +182,10 @@ def test_jev_failure_mapping_permanent_vs_transient() raises:
     assert_true(map_jev_failure("rate_limit").retryable)
     assert_true(map_jev_failure("overloaded").retryable)
     assert_true(map_jev_failure("internal_server").retryable)
-    assert_equal(map_jev_failure("response_validation").family, "provider_response_contract")
+    assert_equal(
+        map_jev_failure("response_validation").family,
+        "provider_response_contract",
+    )
     assert_true(not map_jev_failure("response_validation").retryable)
     with assert_raises():
         _ = map_jev_failure("mystery")
@@ -191,7 +218,9 @@ from hyf_provider.jev_state import minimal_state, state_includes_full_repository
 
 def test_data_minimized_state_projection() raises:
     var state = minimal_state(
-        "Roma tomatoes available now", "Roma tomatoes", "Tomatoes for sauce; seconds permitted"
+        "Roma tomatoes available now",
+        "Roma tomatoes",
+        "Tomatoes for sauce; seconds permitted",
     )
     assert_true(state.find("farm_update:") >= 0)
     assert_true(state.find("focus_product:") >= 0)
@@ -256,7 +285,9 @@ def test_local_provider_server_serves_scripted_jev() raises:
     var port = started.port
     var url = "http://127.0.0.1:" + String(port) + "/v1/systemone"
     with HttpClient(timeout_ms=5000, max_redirects=0) as client:
-        var response = client.post(url, '{"model":"jev-1.13.0","state":"s","questions":{}}')
+        var response = client.post(
+            url, '{"model":"jev-1.13.0","state":"s","questions":{}}'
+        )
         assert_true(response.ok())
         var body = response.json()
         assert_equal(body["model"].string_value(), "jev-1.13.0")

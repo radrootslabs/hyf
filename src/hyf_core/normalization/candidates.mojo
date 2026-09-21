@@ -31,7 +31,10 @@ def _backward_number_start(text: String, unit_start: Int) -> Int:
 
 
 def discover_candidates(
-    text: String, known_products: List[String], known_units: List[String], known_dates: List[String]
+    text: String,
+    known_products: List[String],
+    known_units: List[String],
+    known_dates: List[String],
 ) -> List[Candidate]:
     var candidates = List[Candidate]()
     var lowered = text.lower()
@@ -60,7 +63,11 @@ def discover_candidates(
                 candidates.append(
                     Candidate(
                         kind="quantity",
-                        text=String(text[byte=number_start:index + unit.byte_length()]),
+                        text=String(
+                            text[
+                                byte = number_start : index + unit.byte_length()
+                            ]
+                        ),
                         start=number_start,
                         end=index + unit.byte_length(),
                     )

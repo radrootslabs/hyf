@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct CircuitState(Copyable, Movable):
     var open: Bool

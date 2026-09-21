@@ -23,7 +23,7 @@ def _is_loopback_host(host: String) -> Bool:
 def validate_jev_base_url(base_url: String) raises -> String:
     var trimmed = String(String(base_url).strip())
     while trimmed.byte_length() > 1 and trimmed.endswith("/"):
-        trimmed = String(trimmed[byte=0:trimmed.byte_length() - 1])
+        trimmed = String(trimmed[byte = 0 : trimmed.byte_length() - 1])
     if trimmed == "":
         raise Error("jev base_url must not be empty")
     var scheme = ""
@@ -50,15 +50,13 @@ def validate_jev_base_url(base_url: String) raises -> String:
         if host_port.startswith("["):
             var close = host_port.find("]")
             if close >= 0:
-                host = String(host_port[byte=0:close + 1])
+                host = String(host_port[byte = 0 : close + 1])
         else:
             host = String(host_port[byte=0:colon])
     if host == "":
         raise Error("jev base_url must include a host")
     if scheme == "http" and not _is_loopback_host(host):
-        raise Error(
-            "jev base_url must use https unless the host is loopback"
-        )
+        raise Error("jev base_url must use https unless the host is loopback")
     return trimmed^
 
 

@@ -64,9 +64,9 @@ def assert_matches_scenario_response(
 
     if _has_key(expected, "message_contains"):
         assert_true(
-            actual["error"]["message"].string_value().find(
-                expected["message_contains"].string_value()
-            )
+            actual["error"]["message"]
+            .string_value()
+            .find(expected["message_contains"].string_value())
             >= 0
         )
 
@@ -181,9 +181,7 @@ def _json_values_equal(lhs: Value, rhs: Value) raises -> Bool:
 
     if lhs.is_int() or rhs.is_int():
         return (
-            lhs.is_int()
-            and rhs.is_int()
-            and lhs.int_value() == rhs.int_value()
+            lhs.is_int() and rhs.is_int() and lhs.int_value() == rhs.int_value()
         )
 
     if lhs.is_float() or rhs.is_float():

@@ -1,5 +1,3 @@
-
-
 def result_cache_used() -> Bool:
     return False
 

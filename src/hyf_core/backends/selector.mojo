@@ -23,7 +23,9 @@ struct BackendSelection(Copyable, Movable):
 
 def resolve_backend(context: RequestContext) -> BackendSelection:
     if assisted_execution_requested(context):
-        return BackendSelection(backend_name=heuristic_backend_name(), available=True)
+        return BackendSelection(
+            backend_name=heuristic_backend_name(), available=True
+        )
 
     return BackendSelection(
         backend_name=heuristic_backend_name(), available=True

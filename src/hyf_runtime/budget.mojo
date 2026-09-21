@@ -1,5 +1,3 @@
-
-
 @fieldwise_init
 struct Budget(Copyable, Movable):
     var start_monotonic_ns: Int
@@ -15,7 +13,9 @@ def budget(deadline_ms: Int, server_cap_ms: Int) -> Budget:
     return Budget(start_monotonic_ns=0, cap_ms=cap)
 
 
-def budget_from_clock(deadline_ms: Int, server_cap_ms: Int, now_ns: Int) -> Budget:
+def budget_from_clock(
+    deadline_ms: Int, server_cap_ms: Int, now_ns: Int
+) -> Budget:
     var value = budget(deadline_ms, server_cap_ms)
     value.start_monotonic_ns = now_ns
     return value^

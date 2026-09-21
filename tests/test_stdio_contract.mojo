@@ -108,18 +108,16 @@ def _max_local_runtime_config_toml_with_urls(
     base_url: String, health_url: String, request_timeout_ms: Int
 ) -> String:
     return (
-        '[service]\ntransport = "stdio"\n\n'
-        '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
-        '[assisted]\nprovider = "max_local"\n\n'
-        '[assisted.max_local]\nenabled = true\n'
-        'base_url = "'
+        '[service]\ntransport = "stdio"\n\n[runtime]\ndefault_execution_mode ='
+        ' "deterministic"\nallow_assisted = true\n\n[assisted]\nprovider ='
+        ' "max_local"\n\n[assisted.max_local]\nenabled = true\nbase_url = "'
         + base_url
         + '"\n'
         + 'health_url = "'
         + health_url
         + '"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = '
+        + "request_timeout_ms = "
         + String(request_timeout_ms)
         + "\n"
     )
@@ -135,9 +133,7 @@ def _unavailable_max_local_runtime_config_toml() raises -> String:
 
 
 def _query_rewrite_assisted_request_json(request_id: String) -> String:
-    return _query_rewrite_assisted_request_json_with_deadline(
-        request_id, 2500
-    )
+    return _query_rewrite_assisted_request_json_with_deadline(request_id, 2500)
 
 
 def _query_rewrite_assisted_request_json_with_deadline(
@@ -155,14 +151,15 @@ def _query_rewrite_assisted_request_json_with_deadline(
 
 
 def _query_rewrite_assisted_request_json_without_provenance(
-    request_id: String
+    request_id: String,
 ) -> String:
     return (
         '{"version":1,"request_id":"'
         + request_id
         + '","trace_id":"'
         + request_id
-        + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":false,"deadline_ms":2500},"input":{"query":"apples near me with weekend pickup"}}'
+        + '","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":false,"deadline_ms":2500},"input":{"query":"apples'
+        ' near me with weekend pickup"}}'
     )
 
 
@@ -172,12 +169,21 @@ def _semantic_rank_assisted_request_json(request_id: String) -> String:
         + request_id
         + '","trace_id":"'
         + request_id
-        + '","capability":"semantic_rank","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples near me with weekend pickup","candidates":[{"id":"listing_local_1","title":"Organic apples","farm":"Local Orchard","delivery":"pickup","distance_km":4.1,"freshness_minutes":3},{"id":"listing_regional_1","title":"Honeycrisp apples","farm":"Regional Orchard","delivery":"delivery","distance_km":28.0,"freshness_minutes":25}]}}'
+        + '","capability":"semantic_rank","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"apples'
+        " near me with weekend"
+        ' pickup","candidates":[{"id":"listing_local_1","title":"Organic'
+        ' apples","farm":"Local'
+        ' Orchard","delivery":"pickup","distance_km":4.1,"freshness_minutes":3},{"id":"listing_regional_1","title":"Honeycrisp'
+        ' apples","farm":"Regional'
+        ' Orchard","delivery":"delivery","distance_km":28.0,"freshness_minutes":25}]}}'
     )
 
 
 def _assert_query_rewrite_provider_fallback_with_requests(
-    mode: String, expected_reason: String, request_timeout_ms: Int, requests: Int
+    mode: String,
+    expected_reason: String,
+    request_timeout_ms: Int,
+    requests: Int,
 ) raises:
     _assert_query_rewrite_provider_fallback_with_deadline(
         mode, expected_reason, request_timeout_ms, 2500, requests
@@ -233,8 +239,9 @@ def _assert_query_rewrite_provider_fallback_with_deadline(
                     "provider_runtime",
                 )
                 assert_equal(
-                    response["meta"]["provenance"]["fallback"]["reason"]
-                    .string_value(),
+                    response["meta"]["provenance"]["fallback"][
+                        "reason"
+                    ].string_value(),
                     expected_reason,
                 )
                 assert_equal(
@@ -288,8 +295,9 @@ def _assert_query_rewrite_runtime_config_fallback(
                     "provider_runtime",
                 )
                 assert_equal(
-                    response["meta"]["provenance"]["fallback"]["reason"]
-                    .string_value(),
+                    response["meta"]["provenance"]["fallback"][
+                        "reason"
+                    ].string_value(),
                     expected_reason,
                 )
                 assert_equal(
@@ -352,13 +360,15 @@ def _assert_invalid_runtime_config_load_error(
 
                 assert_true(response["ok"].bool_value())
                 assert_equal(
-                    response["output"]["runtime"]["config"]["loaded"]
-                    .bool_value(),
+                    response["output"]["runtime"]["config"][
+                        "loaded"
+                    ].bool_value(),
                     False,
                 )
                 assert_equal(
-                    response["output"]["runtime"]["config"]["load_state"]
-                    .string_value(),
+                    response["output"]["runtime"]["config"][
+                        "load_state"
+                    ].string_value(),
                     "invalid",
                 )
                 assert_true(
@@ -384,13 +394,15 @@ def _assert_valid_runtime_config_load(config_text: String) raises:
 
                 assert_true(response["ok"].bool_value())
                 assert_equal(
-                    response["output"]["runtime"]["config"]["loaded"]
-                    .bool_value(),
+                    response["output"]["runtime"]["config"][
+                        "loaded"
+                    ].bool_value(),
                     True,
                 )
                 assert_equal(
-                    response["output"]["runtime"]["config"]["load_state"]
-                    .string_value(),
+                    response["output"]["runtime"]["config"][
+                        "load_state"
+                    ].string_value(),
                     "loaded",
                 )
 
@@ -401,9 +413,7 @@ def test_business_fallback_reason_taxonomy_declares_provider_io_family() raises:
         "connection_failed", "provider_io"
     )
     _assert_declared_business_fallback_reason("invalid_url", "provider_io")
-    _assert_declared_business_fallback_reason(
-        "provider_non_2xx", "provider_io"
-    )
+    _assert_declared_business_fallback_reason("provider_non_2xx", "provider_io")
     _assert_declared_business_fallback_reason(
         "provider_error_payload", "provider_io"
     )
@@ -419,9 +429,7 @@ def test_business_fallback_reason_taxonomy_declares_provider_io_family() raises:
     _assert_declared_business_fallback_reason(
         "provider_missing_content", "provider_io"
     )
-    _assert_declared_business_fallback_reason(
-        "provider_error", "provider_io"
-    )
+    _assert_declared_business_fallback_reason("provider_error", "provider_io")
 
 
 def test_business_fallback_reason_taxonomy_declares_runtime_family() raises:
@@ -444,9 +452,7 @@ def test_business_fallback_reason_taxonomy_declares_capability_family() raises:
 
 def test_business_fallback_reason_taxonomy_excludes_control_health_reason() raises:
     assert_equal(
-        _business_fallback_reason_family(
-            "non_2xx"
-        ),
+        _business_fallback_reason_family("non_2xx"),
         "undeclared",
     )
 
@@ -545,8 +551,9 @@ def test_status_reports_repo_local_runtime_truth() raises:
                     False,
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "disabled_by_runtime_config",
                 )
                 assert_equal(
@@ -706,53 +713,61 @@ def test_status_loads_valid_runtime_config_truthfully() raises:
                     "provider_unavailable",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "unavailable",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reason"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "reason"
+                    ].string_value(),
                     "connection_failed",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["id"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"]["id"].string_value(),
                     "hyf_provider_runtime",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["kind"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "kind"
+                    ].string_value(),
                     "provider_runtime",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["transport"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "transport"
+                    ].string_value(),
                     "http",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["backend_kind"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "backend_kind"
+                    ].string_value(),
                     "max_local",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["provider"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "provider"
+                    ].string_value(),
                     "max_local",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["route"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "route"
+                    ].string_value(),
                     "provider_runtime.query_rewrite.max_local",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["model"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "model"
+                    ].string_value(),
                     "max-local-query-rewrite",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reachable"]
-                    .bool_value(),
+                    response["output"]["assisted_runtime"][
+                        "reachable"
+                    ].bool_value(),
                     False,
                 )
                 assert_equal(
@@ -884,13 +899,15 @@ def test_status_reports_invalid_runtime_config_without_crashing() raises:
                     "invalid_config",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "invalid_config",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reason"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "reason"
+                    ].string_value(),
                     "invalid_config",
                 )
                 assert_equal(
@@ -936,7 +953,8 @@ def test_status_reports_unconfigured_assisted_runtime_truthfully() raises:
         var startup_config_path = Path(temp_dir) / "explicit-hyf-config.toml"
         startup_config_path.write_text(
             '[service]\ntransport = "stdio"\n\n'
-            + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+            + "[runtime]\ndefault_execution_mode ="
+            ' "deterministic"\nallow_assisted = true\n\n'
             + '[assisted]\nprovider = "max_local"\n'
         )
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
@@ -956,23 +974,27 @@ def test_status_reports_unconfigured_assisted_runtime_truthfully() raises:
                     "provider_unconfigured",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "unconfigured",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reason"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "reason"
+                    ].string_value(),
                     "not_checked",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["transport"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "transport"
+                    ].string_value(),
                     "deferred",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["configured"]
-                    .bool_value(),
+                    response["output"]["assisted_runtime"][
+                        "configured"
+                    ].bool_value(),
                     False,
                 )
 
@@ -1002,18 +1024,21 @@ def test_status_reports_non_2xx_max_local_health_truthfully() raises:
 
                 assert_true(response["ok"].bool_value())
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "unavailable",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reason"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "reason"
+                    ].string_value(),
                     "non_2xx",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reachable"]
-                    .bool_value(),
+                    response["output"]["assisted_runtime"][
+                        "reachable"
+                    ].bool_value(),
                     False,
                 )
 
@@ -1057,43 +1082,51 @@ def test_status_reports_ready_max_local_provider_truthfully() raises:
                     "ready",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "ready",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reason"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "reason"
+                    ].string_value(),
                     "ready",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["transport"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "transport"
+                    ].string_value(),
                     "http",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["backend_kind"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "backend_kind"
+                    ].string_value(),
                     "max_local",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["provider"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "provider"
+                    ].string_value(),
                     "max_local",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["route"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "route"
+                    ].string_value(),
                     "provider_runtime.query_rewrite.max_local",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["model"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "model"
+                    ].string_value(),
                     "max-local-query-rewrite",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reachable"]
-                    .bool_value(),
+                    response["output"]["assisted_runtime"][
+                        "reachable"
+                    ].bool_value(),
                     True,
                 )
 
@@ -1125,18 +1158,21 @@ def test_status_bounds_max_local_health_probe_timeout() raises:
 
                 assert_true(response["ok"].bool_value())
                 assert_equal(
-                    response["output"]["assisted_runtime"]["state"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "state"
+                    ].string_value(),
                     "unavailable",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reason"]
-                    .string_value(),
+                    response["output"]["assisted_runtime"][
+                        "reason"
+                    ].string_value(),
                     "timeout",
                 )
                 assert_equal(
-                    response["output"]["assisted_runtime"]["reachable"]
-                    .bool_value(),
+                    response["output"]["assisted_runtime"][
+                        "reachable"
+                    ].bool_value(),
                     False,
                 )
 
@@ -1145,15 +1181,15 @@ def test_status_bounds_max_local_health_probe_timeout() raises:
 
 def test_status_rejects_invalid_max_local_runtime_config() raises:
     var prefix = (
-        '[service]\ntransport = "stdio"\n\n'
-        '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        '[service]\ntransport = "stdio"\n\n[runtime]\ndefault_execution_mode ='
+        ' "deterministic"\nallow_assisted = true\n\n'
     )
     var disabled_prefix = (
-        '[service]\ntransport = "stdio"\n\n'
-        '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = false\n\n'
+        '[service]\ntransport = "stdio"\n\n[runtime]\ndefault_execution_mode ='
+        ' "deterministic"\nallow_assisted = false\n\n'
     )
     var provider = '[assisted]\nprovider = "max_local"\n\n'
-    var max_local_header = '[assisted.max_local]\nenabled = true\n'
+    var max_local_header = "[assisted.max_local]\nenabled = true\n"
     _assert_invalid_runtime_config_load_error(
         prefix + '[assisted]\nprovider = "unsupported"\n',
         "assisted.provider",
@@ -1169,7 +1205,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "runtime.allow_assisted",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1178,7 +1214,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + max_local_header
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.base_url",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1188,7 +1224,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = " http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.base_url",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1198,7 +1234,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health "\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.health_url",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1208,7 +1244,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = "file:///tmp/max"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.base_url",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1218,7 +1254,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = " max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.model",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1228,7 +1264,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = ""\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.model",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1239,19 +1275,19 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
         + 'route = "provider_runtime.query_rewrite.max_local"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + '[assisted.max_local] # provider route is derived\n'
-        + 'enabled = true\n'
+        + "[assisted.max_local] # provider route is derived\n"
+        + "enabled = true\n"
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
         + 'route = "provider_runtime.query_rewrite.max_local"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1262,7 +1298,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
         + '"route" = "provider_runtime.query_rewrite.max_local"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1273,97 +1309,100 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
         + "'route' = \"provider_runtime.query_rewrite.max_local\"\n"
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + 'assisted.max_local.route = "provider_runtime.query_rewrite.max_local"\n'
+        + "assisted.max_local.route ="
+        ' "provider_runtime.query_rewrite.max_local"\n'
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + '"assisted"."max_local"."route" = "provider_runtime.query_rewrite.max_local"\n'
+        + '"assisted"."max_local"."route" ='
+        ' "provider_runtime.query_rewrite.max_local"\n'
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + "'assisted'.'max_local'.'route' = \"provider_runtime.query_rewrite.max_local\"\n"
+        + "'assisted'.'max_local'.'route' ="
+        ' "provider_runtime.query_rewrite.max_local"\n'
         + max_local_header
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
         + '[assisted."max_local"]\n'
-        + 'enabled = true\n'
+        + "enabled = true\n"
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
         + 'route = "provider_runtime.query_rewrite.max_local"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
         + '["assisted"."max_local"]\n'
-        + 'enabled = true\n'
+        + "enabled = true\n"
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
         + 'route = "provider_runtime.query_rewrite.max_local"\n'
-        + 'request_timeout_ms = 15000\n',
+        + "request_timeout_ms = 15000\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + 'assisted.max_local = { enabled = true, '
+        + "assisted.max_local = { enabled = true, "
         + 'base_url = "http://127.0.0.1:8000/v1", '
         + 'health_url = "http://127.0.0.1:8000/health", '
         + 'model = "max-local-query-rewrite", '
         + 'route = "provider_runtime.query_rewrite.max_local", '
-        + 'request_timeout_ms = 15000 }\n',
+        + "request_timeout_ms = 15000 }\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + 'assisted.max_local = { enabled = true, '
+        + "assisted.max_local = { enabled = true, "
         + 'base_url = "http://127.0.0.1:8000/v1", '
         + 'health_url = "http://127.0.0.1:8000/health", '
         + 'model = "max-local-query-rewrite, route = quoted literal", '
         + 'route = "provider_runtime.query_rewrite.max_local", '
-        + 'request_timeout_ms = 15000 }\n',
+        + "request_timeout_ms = 15000 }\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
         prefix
         + provider
-        + 'assisted.max_local = { enabled = true, '
+        + "assisted.max_local = { enabled = true, "
         + 'base_url = "http://127.0.0.1:8000/v1", '
         + 'health_url = "http://127.0.0.1:8000/health", '
         + 'model = "max-local-query-rewrite", '
         + "'route' = \"provider_runtime.query_rewrite.max_local\", "
-        + 'request_timeout_ms = 15000 }\n',
+        + "request_timeout_ms = 15000 }\n",
         "assisted.max_local.route",
     )
     _assert_invalid_runtime_config_load_error(
@@ -1373,7 +1412,7 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
         + 'base_url = "http://127.0.0.1:8000/v1"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite"\n'
-        + 'request_timeout_ms = 0\n',
+        + "request_timeout_ms = 0\n",
         "assisted.max_local.request_timeout_ms",
     )
 
@@ -1381,16 +1420,18 @@ def test_status_rejects_invalid_max_local_runtime_config() raises:
 def test_status_allows_non_route_toml_mentions() raises:
     var config = (
         '[service]\ntransport = "stdio"\n\n'
-        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted'
+        " = true\n\n"
         + '[assisted]\nprovider = "max_local"\n\n'
-        + '# assisted.max_local.route is intentionally derived by HYF\n'
-        + '[assisted.max_local]\n'
+        + "# assisted.max_local.route is intentionally derived by HYF\n"
+        + "[assisted.max_local]\n"
         + '# route = "provider_runtime.query_rewrite.max_local"\n'
-        + 'enabled = true\n'
-        + 'base_url = "http://127.0.0.1:8000/v1?route=provider_runtime.query_rewrite.max_local"\n'
+        + "enabled = true\n"
+        + "base_url ="
+        ' "http://127.0.0.1:8000/v1?route=provider_runtime.query_rewrite.max_local"\n'
         + 'health_url = "http://127.0.0.1:8000/health"\n'
         + 'model = "max-local-query-rewrite-route-token"\n'
-        + 'request_timeout_ms = 15000\n'
+        + "request_timeout_ms = 15000\n"
     )
     _assert_valid_runtime_config_load(config)
 
@@ -1398,13 +1439,14 @@ def test_status_allows_non_route_toml_mentions() raises:
 def test_status_allows_inline_table_quoted_route_mentions() raises:
     var config = (
         '[service]\ntransport = "stdio"\n\n'
-        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted'
+        " = true\n\n"
         + '[assisted]\nprovider = "max_local"\n\n'
-        + 'assisted.max_local = { enabled = true, '
+        + "assisted.max_local = { enabled = true, "
         + 'base_url = "http://127.0.0.1:8000/v1", '
         + 'health_url = "http://127.0.0.1:8000/health", '
         + 'model = "max-local-query-rewrite, route = quoted literal", '
-        + 'request_timeout_ms = 15000 }\n'
+        + "request_timeout_ms = 15000 }\n"
     )
     _assert_valid_runtime_config_load(config)
 
@@ -1419,7 +1461,9 @@ def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
-                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    load_scenario_request_json(
+                        "scenarios/capabilities_ok.json"
+                    ),
                     "--config",
                     startup_config_path.__fspath__(),
                 )
@@ -1487,7 +1531,9 @@ def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
-                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    load_scenario_request_json(
+                        "scenarios/capabilities_ok.json"
+                    ),
                     "--config",
                     startup_config_path.__fspath__(),
                 )
@@ -1551,7 +1597,9 @@ def test_capabilities_bounds_max_local_health_probe_timeout() raises:
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
-                    load_scenario_request_json("scenarios/capabilities_ok.json"),
+                    load_scenario_request_json(
+                        "scenarios/capabilities_ok.json"
+                    ),
                     "--config",
                     startup_config_path.__fspath__(),
                 )
@@ -1619,8 +1667,9 @@ def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable
                     "provider_runtime",
                 )
                 assert_equal(
-                    response["meta"]["provenance"]["fallback"]["reason"]
-                    .string_value(),
+                    response["meta"]["provenance"]["fallback"][
+                        "reason"
+                    ].string_value(),
                     "connection_failed",
                 )
                 assert_equal(
@@ -1632,7 +1681,8 @@ def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable
 def test_query_rewrite_falls_back_on_unconfigured_provider_runtime() raises:
     _assert_query_rewrite_runtime_config_fallback(
         '[service]\ntransport = "stdio"\n\n'
-        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted'
+        " = true\n\n"
         + '[assisted]\nprovider = "max_local"\n',
         "provider_unconfigured",
         "rewrite-assisted-unconfigured-runtime-1",
@@ -1650,7 +1700,8 @@ def test_query_rewrite_falls_back_on_invalid_provider_runtime_config() raises:
 def test_query_rewrite_fallback_metadata_is_visible_without_provenance() raises:
     _assert_query_rewrite_runtime_config_fallback_without_provenance(
         '[service]\ntransport = "stdio"\n\n'
-        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted = true\n\n'
+        + '[runtime]\ndefault_execution_mode = "deterministic"\nallow_assisted'
+        " = true\n\n"
         + '[assisted]\nprovider = "max_local"\n',
         "provider_unconfigured",
         "rewrite-assisted-no-provenance-1",
@@ -1694,8 +1745,9 @@ def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() 
                     "provider_runtime",
                 )
                 assert_equal(
-                    response["meta"]["provenance"]["fallback"]["reason"]
-                    .string_value(),
+                    response["meta"]["provenance"]["fallback"][
+                        "reason"
+                    ].string_value(),
                     "unsupported_capability",
                 )
                 assert_equal(
@@ -1722,7 +1774,10 @@ def test_query_rewrite_uses_max_local_provider_when_ready() raises:
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
                 var response = run_stdio_entrypoint(
                     "src/main.mojo",
-                    '{"version":1,"request_id":"rewrite-assisted-max-local-1","trace_id":"rewrite-assisted-max-local-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"local apples pickup weekend"}}',
+                    (
+                        '{"version":1,"request_id":"rewrite-assisted-max-local-1","trace_id":"rewrite-assisted-max-local-1","capability":"query_rewrite","context":{"execution_mode_preference":"assisted","return_provenance":true},"input":{"query":"local'
+                        ' apples pickup weekend"}}'
+                    ),
                     "--config",
                     startup_config_path.__fspath__(),
                 )
@@ -1879,7 +1934,7 @@ def test_status_reports_configured_but_deferred_custody_truthfully() raises:
         var identity_dir = Path(temp_dir) / "secrets" / "services" / "hyf"
         _ = std.os.makedirs(identity_dir.__fspath__(), exist_ok=True)
         (identity_dir / "identity.secret.json").write_text(
-            "{\"configured\":\"test-only-placeholder\"}"
+            '{"configured":"test-only-placeholder"}'
         )
 
         var protected_dir = (
@@ -1973,9 +2028,9 @@ def test_status_clears_repo_local_root_outside_repo_local_profile() raises:
                     "",
                 )
                 assert_true(
-                    response["output"]["runtime"]["paths"][
-                        "config_path"
-                    ].string_value().find(temp_dir)
+                    response["output"]["runtime"]["paths"]["config_path"]
+                    .string_value()
+                    .find(temp_dir)
                     < 0
                 )
 
@@ -2095,12 +2150,7 @@ def test_query_rewrite_does_not_create_protected_local_artifacts() raises:
                     )
                 )
                 assert_true(
-                    not exists(
-                        Path(temp_dir)
-                        / "cache"
-                        / "services"
-                        / "hyf"
-                    )
+                    not exists(Path(temp_dir) / "cache" / "services" / "hyf")
                 )
 
 

@@ -24,7 +24,10 @@ from hyf_core.provenance import (
     ProvenanceFallback,
     ProvenanceSourceRef,
 )
-from hyf_core.request_context import RequestContext, assisted_execution_requested
+from hyf_core.request_context import (
+    RequestContext,
+    assisted_execution_requested,
+)
 
 
 def build_query_rewrite_output(analysis: QueryAnalysis) raises -> Value:

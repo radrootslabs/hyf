@@ -77,4 +77,4 @@ def validate_span_against_revision(
 def selected_text(text: String, evidence: EvidenceRef) raises -> String:
     if evidence.kind != "span":
         raise Error("selected_text requires span evidence")
-    return String(text[byte=evidence.start:evidence.end])
+    return String(text[byte = evidence.start : evidence.end])

@@ -4,7 +4,11 @@ from std.sys import stdin
 from hyf_core.metadata import hyf_protocol_version
 from hyf_runtime.diagnostics import effective_diagnostics_dir_for_runtime_paths
 from hyf_runtime.startup import resolve_startup_context_from_process
-from hyf_stdio.codec import decode_request, encode_error, extract_request_correlation
+from hyf_stdio.codec import (
+    decode_request,
+    encode_error,
+    extract_request_correlation,
+)
 from hyf_stdio.envelope import WireErrorResponse
 from hyf_stdio.errors import internal_error, invalid_request_error
 from hyf_stdio.server import (

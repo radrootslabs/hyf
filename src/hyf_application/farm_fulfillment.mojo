@@ -25,19 +25,29 @@ def interpret_fulfillment(
         raise Error("fulfillment requires a method")
     if _is_blank(window_expression):
         return FulfillmentClaim(
-            method=String(method), window_expression="", resolved_date="",
-            ambiguity="none", area_verified=False,
+            method=String(method),
+            window_expression="",
+            resolved_date="",
+            ambiguity="none",
+            area_verified=False,
         )
     if _is_blank(timezone):
         return FulfillmentClaim(
-            method=String(method), window_expression=String(window_expression),
-            resolved_date="", ambiguity="missing_zone", area_verified=False,
+            method=String(method),
+            window_expression=String(window_expression),
+            resolved_date="",
+            ambiguity="missing_zone",
+            area_verified=False,
         )
-    var resolved = resolve_relative_expression(window_expression, reference_date)
+    var resolved = resolve_relative_expression(
+        window_expression, reference_date
+    )
     if resolved.resolution != "resolved":
         return FulfillmentClaim(
-            method=String(method), window_expression=String(window_expression),
-            resolved_date="", ambiguity=String(resolved.ambiguity),
+            method=String(method),
+            window_expression=String(window_expression),
+            resolved_date="",
+            ambiguity=String(resolved.ambiguity),
             area_verified=False,
         )
     var date = (
@@ -48,6 +58,9 @@ def interpret_fulfillment(
         + String(resolved.date.day)
     )
     return FulfillmentClaim(
-        method=String(method), window_expression=String(window_expression),
-        resolved_date=date, ambiguity="none", area_verified=False,
+        method=String(method),
+        window_expression=String(window_expression),
+        resolved_date=date,
+        ambiguity="none",
+        area_verified=False,
     )

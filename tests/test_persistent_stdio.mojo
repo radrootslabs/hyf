@@ -27,7 +27,9 @@ def test_persistent_session_processes_multiple_frames() raises:
         var context = _context(temp_dir)
         var frames = List[String]()
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
-        frames.append(load_scenario_request_json("scenarios/capabilities_ok.json"))
+        frames.append(
+            load_scenario_request_json("scenarios/capabilities_ok.json")
+        )
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
         var responses = run_stdio_session(frames, context)
         assert_equal(len(responses), 3)
@@ -45,7 +47,7 @@ def test_session_recovers_from_malformed_frame() raises:
         var responses = run_stdio_session(frames, context)
         assert_equal(len(responses), 3)
         assert_true(responses[0].find('"ok":true') >= 0)
-        assert_true(responses[1].find('invalid_request') >= 0)
+        assert_true(responses[1].find("invalid_request") >= 0)
         assert_true(responses[2].find('"ok":true') >= 0)
 
 
@@ -59,13 +61,15 @@ def test_session_preserves_order_and_recovers_after_malformed() raises:
         var frames = List[String]()
         frames.append(load_scenario_request_json("scenarios/status_ok.json"))
         frames.append("{bad json")
-        frames.append(load_scenario_request_json("scenarios/capabilities_ok.json"))
+        frames.append(
+            load_scenario_request_json("scenarios/capabilities_ok.json")
+        )
         var responses = run_stdio_session(frames, context)
         assert_equal(len(responses), 3)
         assert_true(responses[0].find('"ok":true') >= 0)
-        assert_true(responses[1].find('invalid_request') >= 0)
+        assert_true(responses[1].find("invalid_request") >= 0)
         assert_true(responses[2].find('"ok":true') >= 0)
-        assert_true(responses[2].find('business_capabilities') >= 0)
+        assert_true(responses[2].find("business_capabilities") >= 0)
 
 
 def test_session_rejects_oversized_frame() raises:
@@ -143,7 +147,10 @@ def test_new_operation_wire_frames_are_gated() raises:
             frames.append(scenario["request"].string_value())
             var responses = run_stdio_session(frames, context)
             assert_true(
-                responses[0].find(scenario["expected_error_code"].string_value()) >= 0
+                responses[0].find(
+                    scenario["expected_error_code"].string_value()
+                )
+                >= 0
             )
 
 
@@ -152,7 +159,9 @@ def test_long_session_processes_many_frames_in_order() raises:
         var context = _context(temp_dir)
         var frames = List[String]()
         for index in range(50):
-            frames.append(load_scenario_request_json("scenarios/status_ok.json"))
+            frames.append(
+                load_scenario_request_json("scenarios/status_ok.json")
+            )
         var responses = run_stdio_session(frames, context)
         assert_equal(len(responses), 50)
         for response in responses:

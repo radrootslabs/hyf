@@ -60,7 +60,7 @@ def _extract_json_value(raw: String, start_index: Int) raises -> String:
                 elif byte == UInt8(ord("}")) or byte == UInt8(ord("]")):
                     depth -= 1
                     if depth == 0:
-                        return String(raw[byte=start_index : index + 1])
+                        return String(raw[byte = start_index : index + 1])
             index += 1
         raise Error("unterminated fixture object or array field")
 
@@ -74,7 +74,7 @@ def _extract_json_value(raw: String, start_index: Int) raises -> String:
             elif byte == UInt8(ord("\\")):
                 escaped = True
             elif byte == UInt8(ord('"')):
-                return String(raw[byte=start_index : index + 1])
+                return String(raw[byte = start_index : index + 1])
             index += 1
         raise Error("unterminated fixture string field")
 
@@ -92,7 +92,9 @@ def _extract_json_value(raw: String, start_index: Int) raises -> String:
     return String(raw[byte=start_index:])
 
 
-def load_fixture_top_level_field_from_path(path: Path, key: String) raises -> Value:
+def load_fixture_top_level_field_from_path(
+    path: Path, key: String
+) raises -> Value:
     var raw = path.read_text()
     var data = raw.as_bytes()
     var index = _skip_whitespace(raw, 0)
@@ -120,7 +122,8 @@ def load_fixture_top_level_field_from_path(path: Path, key: String) raises -> Va
         index = _skip_whitespace(raw, index)
         if index >= len(data) or data[index] != UInt8(ord(":")):
             raise Error(
-                "fixture scenario field '" + parsed_key.string_value()
+                "fixture scenario field '"
+                + parsed_key.string_value()
                 + "' missing colon"
             )
 
@@ -139,7 +142,8 @@ def load_fixture_top_level_field_from_path(path: Path, key: String) raises -> Va
         if data[index] == UInt8(ord("}")):
             break
         raise Error(
-            "fixture scenario field '" + parsed_key.string_value()
+            "fixture scenario field '"
+            + parsed_key.string_value()
             + "' missing delimiter"
         )
 

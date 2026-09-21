@@ -475,8 +475,7 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
         "provider_runtime",
     )
     assert_equal(
-        output["provider_runtime_capabilities"][0]["transport"]
-        .string_value(),
+        output["provider_runtime_capabilities"][0]["transport"].string_value(),
         "deferred",
     )
     assert_equal(
@@ -484,8 +483,9 @@ def test_capabilities_output_reflects_registry_truth_for_all_business_capabiliti
         "disabled_by_runtime_config",
     )
     assert_equal(
-        output["provider_runtime_capabilities"][0]["backend_kind"]
-        .string_value(),
+        output["provider_runtime_capabilities"][0][
+            "backend_kind"
+        ].string_value(),
         "deferred",
     )
 
@@ -945,10 +945,7 @@ def test_internal_error_diagnostics_records_detail() raises:
 
 def test_semantic_fixture_manifest_declares_repo_local_family() raises:
     var manifest_path = (
-        _dir_of_current_file()
-        / "fixtures"
-        / "hyf_v1_jev"
-        / "manifest.json"
+        _dir_of_current_file() / "fixtures" / "hyf_v1_jev" / "manifest.json"
     )
     assert_true(exists(manifest_path))
     var manifest = loads(manifest_path.read_text())
@@ -968,8 +965,9 @@ def test_semantic_fixture_manifest_declares_repo_local_family() raises:
         "testing/fixtures/canonical/hyf/v1",
     )
     assert_equal(
-        manifest["shared_wire_authority"]["local_offline_mirror"]
-        .string_value(),
+        manifest["shared_wire_authority"][
+            "local_offline_mirror"
+        ].string_value(),
         "tests/fixtures/v1",
     )
     assert_equal(
@@ -1067,7 +1065,9 @@ def test_wire_operation_schemas_accept_valid_and_reject_invalid() raises:
     assert_true(validated >= 6)
 
 
-def _assert_manifest_examples(manifest_name: String, expected_valid: Int) raises:
+def _assert_manifest_examples(
+    manifest_name: String, expected_valid: Int
+) raises:
     var manifest = _wire_schema_json(manifest_name)
     assert_equal(manifest["spec_id"].string_value(), "hyf_v1_jev")
     var valid_count = 0
@@ -1182,9 +1182,13 @@ def test_semantic_fixture_corpus_is_installed_and_planned() raises:
     for entry in cases:
         assert_true(entry["mandatory"].bool_value())
         var case_path = fixture_dir / entry["path"].string_value()
-        assert_true(exists(case_path), "missing case: " + entry["path"].string_value())
+        assert_true(
+            exists(case_path), "missing case: " + entry["path"].string_value()
+        )
         var doc = loads(case_path.read_text())
-        assert_equal(doc["case_id"].string_value(), entry["case_id"].string_value())
+        assert_equal(
+            doc["case_id"].string_value(), entry["case_id"].string_value()
+        )
         assert_equal(doc["implementation_status"].string_value(), "planned")
         assert_equal(
             doc["required_from_step"].string_value(),
@@ -1250,9 +1254,7 @@ def _write_min_fixture_corpus(base: Path, mutation: String) raises:
 
 def test_fixture_validator_accepts_corpus_and_rejects_corruptions() raises:
     var corpus_dir = _dir_of_current_file() / "fixtures" / "hyf_v1_jev"
-    assert_equal(
-        len(validate_fixture_corpus(corpus_dir.__fspath__())), 0
-    )
+    assert_equal(len(validate_fixture_corpus(corpus_dir.__fspath__())), 0)
     var mutations = List[String]()
     mutations.append("duplicate_case_id")
     mutations.append("dangling_path")
@@ -1280,50 +1282,66 @@ def test_projection_assertions_enforce_exactness_and_reject_unknown_operators() 
     )
     var passing = List[Value]()
     passing.append(
-        loads('{"operator":"equals","path":"/assessment/eligibility","value":"eligible"}')
+        loads(
+            '{"operator":"equals","path":"/assessment/eligibility","value":"eligible"}'
+        )
     )
     passing.append(
         loads('{"operator":"absent","path":"/assessment/failed_checks"}')
     )
     passing.append(
-        loads('{"operator":"contains","path":"/plans/0/allocations","value":{"lot_id":"lot-1","revision":"l1","quantity":30}}')
+        loads(
+            '{"operator":"contains","path":"/plans/0/allocations","value":{"lot_id":"lot-1","revision":"l1","quantity":30}}'
+        )
     )
     passing.append(
-        loads('{"operator":"tolerance","path":"/plans/0/allocations/0/quantity","value":30,"tolerance":0}')
+        loads(
+            '{"operator":"tolerance","path":"/plans/0/allocations/0/quantity","value":30,"tolerance":0}'
+        )
     )
     assert_projection(actual, passing)
 
     var wrong_value = List[Value]()
     wrong_value.append(
-        loads('{"operator":"equals","path":"/assessment/eligibility","value":"ineligible"}')
+        loads(
+            '{"operator":"equals","path":"/assessment/eligibility","value":"ineligible"}'
+        )
     )
     with assert_raises():
         assert_projection(actual, wrong_value)
 
     var missing_revision = List[Value]()
     missing_revision.append(
-        loads('{"operator":"present","path":"/plans/0/allocations/0/expected_revision"}')
+        loads(
+            '{"operator":"present","path":"/plans/0/allocations/0/expected_revision"}'
+        )
     )
     with assert_raises():
         assert_projection(actual, missing_revision)
 
     var wrong_order = List[Value]()
     wrong_order.append(
-        loads('{"operator":"equals","path":"/plans/0/allocations/0","value":{"lot_id":"lot-2","revision":"l1","quantity":30}}')
+        loads(
+            '{"operator":"equals","path":"/plans/0/allocations/0","value":{"lot_id":"lot-2","revision":"l1","quantity":30}}'
+        )
     )
     with assert_raises():
         assert_projection(actual, wrong_order)
 
     var out_of_tolerance = List[Value]()
     out_of_tolerance.append(
-        loads('{"operator":"tolerance","path":"/plans/0/allocations/0/quantity","value":31,"tolerance":0}')
+        loads(
+            '{"operator":"tolerance","path":"/plans/0/allocations/0/quantity","value":31,"tolerance":0}'
+        )
     )
     with assert_raises():
         assert_projection(actual, out_of_tolerance)
 
     var unknown_operator = List[Value]()
     unknown_operator.append(
-        loads('{"operator":"approximately","path":"/assessment/eligibility","value":"eligible"}')
+        loads(
+            '{"operator":"approximately","path":"/assessment/eligibility","value":"eligible"}'
+        )
     )
     with assert_raises():
         assert_projection(actual, unknown_operator)
@@ -1342,13 +1360,17 @@ from hyf_core.capabilities.registry import (
 def test_capability_exposure_separates_support_permission_readiness() raises:
     assert_true(capability_assisted_supported("query_rewrite"))
     assert_true(not capability_assisted_supported("semantic_rank"))
-    var supported_but_blocked = capability_exposure("query_rewrite", False, True, False)
+    var supported_but_blocked = capability_exposure(
+        "query_rewrite", False, True, False
+    )
     assert_true(supported_but_blocked.implementation_supported)
     assert_true(not supported_but_blocked.provider_configured)
     assert_true(not supported_but_blocked.exposed)
     var fully_ready = capability_exposure("query_rewrite", True, True, True)
     assert_true(fully_ready.exposed)
-    var permission_denied = capability_exposure("query_rewrite", True, False, True)
+    var permission_denied = capability_exposure(
+        "query_rewrite", True, False, True
+    )
     assert_true(not permission_denied.exposed)
 
 

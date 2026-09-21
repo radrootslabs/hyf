@@ -303,8 +303,7 @@ def test_query_rewrite_request_body_sets_schema_contract() raises:
     assert_equal(body["messages"][0]["role"].string_value(), "system")
     assert_equal(body["messages"][1]["role"].string_value(), "user")
     assert_true(
-        body["messages"][1]["content"].string_value().find("eggs near me")
-        >= 0
+        body["messages"][1]["content"].string_value().find("eggs near me") >= 0
     )
     assert_equal(body["response_format"]["type"].string_value(), "json_schema")
     assert_equal(
@@ -315,8 +314,7 @@ def test_query_rewrite_request_body_sets_schema_contract() raises:
         body["response_format"]["json_schema"]["strict"].bool_value(), True
     )
     assert_equal(
-        body["response_format"]["json_schema"]["schema"]["type"]
-        .string_value(),
+        body["response_format"]["json_schema"]["schema"]["type"].string_value(),
         "object",
     )
 

@@ -48,7 +48,15 @@ def weekday_index(date: DateOnly) -> Int:
 
 def _weekday_number(name: String) raises -> Int:
     var lowered = name.lower()
-    var names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    var names = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ]
     for index in range(len(names)):
         if lowered == names[index]:
             return index
@@ -102,7 +110,9 @@ struct LocalTimeResolution(Copyable, Movable):
     var offset_minutes: Int
 
 
-def resolve_local_time(candidate_offsets: List[Int]) raises -> LocalTimeResolution:
+def resolve_local_time(
+    candidate_offsets: List[Int],
+) raises -> LocalTimeResolution:
     if len(candidate_offsets) == 0:
         return LocalTimeResolution(
             resolution="unresolved", ambiguity="missing_zone", offset_minutes=0

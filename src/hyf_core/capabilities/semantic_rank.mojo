@@ -25,22 +25,24 @@ from hyf_core.provenance import ProvenanceSourceRef
 from hyf_core.request_context import RequestContext
 
 
-def _build_scored_candidates(
-    ranked: List[CandidateEvaluation]
-) raises -> Value:
+def _build_scored_candidates(ranked: List[CandidateEvaluation]) raises -> Value:
     var scored = loads("[]")
     for evaluation in ranked:
         var candidate = loads("{}")
         candidate.set("id", Value(String(evaluation.candidate.id)))
         candidate.set("heuristic_score", Value(evaluation.score))
-        candidate.set("matched_terms", string_array_value(evaluation.matched_terms))
+        candidate.set(
+            "matched_terms", string_array_value(evaluation.matched_terms)
+        )
         candidate.set("reasons", string_array_value(evaluation.reasons))
         candidate.set(
             "delivery_alignment",
             Value(String(evaluation.delivery_alignment)),
         )
         candidate.set("distance_band", Value(String(evaluation.distance_band)))
-        candidate.set("freshness_band", Value(String(evaluation.freshness_band)))
+        candidate.set(
+            "freshness_band", Value(String(evaluation.freshness_band))
+        )
         candidate.set("scope_match", Value(evaluation.scope_match))
         scored.append(candidate)
     return scored^

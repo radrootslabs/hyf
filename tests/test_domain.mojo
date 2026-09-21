@@ -70,7 +70,9 @@ def test_evidence_rejects_out_of_range_and_revision_mismatch() raises:
     var good = span_evidence("s1", "r1", 0, 3, "span")
     with assert_raises():
         validate_span_against_revision(text, "r2", good)
-    var field = record_field_evidence("s1", "r1", "lot-1", "unreserved_quantity")
+    var field = record_field_evidence(
+        "s1", "r1", "lot-1", "unreserved_quantity"
+    )
     assert_equal(field.kind, "record_field")
     assert_equal(field.record_id.value(), "lot-1")
 
@@ -242,7 +244,10 @@ def test_time_types_distinguish_source_and_evaluation() raises:
     var context = time_context(source, ingestion, replay_later)
     assert_true(timestamp_has_zone(context.source_time))
     assert_true(timestamp_has_zone(context.evaluation_time))
-    assert_true(context.evaluation_time.epoch_seconds > context.source_time.epoch_seconds)
+    assert_true(
+        context.evaluation_time.epoch_seconds
+        > context.source_time.epoch_seconds
+    )
     var d = date_only(2026, 9, 25)
     assert_equal(d.year, 2026)
     assert_equal(d.month, 9)
@@ -355,16 +360,24 @@ from hyf_core.domain.supply_claim import (
 def test_supply_claims_are_per_product_and_not_inventory() raises:
     var tomatoes = resolved_product("Roma tomatoes", "tomato.roma")
     var basil = resolved_product("Basil", "basil")
-    var tomato_claim = supply_claim("c1", tomatoes, "offered", "known", 80, 0, "lb", "approximate")
-    var basil_claim = supply_claim("c2", basil, "unavailable", "unknown", 0, 0, "", "unknown")
+    var tomato_claim = supply_claim(
+        "c1", tomatoes, "offered", "known", 80, 0, "lb", "approximate"
+    )
+    var basil_claim = supply_claim(
+        "c2", basil, "unavailable", "unknown", 0, 0, "", "unknown"
+    )
     assert_equal(tomato_claim.status, "offered")
     assert_equal(basil_claim.status, "unavailable")
     assert_true(not claim_confirms_inventory(tomato_claim))
-    var forecast = supply_claim("c3", basil, "forecast", "unknown", 0, 0, "", "unknown")
+    var forecast = supply_claim(
+        "c3", basil, "forecast", "unknown", 0, 0, "", "unknown"
+    )
     assert_true(claim_is_forecast(forecast))
     assert_true(not claim_is_forecast(tomato_claim))
     with assert_raises():
-        _ = supply_claim("c4", tomatoes, "probably", "known", 1, 0, "kg", "exact")
+        _ = supply_claim(
+            "c4", tomatoes, "probably", "known", 1, 0, "kg", "exact"
+        )
 
 
 from hyf_core.domain.supply_change import (
@@ -374,11 +387,17 @@ from hyf_core.domain.supply_change import (
 
 
 def test_supply_change_operations_and_scoped_withdrawal() raises:
-    var addition = proposed_change("listing", Optional[String]("b1"), "addition", None)
+    var addition = proposed_change(
+        "listing", Optional[String]("b1"), "addition", None
+    )
     assert_equal(addition.operation, "addition")
-    var remaining = proposed_change("listing", Optional[String]("b1"), "remaining", None)
+    var remaining = proposed_change(
+        "listing", Optional[String]("b1"), "remaining", None
+    )
     assert_equal(remaining.operation, "remaining")
-    var replacement = proposed_change("listing", Optional[String]("b1"), "replacement", None)
+    var replacement = proposed_change(
+        "listing", Optional[String]("b1"), "replacement", None
+    )
     assert_equal(replacement.operation, "replacement")
     # Ambiguous withdrawal target must not expand to whole-farm stock.
     var ambiguous = proposed_change("listing", None, "withdrawal", None)
@@ -437,11 +456,19 @@ def test_demand_lines_and_condition_strength() raises:
     var tomatoes = resolved_product("tomatoes", "tomato")
     var lines = List[DemandLine]()
     var conditions_a = List[Condition]()
-    conditions_a.append(condition("fulfillment", "mandatory", Optional[String]("delivery")))
-    conditions_a.append(condition("fulfillment_excluded", "excluded", Optional[String]("pickup")))
+    conditions_a.append(
+        condition("fulfillment", "mandatory", Optional[String]("delivery"))
+    )
+    conditions_a.append(
+        condition(
+            "fulfillment_excluded", "excluded", Optional[String]("pickup")
+        )
+    )
     lines.append(demand_line("l1", tomatoes, "known", 25, 0, conditions_a))
     var conditions_b = List[Condition]()
-    conditions_b.append(condition("grade", "permitted", Optional[String]("seconds")))
+    conditions_b.append(
+        condition("grade", "permitted", Optional[String]("seconds"))
+    )
     lines.append(demand_line("l2", tomatoes, "unknown", 0, 0, conditions_b))
     assert_equal(len(lines), 2)
     assert_true(condition_is_exclusion(lines[0].conditions[1]))
@@ -461,11 +488,17 @@ from hyf_core.domain.snapshot import (
 
 def test_supply_snapshot_revisions_and_unknown_unreserved() raises:
     var tomatoes = resolved_product("Roma tomatoes", "tomato.roma")
-    var known = supply_snapshot("lot-1", "l1", "farm-1", tomatoes, "known", 50, 0, "kg")
-    var other_revision = supply_snapshot("lot-1", "l2", "farm-1", tomatoes, "known", 30, 0, "kg")
+    var known = supply_snapshot(
+        "lot-1", "l1", "farm-1", tomatoes, "known", 50, 0, "kg"
+    )
+    var other_revision = supply_snapshot(
+        "lot-1", "l2", "farm-1", tomatoes, "known", 30, 0, "kg"
+    )
     assert_true(snapshot_unreserved_known(known))
     assert_true(snapshot_identity(known) != snapshot_identity(other_revision))
-    var unknown = supply_snapshot("lot-2", "l1", "farm-1", tomatoes, "unknown", 0, 0, "kg")
+    var unknown = supply_snapshot(
+        "lot-2", "l1", "farm-1", tomatoes, "unknown", 0, 0, "kg"
+    )
     assert_true(not snapshot_unreserved_known(unknown))
 
 
@@ -478,18 +511,34 @@ from hyf_core.domain.eligibility import (
 
 def test_eligibility_precedence() raises:
     var checks = List[ConstraintAssessment]()
-    checks.append(constraint_assessment("product", "pass", True, "product_mismatch"))
-    checks.append(constraint_assessment("quantity", "unknown", True, "stock_unknown"))
-    checks.append(constraint_assessment("preference", "unknown", False, "evidence_insufficient"))
+    checks.append(
+        constraint_assessment("product", "pass", True, "product_mismatch")
+    )
+    checks.append(
+        constraint_assessment("quantity", "unknown", True, "stock_unknown")
+    )
+    checks.append(
+        constraint_assessment(
+            "preference", "unknown", False, "evidence_insufficient"
+        )
+    )
     assert_equal(compose_eligibility(checks), "conditional")
 
     var failing = List[ConstraintAssessment]()
-    failing.append(constraint_assessment("quantity", "fail", True, "quantity_insufficient"))
-    failing.append(constraint_assessment("window", "unknown", True, "window_mismatch"))
+    failing.append(
+        constraint_assessment("quantity", "fail", True, "quantity_insufficient")
+    )
+    failing.append(
+        constraint_assessment("window", "unknown", True, "window_mismatch")
+    )
     assert_equal(compose_eligibility(failing), "ineligible")
 
     var optional_only = List[ConstraintAssessment]()
-    optional_only.append(constraint_assessment("preference", "unknown", False, "evidence_insufficient"))
+    optional_only.append(
+        constraint_assessment(
+            "preference", "unknown", False, "evidence_insufficient"
+        )
+    )
     assert_equal(compose_eligibility(optional_only), "eligible")
     with assert_raises():
         _ = constraint_assessment("product", "maybe", True, "x")
@@ -538,7 +587,9 @@ from hyf_core.domain.coverage import (
 def test_coverage_limitations_do_not_claim_global_absence() raises:
     var unsupported = List[String]()
     unsupported.append("multi_supplier")
-    var value = coverage(True, 10, 2, "single_supplier_compatible_lots", unsupported)
+    var value = coverage(
+        True, 10, 2, "single_supplier_compatible_lots", unsupported
+    )
     assert_equal(value.scope, "supplied_only")
     assert_true(value.truncated)
     assert_equal(len(value.unsupported), 1)
@@ -546,13 +597,21 @@ def test_coverage_limitations_do_not_claim_global_absence() raises:
     assert_true(not unsupported_is_no_supply())
 
 
-from hyf_core.domain.execution import ExecutionMeta, execution_is_business_outcome, execution_meta
+from hyf_core.domain.execution import (
+    ExecutionMeta,
+    execution_is_business_outcome,
+    execution_meta,
+)
 
 
 def test_execution_metadata_is_separate_from_business_outcome() raises:
-    var complete = execution_meta("complete", 0, None, Optional[String]("qb1"), None)
+    var complete = execution_meta(
+        "complete", 0, None, Optional[String]("qb1"), None
+    )
     assert_equal(complete.status, "complete")
-    var degraded = execution_meta("degraded", 0, None, None, Optional[String]("provider_degraded"))
+    var degraded = execution_meta(
+        "degraded", 0, None, None, Optional[String]("provider_degraded")
+    )
     assert_equal(degraded.status, "degraded")
     assert_true(not execution_is_business_outcome())
     with assert_raises():
@@ -561,7 +620,11 @@ def test_execution_metadata_is_separate_from_business_outcome() raises:
         _ = execution_meta("weird", 0, None, None, None)
 
 
-from hyf_core.normalization.candidates import Candidate, candidate_kinds, discover_candidates
+from hyf_core.normalization.candidates import (
+    Candidate,
+    candidate_kinds,
+    discover_candidates,
+)
 
 
 def test_candidate_discovery_spans_and_unknown_products() raises:
@@ -572,7 +635,10 @@ def test_candidate_discovery_spans_and_unknown_products() raises:
     var dates = List[String]()
     dates.append("friday")
     var candidates = discover_candidates(
-        "Got about 80 lb of Roma tomatoes. Can deliver Friday.", products, units, dates
+        "Got about 80 lb of Roma tomatoes. Can deliver Friday.",
+        products,
+        units,
+        dates,
     )
     var kinds = candidate_kinds(candidates)
     assert_true(len(kinds) == 3)
@@ -588,6 +654,10 @@ def test_candidate_discovery_spans_and_unknown_products() raises:
     var empty_units = List[String]()
     var empty_dates = List[String]()
     assert_equal(
-        len(discover_candidates("mystery greens", unknown_products, empty_units, empty_dates)),
+        len(
+            discover_candidates(
+                "mystery greens", unknown_products, empty_units, empty_dates
+            )
+        ),
         0,
     )

@@ -35,7 +35,9 @@ def _read_pipe_line(mut pipe: Pipe) raises -> String:
         var read = pipe.read_bytes(Span(buffer))
         if read == 0:
             break
-        var chunk = String(from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(read)))
+        var chunk = String(
+            from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(read))
+        )
         if chunk == "\n":
             break
         output += chunk
@@ -59,9 +61,11 @@ def _read_request(mut stream: TcpStream) raises -> String:
             var marker = lowered.find("content-length:")
             var content_length = 0
             if marker >= 0:
-                var rest = String(text[byte=marker + 15:])
+                var rest = String(text[byte = marker + 15 :])
                 var line_end = rest.find("\r\n")
-                var value = rest if line_end < 0 else String(rest[byte=0:line_end])
+                var value = rest if line_end < 0 else String(
+                    rest[byte=0:line_end]
+                )
                 content_length = Int(String(String(value).strip()))
             expected_total = header_end + 4 + content_length
         if expected_total >= 0 and len(bytes) >= expected_total:
@@ -79,7 +83,7 @@ def _request_path(request: String) -> String:
     var first_space = first_line.find(" ")
     if first_space < 0:
         return ""
-    var rest = String(first_line[byte=first_space + 1:])
+    var rest = String(first_line[byte = first_space + 1 :])
     var second_space = rest.find(" ")
     if second_space < 0:
         return ""
@@ -162,8 +166,9 @@ def _handle(mut stream: TcpStream, mode: String) raises:
         stream.write_all(
             Span[UInt8, _](
                 (
-                    "HTTP/1.1 302 Found\r\nlocation: http://127.0.0.1:1/steal\r\n"
-                    "content-length: 0\r\nconnection: close\r\n\r\n"
+                    "HTTP/1.1 302 Found\r\nlocation:"
+                    " http://127.0.0.1:1/steal\r\ncontent-length:"
+                    " 0\r\nconnection: close\r\n\r\n"
                 ).as_bytes()
             )
         )
@@ -214,11 +219,15 @@ struct SpawnedJevStubAuto(Movable):
     var stub: SpawnedJevStub
 
 
-def spawn_jev_stub_auto(mode: String, requests: Int) raises -> SpawnedJevStubAuto:
+def spawn_jev_stub_auto(
+    mode: String, requests: Int
+) raises -> SpawnedJevStubAuto:
     return _spawn_jev_stub(0, mode, requests)
 
 
-def spawn_jev_stub(port: Int, mode: String, requests: Int) raises -> SpawnedJevStub:
+def spawn_jev_stub(
+    port: Int, mode: String, requests: Int
+) raises -> SpawnedJevStub:
     var started = _spawn_jev_stub(port, mode, requests)
     return started.stub^
 
@@ -252,6 +261,6 @@ def _spawn_jev_stub(
     var reported_port = port
     var space = ready_line.find(" ")
     if space >= 0:
-        reported_port = Int(String(ready_line[byte=space + 1:]))
+        reported_port = Int(String(ready_line[byte = space + 1 :]))
     stdout_pipe.set_output_only()
     return SpawnedJevStubAuto(port=reported_port, stub=SpawnedJevStub(Int(pid)))

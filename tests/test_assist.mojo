@@ -1,6 +1,7 @@
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
+from hyf_assist.questions import Question
 from hyf_assist.evaluator import (
     DisabledSemanticEvaluator,
     SemanticEvaluatorRequest,
@@ -88,3 +89,39 @@ def test_scripted_evaluator_is_strict_and_bounded() raises:
         _ = scripted_evaluate(
             evaluator, SemanticEvaluatorRequest(state="", question_bundle="qb1")
         )
+
+
+from hyf_assist.questions import (
+    bundle_pins_configuration,
+    choice_question,
+    noul_question,
+    question_bundle,
+    score_question,
+)
+
+
+def test_question_bundles_are_versioned_and_validated() raises:
+    var choices = List[String]()
+    choices.append("offered")
+    choices.append("forecast")
+    choices.append("unavailable")
+    choices.append("unclear")
+    var questions = List[Question]()
+    questions.append(choice_question("supply_status", "status?", choices))
+    questions.append(noul_question("seconds_ok", "seconds permitted?"))
+    var rubric = List[String]()
+    rubric.append("unsuitable")
+    rubric.append("limited")
+    rubric.append("suitable")
+    questions.append(score_question("culinary_fit", "fit?", rubric))
+    var bundle = question_bundle("qb1", "1", "jev-1.13.0", questions)
+    assert_true(bundle_pins_configuration(bundle))
+    assert_equal(len(bundle.questions), 3)
+    var too_few = List[String]()
+    too_few.append("only")
+    with assert_raises():
+        _ = choice_question("x", "y", too_few)
+    var one = List[String]()
+    one.append("only")
+    with assert_raises():
+        _ = score_question("s", "i", one)

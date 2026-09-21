@@ -1,0 +1,6 @@
+{
+  "fixture_id": "farm_update_disabled",
+  "capability": "farm_update.interpret",
+  "request": "{\"version\":1,\"request_id\":\"wire-farm-1\",\"capability\":\"farm_update.interpret\",\"input\":{\"source\":{\"source_id\":\"s1\",\"revision\":\"r1\",\"text\":\"x\",\"source_time\":\"2026-09-21T09:00:00-07:00\",\"timezone\":\"America/Vancouver\",\"actor_id\":\"a1\",\"farm_id\":\"f1\"}}}",
+  "expected_error_code": "capability_disabled"
+}

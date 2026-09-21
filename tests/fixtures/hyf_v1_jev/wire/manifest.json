@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "spec_id": "hyf_v1_jev",
+  "family": "wire_compatibility",
+  "note": "Repo-local wire frames for the new gated operations. The shared-wire mirror tests/fixtures/v1 remains unchanged.",
+  "scenarios": ["farm_update_disabled.json", "buyer_match_disabled.json"]
+}

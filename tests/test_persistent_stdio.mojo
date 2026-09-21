@@ -109,3 +109,23 @@ def test_buyer_match_operation_is_gated_until_enabled() raises:
         frames.append(request)
         var responses = run_stdio_session(frames, context)
         assert_true(responses[0].find("capability_disabled") >= 0)
+
+
+from fixture_loader import load_fixture_json_file as _load_fixture_json
+from std.pathlib import Path as _Path, _dir_of_current_file as _dir_of
+
+
+def test_new_operation_wire_frames_are_gated() raises:
+    var wire_dir = _dir_of() / "fixtures" / "hyf_v1_jev" / "wire"
+    var manifest = _load_fixture_json(wire_dir / "manifest.json")
+    assert_equal(manifest["spec_id"].string_value(), "hyf_v1_jev")
+    with TemporaryDirectory() as temp_dir:
+        var context = _context(temp_dir)
+        for name in manifest["scenarios"].array_items():
+            var scenario = _load_fixture_json(wire_dir / name.string_value())
+            var frames = List[String]()
+            frames.append(scenario["request"].string_value())
+            var responses = run_stdio_session(frames, context)
+            assert_true(
+                responses[0].find(scenario["expected_error_code"].string_value()) >= 0
+            )

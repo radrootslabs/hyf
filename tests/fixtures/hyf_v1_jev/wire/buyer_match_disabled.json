@@ -1,0 +1,6 @@
+{
+  "fixture_id": "buyer_match_disabled",
+  "capability": "buyer_request.match",
+  "request": "{\"version\":1,\"request_id\":\"wire-match-1\",\"capability\":\"buyer_request.match\",\"input\":{\"need\":{\"need_id\":\"n1\"},\"snapshots\":[]}}",
+  "expected_error_code": "capability_disabled"
+}

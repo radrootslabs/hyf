@@ -52,3 +52,20 @@ def allocate_single_line(
 
 def multi_supplier_is_supported() -> Bool:
     return False
+
+
+@fieldwise_init
+struct PlannerBounds(Copyable, Movable):
+    var max_candidates: Int
+    var max_plans: Int
+
+
+def planner_bounds(max_candidates: Int, max_plans: Int) raises -> PlannerBounds:
+    if max_candidates <= 0 or max_plans <= 0:
+        raise Error("planner bounds must be positive")
+    return PlannerBounds(max_candidates=max_candidates, max_plans=max_plans)
+
+
+def enforce_plan_bound(plan_count: Int, bounds: PlannerBounds) raises:
+    if plan_count > bounds.max_plans:
+        raise Error("plan enumeration exceeds the bound")

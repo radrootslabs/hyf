@@ -536,3 +536,16 @@ def test_supplier_grouping_and_bounded_allocation() raises:
     assert_equal(len(plan.allocations), 2)
     assert_equal(len(plan_conservation_violations(plan, capacities)), 0)
     assert_true(not multi_supplier_is_supported())
+
+
+from hyf_application.match_plan import PlannerBounds, enforce_plan_bound, planner_bounds
+
+
+def test_bounded_single_line_allocation() raises:
+    var bounds = planner_bounds(10, 3)
+    assert_equal(bounds.max_plans, 3)
+    enforce_plan_bound(2, bounds)
+    with assert_raises():
+        enforce_plan_bound(4, bounds)
+    with assert_raises():
+        _ = planner_bounds(0, 3)

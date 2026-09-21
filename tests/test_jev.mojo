@@ -43,3 +43,40 @@ def test_jev_request_serialization_shape() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+from hyf_provider.jev_answers import parse_choice_answer, parse_noul_answer
+from json import loads
+
+
+def test_parse_choice_and_noul_answers() raises:
+    var noul = parse_noul_answer("seconds_ok", loads('{"type":"noul","noul":0.9}'))
+    assert_equal(noul.kind, "noul")
+    assert_equal(noul.noul, 0.9)
+    var choices = List[String]()
+    choices.append("offered")
+    choices.append("forecast")
+    choices.append("unclear")
+    var choice = parse_choice_answer(
+        "supply_status",
+        loads('{"type":"choice","choice":"offered","probabilities":{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0}'),
+        choices,
+    )
+    assert_equal(choice.choice, "offered")
+
+    with assert_raises():
+        _ = parse_noul_answer("q", loads('{"type":"noul","noul":1.5}'))
+    with assert_raises():
+        _ = parse_choice_answer(
+            "q", loads('{"type":"choice","choice":"bogus","confidence":1.0}'), choices
+        )
+    with assert_raises():
+        _ = parse_choice_answer(
+            "q",
+            loads('{"type":"choice","choice":"offered","probabilities":{"offered":0.5,"forecast":0.5,"unclear":0.5},"confidence":1.0}'),
+            choices,
+        )
+    with assert_raises():
+        _ = parse_choice_answer(
+            "q", loads('{"type":"noul","noul":0.5}'), choices
+        )

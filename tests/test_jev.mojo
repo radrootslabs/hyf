@@ -184,3 +184,23 @@ def test_provider_response_projection() raises:
     assert_true(provider_cannot_supply_trusted_identity())
     with assert_raises():
         _ = answer_by_id(answers, "nonexistent")
+
+
+from hyf_provider.jev_state import minimal_state, state_includes_full_repository
+
+
+def test_data_minimized_state_projection() raises:
+    var state = minimal_state(
+        "Roma tomatoes available now", "Roma tomatoes", "Tomatoes for sauce; seconds permitted"
+    )
+    assert_true(state.find("farm_update:") >= 0)
+    assert_true(state.find("focus_product:") >= 0)
+    assert_true(state.find("buyer_request:") >= 0)
+    var only_source = minimal_state("Basil sold out", "", "")
+    assert_equal(only_source, "farm_update: Basil sold out")
+    assert_true(not state_includes_full_repository())
+    var huge = String()
+    for _ in range(2000):
+        huge += "xxxxxxxxxx"
+    with assert_raises():
+        _ = minimal_state(huge, "", "")

@@ -50,3 +50,27 @@ def test_candidate_and_plan_resource_envelope() raises:
     assert_true(not within_envelope(envelope, 1000, 2, 100, 5, 1))
     assert_true(not within_envelope(envelope, 10, 100, 100, 5, 1))
     assert_true(not within_envelope(envelope, 10, 2, 100000, 5, 1))
+
+
+from hyf_runtime.config import default_loaded_runtime_config, operation_enabled
+from hyf_runtime.jev_composition import compose_jev
+from hyf_application.authority_sim import apply_expected_version, new_authority_simulation
+
+
+def test_provider_disablement_and_rollback_preserve_state() raises:
+    var config = default_loaded_runtime_config()
+    config.effective.runtime.enable_farm_update_interpret = True
+    config.effective.runtime.enable_buyer_request_interpret = True
+    config.effective.runtime.enable_buyer_request_match = True
+    assert_true(operation_enabled(config, "farm_update.interpret"))
+    config.effective.runtime.disable_provider = True
+    assert_true(not operation_enabled(config, "farm_update.interpret"))
+    assert_true(not operation_enabled(config, "buyer_request.match"))
+    var composition = compose_jev(config)
+    assert_equal(composition.reason, "provider_disabled")
+
+    # Model/provider rollback must not erase accepted business state.
+    var simulation = new_authority_simulation()
+    apply_expected_version(simulation, "s1", "r1", "r1")
+    assert_equal(simulation.accepted_changes, 1)
+    assert_true(simulation.requires_confirmation)

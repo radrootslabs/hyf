@@ -161,3 +161,30 @@ def test_farm_review_output_is_proposal_only() raises:
     assert_equal(output.hyf_business_writes, 0)
     assert_true(not missing_optional_price_blocks_draft())
     assert_true(ambiguous_withdrawal_blocks_apply())
+
+
+from hyf_application.farm_clarification import (
+    apply_farm_clarification,
+    clarification_overwrites_original,
+    farm_clarification_is_stale,
+)
+
+
+def test_farm_clarification_is_revisioned_new_evidence() raises:
+    var refined = apply_farm_clarification(
+        "80", "quantity.unreserved", "farm-source-1", "r2",
+        "60 lb unreserved", "60",
+    )
+    assert_equal(refined.value.value(), "60")
+    assert_equal(refined.method, "clarification")
+    assert_true(not clarification_overwrites_original())
+    assert_true(
+        not farm_clarification_is_stale(
+            "quantity.unreserved", "farm-source-1", "r2", "60 lb", "r2"
+        )
+    )
+    assert_true(
+        farm_clarification_is_stale(
+            "quantity.unreserved", "farm-source-1", "r2", "60 lb", "r3"
+        )
+    )

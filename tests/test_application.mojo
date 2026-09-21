@@ -122,6 +122,7 @@ def test_authorized_change_target_resolution() raises:
 
 
 from hyf_application.farm_fulfillment import interpret_fulfillment
+from hyf_core.domain.price import price_is_known
 from hyf_core.domain.supply_change import ProposedSupplyChange
 from hyf_core.domain.time import date_only
 
@@ -243,3 +244,21 @@ def test_buyer_condition_strength_and_negation() raises:
     assert_equal(excluded.strength, "excluded")
     assert_true(not delivery_exclusion_means_pickup())
     assert_true(not missing_information_is_prohibition())
+
+
+from hyf_application.buyer_normalization import (
+    normalize_buyer_price,
+    normalize_buyer_quantity,
+    unknown_price_is_free,
+    unsupported_conversion_is_zero,
+)
+
+
+def test_buyer_quantity_and_price_normalization() raises:
+    var quantity = normalize_buyer_quantity(25, 0, "kg", "exact")
+    assert_equal(quantity.value, 25)
+    assert_equal(quantity.dimension, "mass")
+    var price = normalize_buyer_price(0, 2, "", "per_unit")
+    assert_true(not price_is_known(price))
+    assert_true(not unknown_price_is_free())
+    assert_true(not unsupported_conversion_is_zero())

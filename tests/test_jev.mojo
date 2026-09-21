@@ -367,3 +367,24 @@ def test_bounded_retry_and_budget_behavior() raises:
     assert_true(not retry_decision(policy, 0, 390, 429))
     with assert_raises():
         _ = retry_decision(policy, 0, 0, 200)
+
+
+def test_transport_cleanup_and_local_cancellation() raises:
+    var port = reserve_jev_port()
+    var stub = spawn_jev_stub(port, "ok", 1)
+    var outcome = post_jev_systemone(
+        "http://127.0.0.1:" + String(port),
+        _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
+        5000,
+    )
+    assert_equal(outcome.status, 200)
+    stub.wait()
+
+    # A refused connection is a bounded local transport failure (no listener).
+    var dead_port = reserve_jev_port()
+    with assert_raises():
+        _ = post_jev_systemone(
+            "http://127.0.0.1:" + String(dead_port),
+            _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
+            150,
+        )

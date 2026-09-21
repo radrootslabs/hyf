@@ -160,7 +160,10 @@ def _serve(port: Int, mode: String, requests: Int) raises:
     _write(1, "ready\n")
     for _ in range(requests):
         var stream = listener.accept()
-        _handle(stream, mode)
+        try:
+            _handle(stream, mode)
+        except:
+            pass
     listener.close()
 
 

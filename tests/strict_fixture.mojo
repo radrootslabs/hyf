@@ -423,31 +423,23 @@ struct ConnectionReader(Movable):
         outcome.total_bytes = expected_total
         return outcome^
 
-    def probe_completion(mut self, grace_ms: Int) -> String:
+    def probe_completion(mut self, grace_ms: Int) raises -> String:
         """Bounded completion handshake after the final expected exchange.
 
         Any already-buffered or subsequently received bytes mean the client
-        sent an extra exchange. A timeout with no bytes is success; this never
-        waits indefinitely for hypothetical future requests.
+        sent an extra exchange. A bounded timeout with no bytes is success; any
+        other I/O/setup error propagates (it is never a successful completion)
+        and is recorded by the serve loop as a bounded io_error.
         """
         if len(self._buffer) > 0:
             return "extra_exchange_after_completion"
+        self._stream.set_recv_timeout(grace_ms)
         try:
-            self._stream.set_recv_timeout(grace_ms)
-        except:
-            return "completion_probe_config_error"
-        try:
-            try:
-                var n = self._read_more()
-                if n > 0:
-                    return "extra_exchange_after_completion"
-            except Timeout:
-                # A bounded grace elapsed with no extra bytes: success.
-                return ""
-        except e:
-            # An unexpected I/O error is not a successful completion.
-            _ = String(e)
-            return "completion_probe_error"
+            var n = self._read_more()
+            if n > 0:
+                return "extra_exchange_after_completion"
+        except Timeout:
+            return ""
         return ""
 
 

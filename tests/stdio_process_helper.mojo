@@ -90,7 +90,9 @@ def drain_ready(
         return DrainOutcome(False, "")
     var buf = InlineArray[Byte, 4096](fill=0)
     var n = read_fd(fd, buf.unsafe_ptr(), 4096)
-    if n <= 0:
+    if n < 0:
+        return DrainOutcome(True, "read_error")
+    if n == 0:
         return DrainOutcome(True, "")
     if len(out) + n > cap:
         return DrainOutcome(True, "stream_overflow")

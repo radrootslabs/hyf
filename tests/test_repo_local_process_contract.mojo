@@ -164,5 +164,27 @@ def test_diagnostics_overflow_is_bounded_with_cause() raises:
     assert_true(len(out) <= 65536)
 
 
+def test_diagnostics_read_failure_is_distinct_from_eof() raises:
+    # LC04: an unavailable descriptor is a read failure, not a clean EOF.
+    var out = List[UInt8]()
+    var d = drain_ready(-1, out, 16, POLLIN)
+    assert_true(d.eof)
+    assert_equal(d.reason, "read_error")
+
+
+def test_run_stdio_entrypoint_drains_stderr_concurrently_and_bounds_it() raises:
+    # LC04: a child that floods stderr before producing output must not
+    # deadlock the parent, and the overflow is reported with its own cause.
+    var message = ""
+    try:
+        _ = run_stdio_entrypoint_with_deadline(
+            "tests/stdio_stderr_flood_entrypoint.mojo", "{}", "", "", 30000
+        )
+    except e:
+        message = String(e)
+    assert_true(message.find("stderr_stream_overflow") >= 0)
+    assert_true(message.find("timeout") < 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

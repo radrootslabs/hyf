@@ -584,6 +584,8 @@ struct PipedChildState(Movable):
     var connections: Int
     var cleanup_error: String
     var status: ProcessStatus
+    var observed: ProcessStatus
+    var observed_valid: Bool
 
     def store(
         mut self,
@@ -693,6 +695,30 @@ def parse_ready_line(line: String, max_bytes: Int) raises -> Int:
 
 
 # ── Non-opening descriptor census ───────────────────────────────────────────
+
+
+def parse_ready_or_cleanup(
+    pid: Int, line: String, max_bytes: Int
+) raises -> Int:
+    """Parse exact readiness or terminate and prove the owned child is gone.
+
+    Gives malformed readiness a real cleanup path with a bounded cause carrying
+    the offending line and the owned child's reap result.
+    """
+    try:
+        return parse_ready_line(line, max_bytes)
+    except e:
+        var status = terminate_owned(pid, TERMINATION_GRACE_MS)
+        raise Error(
+            "ready_invalid:"
+            + String(e)
+            + " report="
+            + line
+            + " child="
+            + status.describe()
+            + " cleanup="
+            + ("proved" if status.cleanup_proved() else "unreaped")
+        )
 
 
 def descriptor_census(limit: Int) -> Int:

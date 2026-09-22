@@ -24,10 +24,11 @@ from parent_lifecycle import (
     dup2_fd,
     fork_pid,
     make_pipe,
-    parse_ready_line,
+    parse_ready_or_cleanup,
     set_alarm,
     terminate_owned,
     wait_bounded,
+    wait_nohang,
     write_raw,
 )
 from strict_fixture import (
@@ -413,10 +414,23 @@ struct SpawnedMaxLocalStub(Movable):
             + String(self.state.connections)
         )
 
-    def status(self) -> ProcessStatus:
+    def status(mut self) -> ProcessStatus:
+        """Observe child status without losing ownership or report truth.
+
+        If the child has already exited, the observed reap status is cached in
+        ``state.observed`` rather than claimed as a completed reap, so a later
+        ``reap()`` still reads the report and evaluates exit/accounting truth.
+        """
         if self.state.reaped:
             return self.state.status.copy()
-        return wait_bounded(self.pid, 0)
+        if self.state.observed_valid:
+            return self.state.observed.copy()
+        var st = wait_nohang(self.pid)
+        if st.state == "running" or st.state == "interrupted":
+            return st^
+        self.state.observed = st.copy()
+        self.state.observed_valid = True
+        return st^
 
     def reap(mut self):
         """Reap the owned child and strictly decode its bounded report.
@@ -429,6 +443,8 @@ struct SpawnedMaxLocalStub(Movable):
         if self.state.reaped:
             return
         var status = wait_bounded(self.pid, self.state.deadline_ms)
+        if self.state.observed_valid:
+            status = self.state.observed.copy()
         self.state.status = status.copy()
         if status.state == "running" or status.state == "interrupted":
             var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
@@ -572,7 +588,7 @@ struct SpawnedMaxLocalView(Movable):
     def describe(self) -> String:
         return self.target[].describe()
 
-    def status(self) -> ProcessStatus:
+    def status(mut self) -> ProcessStatus:
         return self.target[].status()
 
     def reap(mut self):
@@ -685,6 +701,8 @@ def _spawn_max_local(
         connections=0,
         cleanup_error="",
         status=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed_valid=False,
     )
     var ready_line = ""
     try:
@@ -703,19 +721,9 @@ def _spawn_max_local(
         )
     var reported_port = 0
     try:
-        reported_port = parse_ready_line(ready_line, 256)
+        reported_port = parse_ready_or_cleanup(pid, ready_line, 256)
     except e:
-        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
-        state.status = st.copy()
         state.reaped = True
         state.close_reader()
-        raise Error(
-            "max_local stub malformed readiness ("
-            + String(e)
-            + " / report="
-            + ready_line
-            + " / "
-            + st.describe()
-            + ")"
-        )
+        raise Error("max_local stub malformed readiness (" + String(e) + ")")
     return SpawnedMaxLocalStub(pid, reported_port, state^)

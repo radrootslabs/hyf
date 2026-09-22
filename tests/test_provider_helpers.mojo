@@ -6,7 +6,7 @@ exception, signal or unrelated startup failure.
 """
 
 from std.testing import TestSuite, assert_true, assert_equal
-from std.ffi import ErrNo
+from std.ffi import ErrNo, c_int, external_call
 
 from flare.net import SocketAddr
 from flare.tcp import TcpListener, TcpStream
@@ -22,9 +22,12 @@ from parent_lifecycle import (
     fork_pid,
     make_pipe,
     open_fd_count,
+    parse_ready_line,
+    parse_ready_or_cleanup,
     pid_not_waitable,
     read_all_bounded,
     read_line_bounded,
+    sleep_ms,
     wait_nohang,
     write_fd_bounded,
     write_raw,
@@ -946,6 +949,8 @@ def _owned_report_child(
         connections=0,
         cleanup_error="",
         status=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed_valid=False,
     )
     return SpawnedMaxLocalStub(pid, 0, state^)
 
@@ -1166,6 +1171,8 @@ def test_coalesced_ready_and_report_lines_retain_surplus() raises:
         connections=0,
         cleanup_error="",
         status=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed_valid=False,
     )
     var ready = state.read_line(2048, 500)
     var report = state.read_line(2048, 500)
@@ -1239,6 +1246,100 @@ def test_descriptor_census_detects_planted_high_fd() raises:
     close_fd(pipe.write_fd)
     var after = open_fd_count()
     assert_true(after <= with_pipe)
+
+
+def test_descriptor_census_detects_planted_socket() raises:
+    # The census must count sockets, not only regular files.
+    var before = open_fd_count()
+    var sock = Int(external_call["socket", c_int](c_int(2), c_int(1), c_int(0)))
+    assert_true(sock >= 0)
+    var with_socket = open_fd_count()
+    assert_true(with_socket > before)
+    close_fd(sock)
+    assert_true(open_fd_count() <= with_socket)
+
+
+def test_ready_grammar_rejections() raises:
+    var valid = 0
+    var raised = ""
+    try:
+        valid = parse_ready_line("ready 65535", 256)
+    except e:
+        raised = String(e)
+    assert_equal(valid, 65535)
+    assert_equal(raised, "")
+    var cases = List[String]()
+    cases.append("")
+    cases.append("ready")
+    cases.append("ready ")
+    cases.append("ready abc")
+    cases.append("ready 12345x")
+    cases.append("ready 70000")
+    cases.append("ready 0")
+    cases.append("not-ready")
+    for probe in cases:
+        var reason = ""
+        try:
+            _ = parse_ready_line(probe, 256)
+        except e:
+            reason = String(e)
+        assert_true(reason != "")
+
+
+def test_malformed_ready_line_terminates_owned_child() raises:
+    # LC03: malformed readiness must clean up the exact owned child.
+    var pipe = make_pipe()
+    var pid = fork_pid()
+    if pid == 0:
+        close_fd(pipe.read_fd)
+        _ = write_raw(pipe.write_fd, "garbage-not-ready\n")
+        for _ in range(400):
+            sleep_ms(50)
+        child_exit(0)
+    close_fd(pipe.write_fd)
+    var line = read_line_bounded(pipe.read_fd, 256, 500)
+    close_fd(pipe.read_fd)
+    var message = ""
+    try:
+        _ = parse_ready_or_cleanup(pid, line, 256)
+    except e:
+        message = String(e)
+    assert_true(message.find("ready_invalid:ready_grammar") >= 0)
+    assert_true(message.find("cleanup=proved") >= 0)
+    assert_true(pid_not_waitable(pid))
+
+
+def test_status_observation_preserves_ownership_and_report() raises:
+    # LC01/LC02: observing an exited child must not consume the report.
+    var stub = _owned_report_child(
+        0,
+        "result ok phase=complete case=- reason=ok requests=1 connections=1\n",
+    )
+    var observed = ""
+    for _ in range(200):
+        observed = stub.status().state
+        if observed != "running" and observed != "interrupted":
+            break
+        sleep_ms(20)
+    assert_equal(observed, "reaped")
+    var second = stub.status()
+    assert_equal(second.state, "reaped")
+    stub.reap()
+    assert_true(stub.ok())
+    assert_equal(stub.request_count(), 1)
+    assert_true(stub.status().cleanup_proved())
+
+
+def test_status_observation_then_terminate_is_safe() raises:
+    var stub = _owned_report_child(0, "")
+    sleep_ms(100)
+    _ = stub.status()
+    var owned_pid = stub.pid
+    stub.terminate()
+    stub.terminate()
+    stub.reap()
+    assert_true(pid_not_waitable(owned_pid))
+    assert_true(not stub.ok())
 
 
 # ── LC05: coalesced header cap accounting ───────────────────────────────────

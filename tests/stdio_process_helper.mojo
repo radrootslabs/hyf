@@ -27,7 +27,7 @@ from parent_lifecycle import (
     close_fd,
     dup2_fd,
     fork_pid,
-    make_pipe,
+    make_three_pipes,
     now_ms,
     poll_three,
     read_fd,
@@ -152,9 +152,7 @@ def run_stdio_entrypoint_with_deadline(
     arg1: String,
     deadline_ms: Int,
 ) raises -> Value:
-    var stdin_pipe = make_pipe()
-    var stdout_pipe = make_pipe()
-    var stderr_pipe = make_pipe()
+    var pipes = make_three_pipes()
 
     var command = String("mojo")
     var include_flag = String("-I")
@@ -183,12 +181,12 @@ def run_stdio_entrypoint_with_deadline(
             process_arg1.as_c_string_slice()
         )
 
-    var stdin_read_fd = stdin_pipe.read_fd
-    var stdin_write_fd = stdin_pipe.write_fd
-    var stdout_read_fd = stdout_pipe.read_fd
-    var stdout_write_fd = stdout_pipe.write_fd
-    var stderr_read_fd = stderr_pipe.read_fd
-    var stderr_write_fd = stderr_pipe.write_fd
+    var stdin_read_fd = pipes.stdin_pipe.read_fd
+    var stdin_write_fd = pipes.stdin_pipe.write_fd
+    var stdout_read_fd = pipes.stdout_pipe.read_fd
+    var stdout_write_fd = pipes.stdout_pipe.write_fd
+    var stderr_read_fd = pipes.stderr_pipe.read_fd
+    var stderr_write_fd = pipes.stderr_pipe.write_fd
     var command_ptr = command.as_c_string_slice().unsafe_ptr()
     var argv_ptr = argv.unsafe_ptr()
 

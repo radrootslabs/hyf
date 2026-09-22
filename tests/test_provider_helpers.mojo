@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_true, assert_equal
 from std.ffi import ErrNo, c_int, external_call
 
 from flare.net import SocketAddr
+from flare.net.socket import RawSocket
 from flare.tcp import TcpListener, TcpStream
 
 from parent_lifecycle import (
@@ -21,7 +22,9 @@ from parent_lifecycle import (
     dup2_fd,
     fork_pid,
     make_pipe,
+    make_three_pipes,
     open_fd_count,
+    open_fd_count_checked,
     parse_ready_line,
     parse_ready_or_cleanup,
     pid_not_waitable,
@@ -33,6 +36,7 @@ from parent_lifecycle import (
     write_raw,
 )
 from strict_fixture import (
+    ConnectionReader,
     ExchangeScript,
     FramedRequest,
     authorization_reason,
@@ -1243,9 +1247,86 @@ def test_descriptor_census_detects_planted_high_fd() raises:
     assert_true(planted >= 0)
     assert_true(with_pipe > before)
     close_fd(planted)
+    close_fd(pipe.read_fd)
     close_fd(pipe.write_fd)
-    var after = open_fd_count()
-    assert_true(after <= with_pipe)
+    assert_equal(open_fd_count(), before)
+
+
+def test_partial_pipe_failure_rolls_back() raises:
+    # LC01: a later pipe failure must close the pipes already created.
+    var before = open_fd_count_checked()
+    var message = ""
+    try:
+        _ = make_three_pipes(1)
+    except e:
+        message = String(e)
+    assert_true(message.find("injected pipe creation failure") >= 0)
+    assert_equal(open_fd_count_checked(), before)
+
+
+def test_cleanup_failure_is_observable() raises:
+    # LC01/D36: cleanup failure must be observable, never silently swallowed.
+    var state = PipedChildState(
+        pid=0,
+        report_fd=-1,
+        pending="",
+        eof=False,
+        closed=False,
+        deadline_ms=100,
+        expected_requests=1,
+        reaped=False,
+        ok=False,
+        phase="pending",
+        case_label="-",
+        reason="not_reaped",
+        requests=0,
+        connections=0,
+        cleanup_error="",
+        status=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed_valid=False,
+    )
+    var stub = SpawnedMaxLocalStub(0, 0, state^)
+    stub.cleanup()
+    assert_true(stub.cleanup_error().find("unreaped") >= 0)
+    assert_true(not stub.status().cleanup_proved())
+
+
+def test_result_truth_rejects_wrong_request_count() raises:
+    var stub = _owned_report_child(
+        0,
+        "result ok phase=complete case=- reason=ok requests=2 connections=1\n",
+    )
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.reason(), "request_count_mismatch")
+
+
+def test_result_truth_rejects_invalid_connection_count() raises:
+    var stub = _owned_report_child(
+        0,
+        "result ok phase=complete case=- reason=ok requests=1 connections=5\n",
+    )
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.reason(), "connection_count_invalid")
+
+
+def test_completion_probe_error_is_not_success() raises:
+    # LC05: a non-timeout completion-probe I/O/setup error must not be read as
+    # a successful completion.
+    var pipe = make_pipe()
+    var sock = RawSocket(c_int(pipe.read_fd), c_int(2), c_int(1), True)
+    var stream = TcpStream(sock^, SocketAddr.localhost(UInt16(1)))
+    var reader = ConnectionReader(stream^)
+    var raised = False
+    try:
+        _ = reader.probe_completion(20)
+    except e:
+        raised = True
+        _ = String(e)
+    close_fd(pipe.write_fd)
+    assert_true(raised)
 
 
 def test_descriptor_census_detects_planted_socket() raises:

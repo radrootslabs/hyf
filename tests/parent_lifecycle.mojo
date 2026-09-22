@@ -68,9 +68,47 @@ def now_ms() -> Int:
 
 
 @fieldwise_init
-struct PipeFds(Movable):
+struct PipeFds(Copyable, Movable):
     var read_fd: Int
     var write_fd: Int
+
+    def __copyinit__(out self, existing: Self):
+        self.read_fd = existing.read_fd
+        self.write_fd = existing.write_fd
+
+
+@fieldwise_init
+struct PipeTriple(Movable):
+    var stdin_pipe: PipeFds
+    var stdout_pipe: PipeFds
+    var stderr_pipe: PipeFds
+
+
+def close_pipe(var pipe: PipeFds):
+    close_fd(pipe.read_fd)
+    close_fd(pipe.write_fd)
+
+
+def make_three_pipes(inject_fail_after: Int = -1) raises -> PipeTriple:
+    """Create three owned pipes, closing earlier ones if a later one fails.
+
+    ``inject_fail_after`` is a test-only control: when >= 0 the constructor
+    raises after that many successful pipes, proving the rollback path.
+    """
+    var fds = InlineArray[Int, 6](fill=-1)
+    for index in range(3):
+        if inject_fail_after >= 0 and index == inject_fail_after:
+            for slot in range(6):
+                close_fd(fds[slot])
+            raise Error("lifecycle: injected pipe creation failure")
+        var pipe = make_pipe()
+        fds[index * 2] = pipe.read_fd
+        fds[index * 2 + 1] = pipe.write_fd
+    return PipeTriple(
+        PipeFds(fds[0], fds[1]),
+        PipeFds(fds[2], fds[3]),
+        PipeFds(fds[4], fds[5]),
+    )
 
 
 def ignore_sigpipe():

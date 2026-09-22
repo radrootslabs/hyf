@@ -26,7 +26,7 @@ from parent_lifecycle import (
     child_exit,
     close_fd,
     dup2_fd,
-    fork_pid,
+    fork_owned_or_close3,
     make_three_pipes,
     now_ms,
     poll_three,
@@ -190,17 +190,7 @@ def run_stdio_entrypoint_with_deadline(
     var command_ptr = command.as_c_string_slice().unsafe_ptr()
     var argv_ptr = argv.unsafe_ptr()
 
-    var pid = 0
-    try:
-        pid = fork_pid()
-    except e:
-        close_fd(stdin_read_fd)
-        close_fd(stdin_write_fd)
-        close_fd(stdout_read_fd)
-        close_fd(stdout_write_fd)
-        close_fd(stderr_read_fd)
-        close_fd(stderr_write_fd)
-        raise Error("stdio-entrypoint fork failed: " + String(e))
+    var pid = fork_owned_or_close3(pipes)
     if pid == 0:
         if dup2_fd(stdin_read_fd, 0) < 0:
             child_exit(126)

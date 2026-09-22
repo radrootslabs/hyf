@@ -22,7 +22,7 @@ from parent_lifecycle import (
     child_exit,
     close_fd,
     dup2_fd,
-    fork_pid,
+    fork_owned_or_close,
     make_pipe,
     parse_ready_or_cleanup,
     set_alarm,
@@ -510,7 +510,13 @@ struct SpawnedMaxLocalStub(Movable):
             parsed.requests,
             parsed.connections,
         )
-        if not report_status_matches_exit(
+        if self.state.pending != "":
+            # A second report line after the first is a duplicate/malformed
+            # report, never a success.
+            self.state.ok = False
+            self.state.phase = "parse"
+            self.state.reason = "duplicate_report"
+        elif not report_status_matches_exit(
             status.exited, status.exit_code, parsed.ok
         ):
             self.state.ok = False
@@ -658,13 +664,7 @@ def _spawn_max_local(
     deadline_ms: Int,
 ) raises -> SpawnedMaxLocalStub:
     var pipe = make_pipe()
-    var pid = 0
-    try:
-        pid = fork_pid()
-    except e:
-        close_fd(pipe.read_fd)
-        close_fd(pipe.write_fd)
-        raise Error("max_local stub fork failed: " + String(e))
+    var pid = fork_owned_or_close(pipe.copy())
     if pid == 0:
         if dup2_fd(pipe.write_fd, 1) < 0:
             child_exit(126)

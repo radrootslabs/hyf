@@ -20,6 +20,7 @@ from parent_lifecycle import (
     close_fd,
     descriptor_census,
     dup2_fd,
+    fork_owned_or_close,
     fork_pid,
     make_pipe,
     make_three_pipes,
@@ -1262,6 +1263,33 @@ def test_partial_pipe_failure_rolls_back() raises:
         message = String(e)
     assert_true(message.find("injected pipe creation failure") >= 0)
     assert_equal(open_fd_count_checked(), before)
+
+
+def test_fork_failure_closes_owned_pipes() raises:
+    # LC01: a fork failure must close both ends of the owned pipe.
+    var before = open_fd_count_checked()
+    var pipe = make_pipe()
+    var message = ""
+    try:
+        _ = fork_owned_or_close(pipe.copy(), True)
+    except e:
+        message = String(e)
+    assert_true(message.find("injected fork failure") >= 0)
+    assert_equal(open_fd_count_checked(), before)
+
+
+def test_result_truth_rejects_duplicate_report_line() raises:
+    var stub = _owned_report_child(
+        0,
+        (
+            "result ok phase=complete case=- reason=ok requests=1"
+            " connections=1\nresult ok phase=complete case=- reason=ok"
+            " requests=1 connections=1\n"
+        ),
+    )
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.reason(), "duplicate_report")
 
 
 def test_cleanup_failure_is_observable() raises:

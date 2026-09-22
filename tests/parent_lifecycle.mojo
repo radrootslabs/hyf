@@ -84,31 +84,69 @@ struct PipeTriple(Movable):
     var stderr_pipe: PipeFds
 
 
-def close_pipe(var pipe: PipeFds):
+def close_pipe(pipe: PipeFds):
     close_fd(pipe.read_fd)
     close_fd(pipe.write_fd)
 
 
 def make_three_pipes(inject_fail_after: Int = -1) raises -> PipeTriple:
-    """Create three owned pipes, closing earlier ones if a later one fails.
+    """Create three owned pipes, closing earlier ones if any creation fails.
 
-    ``inject_fail_after`` is a test-only control: when >= 0 the constructor
-    raises after that many successful pipes, proving the rollback path.
+    ``inject_fail_after`` is a test-only control: when >= 0 a failure is
+    raised after that many successful pipes. The injected failure and a real
+    ``make_pipe`` failure share the same rollback handler.
     """
     var fds = InlineArray[Int, 6](fill=-1)
-    for index in range(3):
-        if inject_fail_after >= 0 and index == inject_fail_after:
-            for slot in range(6):
-                close_fd(fds[slot])
-            raise Error("lifecycle: injected pipe creation failure")
-        var pipe = make_pipe()
-        fds[index * 2] = pipe.read_fd
-        fds[index * 2 + 1] = pipe.write_fd
+    try:
+        for index in range(3):
+            if inject_fail_after >= 0 and index == inject_fail_after:
+                raise Error("lifecycle: injected pipe creation failure")
+            var pipe = make_pipe()
+            fds[index * 2] = pipe.read_fd
+            fds[index * 2 + 1] = pipe.write_fd
+    except:
+        for slot in range(6):
+            close_fd(fds[slot])
+        raise
     return PipeTriple(
         PipeFds(fds[0], fds[1]),
         PipeFds(fds[2], fds[3]),
         PipeFds(fds[4], fds[5]),
     )
+
+
+def fork_owned_or_close(
+    pipe: PipeFds, inject_failure: Bool = False
+) raises -> Int:
+    """Fork the owned child, closing both pipe ends if the fork fails.
+
+    A real ``fork`` failure and the test-only injected failure share the same
+    rollback handler, so partial-startup cleanup is execution-proven.
+    """
+    try:
+        if inject_failure:
+            raise Error("lifecycle: injected fork failure")
+        return fork_pid()
+    except:
+        close_pipe(pipe.copy())
+        raise
+    return -1
+
+
+def fork_owned_or_close3(
+    pipes: PipeTriple, inject_failure: Bool = False
+) raises -> Int:
+    """Fork the stdio child, closing all three pipe pairs if the fork fails."""
+    try:
+        if inject_failure:
+            raise Error("lifecycle: injected fork failure")
+        return fork_pid()
+    except:
+        close_pipe(pipes.stdin_pipe.copy())
+        close_pipe(pipes.stdout_pipe.copy())
+        close_pipe(pipes.stderr_pipe.copy())
+        raise
+    return -1
 
 
 def ignore_sigpipe():

@@ -1,4 +1,4 @@
-from std.ffi import c_int, c_size_t, c_ssize_t, external_call
+from std.ffi import c_int, c_size_t, c_ssize_t, c_uint, external_call
 from std.os import Pipe, Process
 from std.sys._libc import close
 
@@ -6,6 +6,8 @@ from flare.net import SocketAddr
 from flare.tcp import TcpListener
 from flare.tcp import TcpStream
 from flare.utils import usleep
+
+from strict_fixture import ConnectionReader, FramedRequest, bearer_token
 
 
 def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
@@ -15,6 +17,16 @@ def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
 @always_inline
 def _fork() -> c_int:
     return external_call["fork", c_int]()
+
+
+@always_inline
+def _kill(pid: c_int, sig: c_int) -> c_int:
+    return external_call["kill", c_int](pid, sig)
+
+
+@always_inline
+def _alarm(seconds: c_uint) -> c_uint:
+    return external_call["alarm", c_uint](seconds)
 
 
 @always_inline
@@ -44,64 +56,6 @@ def _read_pipe_line(mut pipe: Pipe) raises -> String:
     return output^
 
 
-comptime MAX_TEST_REQUEST_BYTES = 1048576
-
-
-def _read_request(mut stream: TcpStream) raises -> String:
-    var bytes = List[UInt8]()
-    var chunk = InlineArray[Byte, 4096](fill=0)
-    var expected_total = -1
-    while True:
-        var n = stream.read(chunk.unsafe_ptr(), 4096)
-        if n <= 0:
-            break
-        for index in range(Int(n)):
-            bytes.append(chunk[index])
-        if len(bytes) > MAX_TEST_REQUEST_BYTES:
-            break
-        var text = String(unsafe_from_utf8=bytes[:])
-        var header_end = text.find("\r\n\r\n")
-        if header_end >= 0 and expected_total < 0:
-            var lowered = text.lower()
-            var marker = lowered.find("content-length:")
-            var content_length = 0
-            if marker >= 0:
-                var rest = String(text[byte = marker + 15 :])
-                var line_end = rest.find("\r\n")
-                var value = rest if line_end < 0 else String(
-                    rest[byte=0:line_end]
-                )
-                content_length = Int(String(String(value).strip()))
-            expected_total = header_end + 4 + content_length
-        if expected_total >= 0 and len(bytes) >= expected_total:
-            break
-    if len(bytes) == 0:
-        return ""
-    return String(unsafe_from_utf8=bytes[:])
-
-
-def _request_body(request: String) -> String:
-    var header_end = request.find("\r\n\r\n")
-    if header_end < 0:
-        return ""
-    return String(request[byte = header_end + 4 :])
-
-
-def _request_path(request: String) -> String:
-    var line_end = request.find("\r\n")
-    if line_end < 0:
-        return ""
-    var first_line = String(request[byte=0:line_end])
-    var first_space = first_line.find(" ")
-    if first_space < 0:
-        return ""
-    var rest = String(first_line[byte = first_space + 1 :])
-    var second_space = rest.find(" ")
-    if second_space < 0:
-        return ""
-    return String(rest[byte=0:second_space])
-
-
 def _json_string(value: String) -> String:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -128,7 +82,9 @@ def _chat_completion(body: String) -> String:
 
 def _response(status: Int, body: String) -> String:
     var reason = "OK"
-    if status == 404:
+    if status == 401:
+        reason = "Unauthorized"
+    elif status == 404:
         reason = "Not Found"
     elif status == 500:
         reason = "Internal Server Error"
@@ -146,36 +102,35 @@ def _response(status: Int, body: String) -> String:
     )
 
 
-def _send(mut stream: TcpStream, status: Int, body: String) raises:
-    var response = _response(status, body)
-    stream.write_all(Span[UInt8, _](response.as_bytes()))
+def _send(mut reader: ConnectionReader, status: Int, body: String) raises:
+    reader.write_all(_response(status, body))
 
 
-def _send_raw(mut stream: TcpStream, response: String) raises:
-    stream.write_all(Span[UInt8, _](response.as_bytes()))
+def _send_raw(mut reader: ConnectionReader, response: String) raises:
+    reader.write_all(response)
 
 
-def _handle_health(mut stream: TcpStream, mode: String) raises:
+def _handle_health(mut reader: ConnectionReader, mode: String) raises:
     if mode == "health_non_2xx":
-        _send(stream, 503, '{"status":"unavailable"}')
+        _send(reader, 503, '{"status":"unavailable"}')
     elif mode == "health_timeout":
         usleep(1_000_000)
     elif mode == "health_malformed_http":
-        _send_raw(stream, "not an http response\r\n\r\n")
+        _send_raw(reader, "not an http response\r\n\r\n")
     elif mode == "query_rewrite_remaining_deadline_timeout":
         usleep(200_000)
-        _send(stream, 200, '{"status":"ok"}')
+        _send(reader, 200, '{"status":"ok"}')
     else:
-        _send(stream, 200, '{"status":"ok"}')
+        _send(reader, 200, '{"status":"ok"}')
 
 
-def _handle_chat_completions(mut stream: TcpStream, mode: String) raises:
+def _handle_chat_completions(mut reader: ConnectionReader, mode: String) raises:
     if mode == "query_rewrite_ok":
-        _send(stream, 200, _chat_completion(_query_rewrite_analysis()))
+        _send(reader, 200, _chat_completion(_query_rewrite_analysis()))
     elif mode == "query_rewrite_non_2xx":
-        _send(stream, 503, '{"error":{"message":"provider unavailable"}}')
+        _send(reader, 503, '{"error":{"message":"provider unavailable"}}')
     elif mode == "query_rewrite_invalid_json":
-        _send(stream, 200, '{"choices":[{"message":{"content":"not json"}}]}')
+        _send(reader, 200, '{"choices":[{"message":{"content":"not json"}}]}')
     elif mode == "query_rewrite_schema_invalid":
         var body = (
             '{"original_text":"local apples pickup weekend",'
@@ -189,60 +144,93 @@ def _handle_chat_completions(mut stream: TcpStream, mode: String) raises:
             '"time_window":"weekend"'
             "}}"
         )
-        _send(stream, 200, _chat_completion(body))
+        _send(reader, 200, _chat_completion(body))
     elif mode == "query_rewrite_top_level_string":
-        _send(stream, 200, '"not object"')
+        _send(reader, 200, '"not object"')
     elif mode == "query_rewrite_top_level_array":
-        _send(stream, 200, "[]")
+        _send(reader, 200, "[]")
     elif mode == "query_rewrite_top_level_null":
-        _send(stream, 200, "null")
+        _send(reader, 200, "null")
     elif mode == "query_rewrite_empty_choices":
-        _send(stream, 200, '{"choices":[]}')
+        _send(reader, 200, '{"choices":[]}')
     elif mode == "query_rewrite_missing_content":
-        _send(stream, 200, '{"choices":[{"message":{}}]}')
+        _send(reader, 200, '{"choices":[{"message":{}}]}')
     elif mode == "query_rewrite_error_payload":
-        _send(stream, 200, '{"error":{"message":"provider refusal"}}')
+        _send(reader, 200, '{"error":{"message":"provider refusal"}}')
     elif mode == "query_rewrite_timeout":
         usleep(2_000_000)
-        _send(stream, 200, _chat_completion(_query_rewrite_analysis()))
+        _send(reader, 200, _chat_completion(_query_rewrite_analysis()))
     elif mode == "query_rewrite_remaining_deadline_timeout":
         usleep(400_000)
-        _send(stream, 200, _chat_completion(_query_rewrite_analysis()))
+        _send(reader, 200, _chat_completion(_query_rewrite_analysis()))
     elif mode == "query_rewrite_malformed_http":
-        _send_raw(stream, "not an http response\r\n\r\n")
+        _send_raw(reader, "not an http response\r\n\r\n")
     else:
-        _send(stream, 500, '{"error":"unsupported_mode"}')
+        _send(reader, 500, '{"error":"unsupported_mode"}')
 
 
-def _handle_request(mut stream: TcpStream, mode: String, index: Int) raises:
-    var request = _read_request(stream)
-    var path = _request_path(request)
+def _handle_framed(
+    mut reader: ConnectionReader,
+    mode: String,
+    request_index: Int,
+    connection_index: Int,
+    framed: FramedRequest,
+) raises:
+    var path = framed.path
     if mode == "echo_body_bytes":
         _send(
-            stream,
+            reader,
             200,
-            '{"received_bytes":'
-            + String(_request_body(request).byte_length())
-            + "}",
+            '{"received_bytes":' + String(framed.body.byte_length()) + "}",
         )
     elif mode == "count_requests":
-        _send(stream, 200, '{"request_index":' + String(index + 1) + "}")
+        _send(
+            reader,
+            200,
+            '{"request_index":'
+            + String(request_index)
+            + ',"connection_index":'
+            + String(connection_index)
+            + "}",
+        )
+    elif mode == "echo_authorization":
+        var token = bearer_token(framed.headers_raw)
+        if token == "":
+            _send(reader, 401, '{"error":"missing_authorization"}')
+        else:
+            _send(reader, 200, '{"authorization":' + _json_string(token) + "}")
+    elif mode == "stall":
+        usleep(30_000_000)
     elif path == "/health":
-        _handle_health(stream, mode)
+        _handle_health(reader, mode)
     elif path == "/v1/chat/completions":
-        _handle_chat_completions(stream, mode)
+        _handle_chat_completions(reader, mode)
     else:
-        _send(stream, 404, '{"error":"not_found"}')
-    stream.close()
+        _send(reader, 404, '{"error":"not_found"}')
 
 
 def _serve_max_local_stub(port: Int, mode: String, requests: Int) raises:
     var listener = TcpListener.bind(SocketAddr.localhost(UInt16(port)))
     var actual_port = Int(listener.local_addr().port)
     _write(1, "ready " + String(actual_port) + "\n")
-    for request_index in range(requests):
+    var request_count = 0
+    var connection_count = 0
+    while request_count < requests:
         var stream = listener.accept()
-        _handle_request(stream, mode, request_index)
+        connection_count += 1
+        var reader = ConnectionReader(stream^)
+        while request_count < requests:
+            var framed = reader.read()
+            if not framed.ok:
+                if framed.error == "empty":
+                    break
+                raise Error("strict fixture framing error: " + framed.error)
+            request_count += 1
+            _handle_framed(
+                reader, mode, request_count, connection_count, framed
+            )
+            if not framed.keep_alive:
+                break
     listener.close()
 
 
@@ -259,6 +247,11 @@ struct SpawnedMaxLocalStub(Movable):
         var status = process.wait()
         if not status.exit_code or status.exit_code.value() != 0:
             raise Error("max_local stub exited unexpectedly")
+
+    def terminate(mut self) raises:
+        _ = _kill(c_int(self.pid), c_int(15))
+        var process = Process(self.pid)
+        _ = process.wait()
 
 
 def reserve_loopback_port() raises -> Int:
@@ -284,6 +277,7 @@ def spawn_max_local_stub(
             _exit_child(c_int(126))
         _ = close(stdout_read_fd)
         _ = close(stdout_write_fd)
+        _ = _alarm(c_uint(20))
         try:
             _serve_max_local_stub(port, mode, requests)
             _exit_child(c_int(0))

@@ -1,11 +1,13 @@
 import std.os
-from std.ffi import c_int, c_size_t, c_ssize_t, external_call
+from std.ffi import c_int, c_size_t, c_ssize_t, c_uint, external_call
 from std.os import Pipe, Process
 from std.sys._libc import close
 
 from flare.net import SocketAddr
 from flare.tcp import TcpListener, TcpStream
 from flare.utils import usleep
+
+from strict_fixture import ConnectionReader, FramedRequest, bearer_token
 
 
 def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
@@ -15,6 +17,11 @@ def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
 @always_inline
 def _fork() -> c_int:
     return external_call["fork", c_int]()
+
+
+@always_inline
+def _alarm(seconds: c_uint) -> c_uint:
+    return external_call["alarm", c_uint](seconds)
 
 
 @always_inline
@@ -44,67 +51,6 @@ def _read_pipe_line(mut pipe: Pipe) raises -> String:
     return output^
 
 
-def _read_request(mut stream: TcpStream) raises -> String:
-    var bytes = List[UInt8]()
-    var chunk = InlineArray[Byte, 4096](fill=0)
-    var expected_total = -1
-    while True:
-        var n = stream.read(chunk.unsafe_ptr(), 4096)
-        if n <= 0:
-            break
-        for index in range(Int(n)):
-            bytes.append(chunk[index])
-        var text = String(unsafe_from_utf8=bytes[:])
-        var header_end = text.find("\r\n\r\n")
-        if header_end >= 0 and expected_total < 0:
-            var lowered = text.lower()
-            var marker = lowered.find("content-length:")
-            var content_length = 0
-            if marker >= 0:
-                var rest = String(text[byte = marker + 15 :])
-                var line_end = rest.find("\r\n")
-                var value = rest if line_end < 0 else String(
-                    rest[byte=0:line_end]
-                )
-                content_length = Int(String(String(value).strip()))
-            expected_total = header_end + 4 + content_length
-        if expected_total >= 0 and len(bytes) >= expected_total:
-            break
-    if len(bytes) == 0:
-        return ""
-    return String(unsafe_from_utf8=bytes[:])
-
-
-def _request_path(request: String) -> String:
-    var line_end = request.find("\r\n")
-    if line_end < 0:
-        return ""
-    var first_line = String(request[byte=0:line_end])
-    var first_space = first_line.find(" ")
-    if first_space < 0:
-        return ""
-    var rest = String(first_line[byte = first_space + 1 :])
-    var second_space = rest.find(" ")
-    if second_space < 0:
-        return ""
-    return String(rest[byte=0:second_space])
-
-
-def _header_value(request: String, name: String) -> String:
-    var header_end = request.find("\r\n\r\n")
-    var header_block = request if header_end < 0 else String(
-        request[byte=0:header_end]
-    )
-    var lowered = header_block.lower()
-    var marker = lowered.find(name.lower() + ":")
-    if marker < 0:
-        return ""
-    var rest = String(header_block[byte = marker + name.byte_length() + 1 :])
-    var line_end = rest.find("\r\n")
-    var value = rest if line_end < 0 else String(rest[byte=0:line_end])
-    return String(String(value).strip())
-
-
 def _json_string(value: String) -> String:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -121,7 +67,9 @@ def _analysis() -> String:
 
 def _response(status: Int, body: String) -> String:
     var reason = "OK"
-    if status == 429:
+    if status == 401:
+        reason = "Unauthorized"
+    elif status == 429:
         reason = "Too Many Requests"
     elif status == 500:
         reason = "Internal Server Error"
@@ -139,82 +87,81 @@ def _response(status: Int, body: String) -> String:
     )
 
 
-def _send(mut stream: TcpStream, status: Int, body: String) raises:
-    stream.write_all(Span[UInt8, _](_response(status, body).as_bytes()))
+def _send(mut reader: ConnectionReader, status: Int, body: String) raises:
+    reader.write_all(_response(status, body))
 
 
-def _send_raw(mut stream: TcpStream, response: String) raises:
-    stream.write_all(Span[UInt8, _](response.as_bytes()))
+def _send_raw(mut reader: ConnectionReader, response: String) raises:
+    reader.write_all(response)
 
 
-def _handle(mut stream: TcpStream, mode: String) raises:
-    var request = _read_request(stream)
-    var path = _request_path(request)
+def _handle(
+    mut reader: ConnectionReader, mode: String, framed: FramedRequest
+) raises:
+    var path = framed.path
     if mode == "echo_authorization":
-        _send(
-            stream,
-            200,
-            '{"authorization":"'
-            + _header_value(request, "authorization")
-            + '"}',
-        )
-        stream.close()
+        var token = bearer_token(framed.headers_raw)
+        if token == "":
+            _send(reader, 401, '{"error":{"message":"missing authorization"}}')
+        else:
+            _send(reader, 200, '{"authorization":' + _json_string(token) + "}")
         return
     if path != "/v1/systemone":
-        _send(stream, 404, '{"error":{"message":"not found"}}')
-        stream.close()
+        _send(reader, 404, '{"error":{"message":"not found"}}')
         return
 
     if mode == "ok":
-        _send(stream, 200, _analysis())
+        _send(reader, 200, _analysis())
     elif mode == "rate_limit":
-        _send(stream, 429, '{"error":{"message":"slow down"}}')
+        _send(reader, 429, '{"error":{"message":"slow down"}}')
     elif mode == "server_error":
-        _send(stream, 500, '{"error":{"message":"boom"}}')
+        _send(reader, 500, '{"error":{"message":"boom"}}')
     elif mode == "overloaded":
-        _send(stream, 529, '{"error":{"message":"overloaded"}}')
+        _send(reader, 529, '{"error":{"message":"overloaded"}}')
     elif mode == "auth":
-        _send(stream, 401, '{"error":{"message":"bad key"}}')
+        _send(reader, 401, '{"error":{"message":"bad key"}}')
     elif mode == "malformed_json":
-        _send(stream, 200, "not json")
+        _send(reader, 200, "not json")
     elif mode == "model_mismatch":
-        _send(stream, 200, _analysis().replace("jev-1.13.0", "jev-other"))
+        _send(reader, 200, _analysis().replace("jev-1.13.0", "jev-other"))
     elif mode == "truncated":
         var truncated = (
             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n"
             "content-length: 999\r\nconnection: close\r\n\r\n"
             '{"model":"jev'
         )
-        stream.write_all(Span[UInt8, _](truncated.as_bytes()))
+        reader.write_all(truncated)
     elif mode == "redirect":
-        var body = ""
-        stream.write_all(
-            Span[UInt8, _](
-                (
-                    "HTTP/1.1 302 Found\r\nlocation:"
-                    " http://127.0.0.1:1/steal\r\ncontent-length:"
-                    " 0\r\nconnection: close\r\n\r\n"
-                ).as_bytes()
-            )
+        reader.write_all(
+            "HTTP/1.1 302 Found\r\nlocation:"
+            " http://127.0.0.1:1/steal\r\ncontent-length:"
+            " 0\r\nconnection: close\r\n\r\n"
         )
     elif mode == "slow":
         usleep(2_000_000)
-        _send(stream, 200, _analysis())
+        _send(reader, 200, _analysis())
     else:
-        _send(stream, 500, '{"error":{"message":"unsupported_mode"}}')
-    stream.close()
+        _send(reader, 500, '{"error":{"message":"unsupported_mode"}}')
 
 
 def _serve(port: Int, mode: String, requests: Int) raises:
     var listener = TcpListener.bind(SocketAddr.localhost(UInt16(port)))
     var actual_port = Int(listener.local_addr().port)
     _write(1, "ready " + String(actual_port) + "\n")
-    for _ in range(requests):
+    var request_count = 0
+    while request_count < requests:
         var stream = listener.accept()
-        try:
-            _handle(stream, mode)
-        except:
-            pass
+        var reader = ConnectionReader(stream^)
+        while request_count < requests:
+            var framed = reader.read()
+            if not framed.ok:
+                if framed.error == "empty":
+                    break
+                raise Error("strict fixture framing error: " + framed.error)
+            request_count += 1
+            _handle(reader, mode, framed)
+            if not framed.keep_alive:
+                break
     listener.close()
 
 
@@ -271,6 +218,7 @@ def _spawn_jev_stub(
             _exit_child(c_int(126))
         _ = close(stdout_read_fd)
         _ = close(stdout_write_fd)
+        _ = _alarm(c_uint(20))
         try:
             _serve(port, mode, requests)
             _exit_child(c_int(0))

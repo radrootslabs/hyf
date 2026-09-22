@@ -8,6 +8,7 @@ from stdio_process_helper import (
     HYF_PATHS_REPO_LOCAL_ROOT_ENV,
     ScopedEnvVar,
     run_stdio_entrypoint,
+    run_stdio_entrypoint_with_deadline,
 )
 
 
@@ -87,6 +88,32 @@ def test_src_main_consumes_repo_local_env_without_outer_wrapper() raises:
                     runtime_status["config"]["load_state"].string_value(),
                     "not_found",
                 )
+
+
+def test_run_stdio_entrypoint_reaps_stalled_child_under_deadline() raises:
+    # FX06/FX08: the parent deadline (not the child alarm) must terminate and
+    # reap the owned child, and the raised error must carry the reap result.
+    var message = ""
+    try:
+        _ = run_stdio_entrypoint_with_deadline(
+            "tests/stdio_stall_entrypoint.mojo", "{}", "", "", 3000
+        )
+    except e:
+        message = String(e)
+    assert_true(message.find("stdio-entrypoint") >= 0)
+    assert_true(message.find("signal=") >= 0 or message.find("exited=") >= 0)
+
+
+def test_run_stdio_entrypoint_classifies_loader_failure() raises:
+    var message = ""
+    try:
+        _ = run_stdio_entrypoint_with_deadline(
+            "tests/does_not_exist_entrypoint.mojo", "{}", "", "", 30000
+        )
+    except e:
+        message = String(e)
+    assert_true(message.find("child_failed") >= 0)
+    assert_true(message.find("timeout") < 0)
 
 
 def main() raises:

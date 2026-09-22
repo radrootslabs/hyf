@@ -1,66 +1,84 @@
-from std.ffi import c_int, c_size_t, c_ssize_t, c_uint, external_call
-from std.os import Pipe, Process
-from std.sys._libc import close
+"""Strict scripted MaxLocal HTTP fixture (ADR-0012 D29 / ADR-0014 D33).
+
+Owned by the parent test process: startup, read, write and wait all have
+parent-enforced deadlines (FX06) and cleanup is exception-safe (FX08). Fixture
+verification failures are reported with a bounded phase/case/reason so tests
+can distinguish intended rejections from compiler/loader/startup/signal
+failures (FX07).
+"""
+
+from std.collections import List
 
 from flare.net import SocketAddr
 from flare.tcp import TcpListener
-from flare.tcp import TcpStream
 from flare.utils import usleep
 
-from strict_fixture import ConnectionReader, FramedRequest, bearer_token
+from parent_lifecycle import (
+    FIXTURE_DEFAULT_DEADLINE_MS,
+    TERMINATION_GRACE_MS,
+    ProcessStatus,
+    child_exit,
+    close_fd,
+    dup2_fd,
+    fork_pid,
+    make_pipe,
+    read_line_bounded,
+    set_alarm,
+    terminate_owned,
+    wait_bounded,
+    write_raw,
+)
+from strict_fixture import (
+    STRICT_MAX_REPORT_BYTES,
+    json_escape,
+    STRICT_COMPLETION_GRACE_MS,
+    ConnectionReader,
+    ExchangeScript,
+    FramedRequest,
+    ServeReport,
+    authorization_reason,
+    exchange_script,
+    parse_report,
+    render_response,
+    report_line,
+    serve_scripts,
+    validate_convenience,
+    verify_exchange,
+)
 
 
-def _dup2(oldfd: c_int, newfd: c_int) -> c_int:
-    return external_call["dup2", c_int](oldfd, newfd)
+comptime STUB_ALARM_SECONDS = 20
 
 
-@always_inline
-def _fork() -> c_int:
-    return external_call["fork", c_int]()
+def allowed_max_local_paths() -> List[String]:
+    var paths = List[String]()
+    paths.append("/health")
+    paths.append("/v1/chat/completions")
+    return paths^
 
 
-@always_inline
-def _kill(pid: c_int, sig: c_int) -> c_int:
-    return external_call["kill", c_int](pid, sig)
+def allowed_max_local_methods() -> List[String]:
+    var methods = List[String]()
+    methods.append("GET")
+    methods.append("POST")
+    return methods^
 
 
-@always_inline
-def _alarm(seconds: c_uint) -> c_uint:
-    return external_call["alarm", c_uint](seconds)
+def require_bearer_for(mode: String) -> Bool:
+    # Convenience modes never bypass route/method validation; the
+    # echo_authorization mode validates the exact Authorization header inside
+    # its own handler and answers 401 when it is missing/duplicated/spoofed.
+    return False
 
 
-@always_inline
-def _exit_child(code: c_int):
-    _ = external_call["_exit", c_int](code)
+# ── Scripted response bodies ────────────────────────────────────────────────
 
 
-def _write(fd: Int, text: String):
-    _ = external_call["write", c_ssize_t](
-        fd, text.as_bytes().unsafe_ptr(), c_size_t(text.byte_length())
-    )
+def _chat_completion(body: String) -> String:
+    return '{"choices":[{"message":{"content":' + json_escape(body) + "}}]}"
 
 
-def _read_pipe_line(mut pipe: Pipe) raises -> String:
-    var buffer = InlineArray[Byte, 1](fill=0)
-    var output = String("")
-    while True:
-        var read = pipe.read_bytes(Span(buffer))
-        if read == 0:
-            break
-        var chunk = String(
-            from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(read))
-        )
-        if chunk == "\n":
-            break
-        output += chunk
-    return output^
-
-
-def _json_string(value: String) -> String:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def _query_rewrite_analysis() -> String:
+def query_rewrite_analysis() -> String:
     return (
         '{"original_text":"local apples pickup weekend",'
         '"normalized_text":"local apples pickup weekend",'
@@ -76,182 +94,389 @@ def _query_rewrite_analysis() -> String:
     )
 
 
-def _chat_completion(body: String) -> String:
-    return '{"choices":[{"message":{"content":' + _json_string(body) + "}}]}"
-
-
-def _response(status: Int, body: String) -> String:
-    var reason = "OK"
-    if status == 401:
-        reason = "Unauthorized"
-    elif status == 404:
-        reason = "Not Found"
-    elif status == 500:
-        reason = "Internal Server Error"
-    elif status == 503:
-        reason = "Service Unavailable"
+def _schema_invalid_analysis() -> String:
     return (
-        "HTTP/1.1 "
-        + String(status)
-        + " "
-        + reason
-        + "\r\ncontent-type: application/json\r\ncontent-length: "
-        + String(body.byte_length())
-        + "\r\nconnection: close\r\n\r\n"
-        + body
+        '{"original_text":"local apples pickup weekend",'
+        '"normalized_text":"local apples pickup weekend",'
+        '"query_terms":["apples","pickup","weekend"],'
+        '"normalization_signals":["lowercase","local_intent_detected"],'
+        '"ranking_hints":["prefer_local_results","prefer_pickup"],'
+        '"extracted_filters":{'
+        '"local_intent":true,'
+        '"fulfillment":"pickup",'
+        '"time_window":"weekend"'
+        "}}"
     )
 
 
-def _send(mut reader: ConnectionReader, status: Int, body: String) raises:
-    reader.write_all(_response(status, body))
-
-
-def _send_raw(mut reader: ConnectionReader, response: String) raises:
-    reader.write_all(response)
-
-
-def _handle_health(mut reader: ConnectionReader, mode: String) raises:
+def _health_status(mode: String) -> Int:
     if mode == "health_non_2xx":
-        _send(reader, 503, '{"status":"unavailable"}')
-    elif mode == "health_timeout":
-        usleep(1_000_000)
-    elif mode == "health_malformed_http":
-        _send_raw(reader, "not an http response\r\n\r\n")
-    elif mode == "query_rewrite_remaining_deadline_timeout":
-        usleep(200_000)
-        _send(reader, 200, '{"status":"ok"}')
-    else:
-        _send(reader, 200, '{"status":"ok"}')
+        return 503
+    return 200
 
 
-def _handle_chat_completions(mut reader: ConnectionReader, mode: String) raises:
-    if mode == "query_rewrite_ok":
-        _send(reader, 200, _chat_completion(_query_rewrite_analysis()))
-    elif mode == "query_rewrite_non_2xx":
-        _send(reader, 503, '{"error":{"message":"provider unavailable"}}')
-    elif mode == "query_rewrite_invalid_json":
-        _send(reader, 200, '{"choices":[{"message":{"content":"not json"}}]}')
-    elif mode == "query_rewrite_schema_invalid":
-        var body = (
-            '{"original_text":"local apples pickup weekend",'
-            '"normalized_text":"local apples pickup weekend",'
-            '"query_terms":["apples","pickup","weekend"],'
-            '"normalization_signals":["lowercase","local_intent_detected"],'
-            '"ranking_hints":["prefer_local_results","prefer_pickup"],'
-            '"extracted_filters":{'
-            '"local_intent":true,'
-            '"fulfillment":"pickup",'
-            '"time_window":"weekend"'
-            "}}"
-        )
-        _send(reader, 200, _chat_completion(body))
-    elif mode == "query_rewrite_top_level_string":
-        _send(reader, 200, '"not object"')
-    elif mode == "query_rewrite_top_level_array":
-        _send(reader, 200, "[]")
-    elif mode == "query_rewrite_top_level_null":
-        _send(reader, 200, "null")
-    elif mode == "query_rewrite_empty_choices":
-        _send(reader, 200, '{"choices":[]}')
-    elif mode == "query_rewrite_missing_content":
-        _send(reader, 200, '{"choices":[{"message":{}}]}')
-    elif mode == "query_rewrite_error_payload":
-        _send(reader, 200, '{"error":{"message":"provider refusal"}}')
-    elif mode == "query_rewrite_timeout":
-        usleep(2_000_000)
-        _send(reader, 200, _chat_completion(_query_rewrite_analysis()))
-    elif mode == "query_rewrite_remaining_deadline_timeout":
-        usleep(400_000)
-        _send(reader, 200, _chat_completion(_query_rewrite_analysis()))
-    elif mode == "query_rewrite_malformed_http":
-        _send_raw(reader, "not an http response\r\n\r\n")
-    else:
-        _send(reader, 500, '{"error":"unsupported_mode"}')
+def _chat_status(mode: String) -> Int:
+    if mode == "query_rewrite_non_2xx":
+        return 503
+    return 200
 
 
-def _handle_framed(
-    mut reader: ConnectionReader,
-    mode: String,
-    request_index: Int,
-    connection_index: Int,
-    framed: FramedRequest,
-) raises:
-    var path = framed.path
-    if mode == "echo_body_bytes":
-        _send(
-            reader,
-            200,
-            '{"received_bytes":' + String(framed.body.byte_length()) + "}",
-        )
-    elif mode == "count_requests":
-        _send(
-            reader,
-            200,
+def _raw_response(mode: String, path: String) -> String:
+    if path == "/health" and mode == "health_malformed_http":
+        return "not an http response\r\n\r\n"
+    if (
+        path == "/v1/chat/completions"
+        and mode == "query_rewrite_malformed_http"
+    ):
+        return "not an http response\r\n\r\n"
+    return ""
+
+
+def _delay_ms(mode: String, path: String) -> Int:
+    if path == "/health" and mode == "health_timeout":
+        return 1000
+    if path == "/health" and mode == "query_rewrite_remaining_deadline_timeout":
+        return 200
+    if path == "/v1/chat/completions":
+        if mode == "query_rewrite_timeout":
+            return 2000
+        if mode == "query_rewrite_remaining_deadline_timeout":
+            return 400
+    if mode == "stall":
+        return 30000
+    return 0
+
+
+def _chat_body(
+    mode: String, request_index: Int, connection_index: Int
+) -> String:
+    if mode == "count_requests":
+        return (
             '{"request_index":'
             + String(request_index)
             + ',"connection_index":'
             + String(connection_index)
-            + "}",
+            + "}"
         )
-    elif mode == "echo_authorization":
-        var token = bearer_token(framed.headers_raw)
-        if token == "":
-            _send(reader, 401, '{"error":"missing_authorization"}')
+    if mode == "query_rewrite_ok":
+        return _chat_completion(query_rewrite_analysis())
+    if mode == "query_rewrite_non_2xx":
+        return '{"error":{"message":"provider unavailable"}}'
+    if mode == "query_rewrite_invalid_json":
+        return '{"choices":[{"message":{"content":"not json"}}]}'
+    if mode == "query_rewrite_schema_invalid":
+        return _chat_completion(_schema_invalid_analysis())
+    if mode == "query_rewrite_top_level_string":
+        return '"not object"'
+    if mode == "query_rewrite_top_level_array":
+        return "[]"
+    if mode == "query_rewrite_top_level_null":
+        return "null"
+    if mode == "query_rewrite_empty_choices":
+        return '{"choices":[]}'
+    if mode == "query_rewrite_missing_content":
+        return '{"choices":[{"message":{}}]}'
+    if mode == "query_rewrite_error_payload":
+        return '{"error":{"message":"provider refusal"}}'
+    if mode in (
+        "query_rewrite_timeout",
+        "query_rewrite_remaining_deadline_timeout",
+    ):
+        return _chat_completion(query_rewrite_analysis())
+    return '{"error":"unsupported_mode"}'
+
+
+def _health_body(mode: String) -> String:
+    if mode == "health_non_2xx":
+        return '{"status":"unavailable"}'
+    return '{"status":"ok"}'
+
+
+def _build_script(
+    mode: String,
+    framed: FramedRequest,
+    request_index: Int,
+    connection_index: Int,
+) -> ExchangeScript:
+    var path = framed.path
+    var status = _chat_status(mode)
+    if path == "/health":
+        status = _health_status(mode)
+    var script = exchange_script(mode, framed.method, path, status, "")
+    script.delay_ms = _delay_ms(mode, path)
+    script.close_connection = True
+    script.require_bearer = require_bearer_for(mode)
+    var raw = _raw_response(mode, path)
+    if raw != "":
+        script.raw_response = raw
+    elif mode == "echo_authorization" and path == "/v1/chat/completions":
+        var auth = authorization_reason(framed.headers_raw, True)
+        if auth != "":
+            script.status = 401
+            script.response_body = '{"error":"' + auth + '"}'
         else:
-            _send(reader, 200, '{"authorization":' + _json_string(token) + "}")
-    elif mode == "stall":
-        usleep(30_000_000)
+            script.echo_authorization = True
+    elif mode == "echo_body_bytes" and path == "/v1/chat/completions":
+        script.response_body = (
+            '{"received_bytes":' + String(framed.body.byte_length()) + "}"
+        )
     elif path == "/health":
-        _handle_health(reader, mode)
-    elif path == "/v1/chat/completions":
-        _handle_chat_completions(reader, mode)
+        script.response_body = _health_body(mode)
     else:
-        _send(reader, 404, '{"error":"not_found"}')
+        script.response_body = _chat_body(mode, request_index, connection_index)
+    return script^
 
 
-def _serve_max_local_stub(port: Int, mode: String, requests: Int) raises:
+# ── Child serve loop ────────────────────────────────────────────────────────
+
+
+def serve_max_local(
+    port: Int, mode: String, requests: Int
+) raises -> ServeReport:
+    var allowed = allowed_max_local_paths()
+    var methods = allowed_max_local_methods()
     var listener = TcpListener.bind(SocketAddr.localhost(UInt16(port)))
     var actual_port = Int(listener.local_addr().port)
-    _write(1, "ready " + String(actual_port) + "\n")
+    write_raw(1, "ready " + String(actual_port) + "\n")
     var request_count = 0
     var connection_count = 0
-    while request_count < requests:
-        var stream = listener.accept()
-        connection_count += 1
-        var reader = ConnectionReader(stream^)
+    try:
         while request_count < requests:
-            var framed = reader.read()
-            if not framed.ok:
-                if framed.error == "empty":
+            var stream = listener.accept()
+            connection_count += 1
+            var reader = ConnectionReader(stream^)
+            while request_count < requests:
+                var framed = reader.read()
+                if not framed.ok:
+                    if framed.error == "empty":
+                        if request_count < requests:
+                            return ServeReport(
+                                False,
+                                "accounting",
+                                mode,
+                                "missing_exchanges",
+                                request_count,
+                                connection_count,
+                            )
+                        break
+                    return ServeReport(
+                        False,
+                        "read",
+                        mode,
+                        framed.error,
+                        request_count,
+                        connection_count,
+                    )
+                var reason = validate_convenience(
+                    framed, allowed, methods, require_bearer_for(mode)
+                )
+                if reason != "":
+                    return ServeReport(
+                        False,
+                        "exchange",
+                        mode,
+                        reason,
+                        request_count,
+                        connection_count,
+                    )
+                var next_index = request_count + 1
+                var script = _build_script(
+                    mode, framed, next_index, connection_count
+                )
+                var verify = verify_exchange(script, framed)
+                if verify != "":
+                    return ServeReport(
+                        False,
+                        "exchange",
+                        mode,
+                        verify,
+                        request_count,
+                        connection_count,
+                    )
+                if next_index == requests:
+                    var extra = reader.probe_completion(
+                        STRICT_COMPLETION_GRACE_MS
+                    )
+                    if extra != "":
+                        return ServeReport(
+                            False,
+                            "accounting",
+                            mode,
+                            extra,
+                            request_count,
+                            connection_count,
+                        )
+                request_count = next_index
+                if script.delay_ms > 0:
+                    usleep(script.delay_ms * 1000)
+                reader.write_all(
+                    render_response(
+                        script,
+                        framed.headers_raw,
+                        request_count,
+                        connection_count,
+                    )
+                )
+                if script.close_connection:
                     break
-                raise Error("strict fixture framing error: " + framed.error)
-            request_count += 1
-            _handle_framed(
-                reader, mode, request_count, connection_count, framed
+        if request_count < requests:
+            return ServeReport(
+                False,
+                "accounting",
+                mode,
+                "missing_exchanges",
+                request_count,
+                connection_count,
             )
-            if not framed.keep_alive:
-                break
-    listener.close()
+        return ServeReport(
+            True, "complete", mode, "ok", request_count, connection_count
+        )
+    except:
+        return ServeReport(
+            False, "read", mode, "io_error", request_count, connection_count
+        )
+
+
+# ── Parent side ─────────────────────────────────────────────────────────────
 
 
 struct SpawnedMaxLocalStub(Movable):
     var pid: Int
     var port: Int
+    var _report_fd: Int
+    var _reaped: Bool
+    var _ok: Bool
+    var _phase: String
+    var _case: String
+    var _reason: String
+    var _requests: Int
+    var _connections: Int
 
-    def __init__(out self, pid: Int, port: Int):
+    def __init__(out self, pid: Int, port: Int, report_fd: Int):
         self.pid = pid
         self.port = port
+        self._report_fd = report_fd
+        self._reaped = False
+        self._ok = False
+        self._phase = "pending"
+        self._case = "-"
+        self._reason = "not_reaped"
+        self._requests = 0
+        self._connections = 0
+
+    def ok(self) -> Bool:
+        return self._ok
+
+    def phase(self) -> String:
+        return String(self._phase)
+
+    def failure_case(self) -> String:
+        return String(self._case)
+
+    def reason(self) -> String:
+        return String(self._reason)
+
+    def request_count(self) -> Int:
+        return self._requests
+
+    def connection_count(self) -> Int:
+        return self._connections
+
+    def describe(self) -> String:
+        return (
+            "phase="
+            + self._phase
+            + " case="
+            + self._case
+            + " reason="
+            + self._reason
+            + " requests="
+            + String(self._requests)
+            + " connections="
+            + String(self._connections)
+        )
+
+    def status(self) -> ProcessStatus:
+        return wait_bounded(self.pid, 0)
+
+    def _store(
+        mut self,
+        ok: Bool,
+        phase: String,
+        case_label: String,
+        reason: String,
+        requests: Int,
+        connections: Int,
+    ):
+        self._ok = ok
+        self._phase = String(phase)
+        self._case = String(case_label)
+        self._reason = String(reason)
+        self._requests = requests
+        self._connections = connections
+
+    def reap(mut self):
+        """Reap the owned child and decode its bounded report (never raises)."""
+        if self._reaped:
+            return
+        var st = wait_bounded(self.pid, FIXTURE_DEFAULT_DEADLINE_MS)
+        var report_text = ""
+        if st.state == "running":
+            var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+            self._store(False, "watchdog", "-", "timeout", 0, 0)
+            if not term.reaped():
+                self._reason = "unreaped:" + term.describe()
+            self._reaped = True
+            close_fd(self._report_fd)
+            return
+        if self._report_fd >= 0:
+            try:
+                report_text = read_line_bounded(
+                    self._report_fd, STRICT_MAX_REPORT_BYTES, 1000
+                )
+            except:
+                report_text = ""
+        if report_text.startswith("result "):
+            var parsed = parse_report(report_text)
+            self._store(
+                parsed.ok,
+                parsed.phase,
+                parsed.case_label,
+                parsed.reason,
+                parsed.requests,
+                parsed.connections,
+            )
+        elif st.exited and st.exit_code == 0:
+            self._store(True, "complete", "-", "ok", 0, 0)
+        elif st.exited:
+            self._store(
+                False,
+                "startup",
+                "-",
+                "exit_" + String(st.exit_code),
+                0,
+                0,
+            )
+        else:
+            self._store(
+                False, "watchdog", "-", "signal_" + String(st.signal), 0, 0
+            )
+        self._reaped = True
+        close_fd(self._report_fd)
 
     def wait(mut self) raises:
-        var process = Process(self.pid)
-        var status = process.wait()
-        if not status.exit_code or status.exit_code.value() != 0:
-            raise Error("max_local stub exited unexpectedly")
+        self.reap()
+        if not self._ok:
+            raise Error("fixture-failure " + self.describe())
 
     def terminate(mut self) raises:
-        _ = _kill(c_int(self.pid), c_int(15))
-        var process = Process(self.pid)
-        _ = process.wait()
+        if self._reaped:
+            return
+        var st = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+        if not st.reaped():
+            raise Error("lifecycle: owned child not reaped: " + st.describe())
+        self._reaped = True
+        close_fd(self._report_fd)
 
 
 def reserve_loopback_port() raises -> Int:
@@ -261,41 +486,88 @@ def reserve_loopback_port() raises -> Int:
     return port
 
 
+def _serve_max_local_for(
+    port: Int,
+    var scripts: List[ExchangeScript],
+    mode: String,
+    requests: Int,
+    scripted: Bool,
+) raises -> ServeReport:
+    if scripted:
+        return serve_max_local_scripted(port, scripts^)
+    return serve_max_local(port, mode, requests)
+
+
+def _read_ready_line(fd: Int) -> String:
+    try:
+        return read_line_bounded(fd, 256, FIXTURE_DEFAULT_DEADLINE_MS)
+    except:
+        return ""
+
+
+def serve_max_local_scripted(
+    port: Int, var scripts: List[ExchangeScript]
+) raises -> ServeReport:
+    var listener = TcpListener.bind(SocketAddr.localhost(UInt16(port)))
+    var actual_port = Int(listener.local_addr().port)
+    write_raw(1, "ready " + String(actual_port) + "\n")
+    return serve_scripts(listener, scripts^, "scripted")
+
+
 def spawn_max_local_stub(
     port: Int, mode: String, requests: Int
 ) raises -> SpawnedMaxLocalStub:
-    var stdout_pipe = Pipe()
-    var stdout_read_fd = c_int(stdout_pipe.fd_in.value().value)
-    var stdout_write_fd = c_int(stdout_pipe.fd_out.value().value)
+    var scripts = List[ExchangeScript]()
+    return _spawn_max_local(port, scripts^, mode, requests, False)
 
-    var pid = _fork()
-    if pid < 0:
-        raise Error("failed to spawn max_local stub")
 
+def spawn_max_local_scripted(
+    port: Int, var scripts: List[ExchangeScript]
+) raises -> SpawnedMaxLocalStub:
+    return _spawn_max_local(port, scripts^, "scripted", len(scripts), True)
+
+
+def _spawn_max_local(
+    port: Int,
+    var scripts: List[ExchangeScript],
+    mode: String,
+    requests: Int,
+    scripted: Bool,
+) raises -> SpawnedMaxLocalStub:
+    var pipe = make_pipe()
+    var pid = fork_pid()
     if pid == 0:
-        if _dup2(stdout_write_fd, 1) < 0:
-            _exit_child(c_int(126))
-        _ = close(stdout_read_fd)
-        _ = close(stdout_write_fd)
-        _ = _alarm(c_uint(20))
+        if dup2_fd(pipe.write_fd, 1) < 0:
+            child_exit(126)
+        close_fd(pipe.read_fd)
+        close_fd(pipe.write_fd)
+        _ = set_alarm(STUB_ALARM_SECONDS)
         try:
-            _serve_max_local_stub(port, mode, requests)
-            _exit_child(c_int(0))
+            var report = _serve_max_local_for(
+                port, scripts^, mode, requests, scripted
+            )
+            write_raw(1, report_line(report) + "\n")
+            child_exit(0 if report.ok else 125)
         except:
-            _exit_child(c_int(125))
-
-    stdout_pipe.set_input_only()
-    var ready_line = _read_pipe_line(stdout_pipe)
+            var failed = ServeReport(
+                False, "startup", mode, "serve_failed", 0, 0
+            )
+            write_raw(1, report_line(failed) + "\n")
+            child_exit(125)
+    close_fd(pipe.write_fd)
+    var ready_line = _read_ready_line(pipe.read_fd)
     if not ready_line.startswith("ready"):
-        stdout_pipe.set_output_only()
-        var process = Process(Int(pid))
-        _ = process.wait()
-        raise Error("max_local stub failed to report ready")
-
+        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
+        close_fd(pipe.read_fd)
+        raise Error(
+            "max_local stub failed to report ready ("
+            + ready_line
+            + " / "
+            + st.describe()
+            + ")"
+        )
     var reported_port = port
     var space = ready_line.find(" ")
     if space >= 0:
         reported_port = Int(String(ready_line[byte = space + 1 :]))
-
-    stdout_pipe.set_output_only()
-    return SpawnedMaxLocalStub(Int(pid), reported_port)
+    return SpawnedMaxLocalStub(pid, reported_port, pipe.read_fd)

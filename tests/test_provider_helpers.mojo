@@ -17,6 +17,7 @@ from parent_lifecycle import (
     pid_not_waitable,
     read_all_bounded,
     read_line_bounded,
+    write_fd_bounded,
     write_raw,
 )
 from strict_fixture import (
@@ -793,6 +794,28 @@ def test_bounded_read_caps_fail_for_intended_cause() raises:
         stdout_message = String(e)
     close_fd(stdout_pipe.read_fd)
     assert_true(stdout_message.find("stdout_overflow") >= 0)
+
+
+def test_write_deadline_and_closed_pipe_causes() raises:
+    var closed = make_pipe()
+    close_fd(closed.read_fd)
+    var closed_reason = write_fd_bounded(closed.write_fd, "payload", 500)
+    close_fd(closed.write_fd)
+    assert_true(
+        closed_reason == "write_pipe_closed" or closed_reason == "write_failed"
+    )
+
+    var full = make_pipe()
+    var payload = String("")
+    for _ in range(1024):
+        payload += "y"
+    for _ in range(7):
+        var doubled = String(payload)
+        payload = payload + doubled
+    var deadline_reason = write_fd_bounded(full.write_fd, payload, 200)
+    close_fd(full.read_fd)
+    close_fd(full.write_fd)
+    assert_equal(deadline_reason, "write_deadline_expired")
 
 
 def test_owned_child_reaped_after_early_terminate() raises:

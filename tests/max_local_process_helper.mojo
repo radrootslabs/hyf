@@ -344,6 +344,7 @@ struct SpawnedMaxLocalStub(Movable):
     var pid: Int
     var port: Int
     var _report_fd: Int
+    var _deadline_ms: Int
     var _reaped: Bool
     var _ok: Bool
     var _phase: String
@@ -352,10 +353,13 @@ struct SpawnedMaxLocalStub(Movable):
     var _requests: Int
     var _connections: Int
 
-    def __init__(out self, pid: Int, port: Int, report_fd: Int):
+    def __init__(
+        out self, pid: Int, port: Int, report_fd: Int, deadline_ms: Int
+    ):
         self.pid = pid
         self.port = port
         self._report_fd = report_fd
+        self._deadline_ms = deadline_ms
         self._reaped = False
         self._ok = False
         self._phase = "pending"
@@ -419,7 +423,7 @@ struct SpawnedMaxLocalStub(Movable):
         """Reap the owned child and decode its bounded report (never raises)."""
         if self._reaped:
             return
-        var st = wait_bounded(self.pid, FIXTURE_DEFAULT_DEADLINE_MS)
+        var st = wait_bounded(self.pid, self._deadline_ms)
         var report_text = ""
         if st.state == "running":
             var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
@@ -498,9 +502,9 @@ def _serve_max_local_for(
     return serve_max_local(port, mode, requests)
 
 
-def _read_ready_line(fd: Int) -> String:
+def _read_ready_line(fd: Int, deadline_ms: Int) -> String:
     try:
-        return read_line_bounded(fd, 256, FIXTURE_DEFAULT_DEADLINE_MS)
+        return read_line_bounded(fd, 256, deadline_ms)
     except:
         return ""
 
@@ -515,16 +519,23 @@ def serve_max_local_scripted(
 
 
 def spawn_max_local_stub(
-    port: Int, mode: String, requests: Int
+    port: Int,
+    mode: String,
+    requests: Int,
+    deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
 ) raises -> SpawnedMaxLocalStub:
     var scripts = List[ExchangeScript]()
-    return _spawn_max_local(port, scripts^, mode, requests, False)
+    return _spawn_max_local(port, scripts^, mode, requests, False, deadline_ms)
 
 
 def spawn_max_local_scripted(
-    port: Int, var scripts: List[ExchangeScript]
+    port: Int,
+    var scripts: List[ExchangeScript],
+    deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
 ) raises -> SpawnedMaxLocalStub:
-    return _spawn_max_local(port, scripts^, "scripted", len(scripts), True)
+    return _spawn_max_local(
+        port, scripts^, "scripted", len(scripts), True, deadline_ms
+    )
 
 
 def _spawn_max_local(
@@ -533,6 +544,7 @@ def _spawn_max_local(
     mode: String,
     requests: Int,
     scripted: Bool,
+    deadline_ms: Int,
 ) raises -> SpawnedMaxLocalStub:
     var pipe = make_pipe()
     var pid = fork_pid()
@@ -555,7 +567,7 @@ def _spawn_max_local(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    var ready_line = _read_ready_line(pipe.read_fd)
+    var ready_line = _read_ready_line(pipe.read_fd, deadline_ms)
     if not ready_line.startswith("ready"):
         var st = terminate_owned(pid, TERMINATION_GRACE_MS)
         close_fd(pipe.read_fd)
@@ -570,4 +582,4 @@ def _spawn_max_local(
     var space = ready_line.find(" ")
     if space >= 0:
         reported_port = Int(String(ready_line[byte = space + 1 :]))
-    return SpawnedMaxLocalStub(pid, reported_port, pipe.read_fd)
+    return SpawnedMaxLocalStub(pid, reported_port, pipe.read_fd, deadline_ms)

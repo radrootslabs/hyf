@@ -257,6 +257,7 @@ def serve_jev(port: Int, mode: String, requests: Int) raises -> ServeReport:
 struct SpawnedJevStub(Movable):
     var pid: Int
     var _report_fd: Int
+    var _deadline_ms: Int
     var _reaped: Bool
     var _ok: Bool
     var _phase: String
@@ -265,9 +266,10 @@ struct SpawnedJevStub(Movable):
     var _requests: Int
     var _connections: Int
 
-    def __init__(out self, pid: Int, report_fd: Int):
+    def __init__(out self, pid: Int, report_fd: Int, deadline_ms: Int):
         self.pid = pid
         self._report_fd = report_fd
+        self._deadline_ms = deadline_ms
         self._reaped = False
         self._ok = False
         self._phase = "pending"
@@ -330,7 +332,7 @@ struct SpawnedJevStub(Movable):
     def reap(mut self):
         if self._reaped:
             return
-        var st = wait_bounded(self.pid, FIXTURE_DEFAULT_DEADLINE_MS)
+        var st = wait_bounded(self.pid, self._deadline_ms)
         var report_text = ""
         if st.state == "running":
             var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
@@ -399,15 +401,18 @@ def reserve_jev_port() raises -> Int:
 
 
 def spawn_jev_stub_auto(
-    mode: String, requests: Int
+    mode: String, requests: Int, deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS
 ) raises -> SpawnedJevStubAuto:
-    return _spawn_jev_stub(0, mode, requests)
+    return _spawn_jev_stub(0, mode, requests, deadline_ms)
 
 
 def spawn_jev_stub(
-    port: Int, mode: String, requests: Int
+    port: Int,
+    mode: String,
+    requests: Int,
+    deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
 ) raises -> SpawnedJevStub:
-    var started = _spawn_jev_stub(port, mode, requests)
+    var started = _spawn_jev_stub(port, mode, requests, deadline_ms)
     return started.stub^
 
 
@@ -420,21 +425,22 @@ def serve_jev_scripted(
     return serve_scripts(listener, scripts^, "scripted")
 
 
-def _read_ready_line(fd: Int) -> String:
+def _read_ready_line(fd: Int, deadline_ms: Int) -> String:
     try:
-        return read_line_bounded(fd, 256, FIXTURE_DEFAULT_DEADLINE_MS)
+        return read_line_bounded(fd, 256, deadline_ms)
     except:
         return ""
 
 
 def spawn_jev_scripted_auto(
     var scripts: List[ExchangeScript],
+    deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
 ) raises -> SpawnedJevStubAuto:
-    return _spawn_jev_scripted(0, scripts^)
+    return _spawn_jev_scripted(0, scripts^, deadline_ms)
 
 
 def _spawn_jev_scripted(
-    port: Int, var scripts: List[ExchangeScript]
+    port: Int, var scripts: List[ExchangeScript], deadline_ms: Int
 ) raises -> SpawnedJevStubAuto:
     var total = len(scripts)
     var pipe = make_pipe()
@@ -456,7 +462,7 @@ def _spawn_jev_scripted(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    var ready_line = _read_ready_line(pipe.read_fd)
+    var ready_line = _read_ready_line(pipe.read_fd, deadline_ms)
     if not ready_line.startswith("ready"):
         var st = terminate_owned(pid, TERMINATION_GRACE_MS)
         close_fd(pipe.read_fd)
@@ -473,12 +479,12 @@ def _spawn_jev_scripted(
         reported_port = Int(String(ready_line[byte = space + 1 :]))
     _ = total
     return SpawnedJevStubAuto(
-        port=reported_port, stub=SpawnedJevStub(pid, pipe.read_fd)
+        port=reported_port, stub=SpawnedJevStub(pid, pipe.read_fd, deadline_ms)
     )
 
 
 def _spawn_jev_stub(
-    port: Int, mode: String, requests: Int
+    port: Int, mode: String, requests: Int, deadline_ms: Int
 ) raises -> SpawnedJevStubAuto:
     var pipe = make_pipe()
     var pid = fork_pid()
@@ -499,7 +505,7 @@ def _spawn_jev_stub(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    var ready_line = _read_ready_line(pipe.read_fd)
+    var ready_line = _read_ready_line(pipe.read_fd, deadline_ms)
     if not ready_line.startswith("ready"):
         var st = terminate_owned(pid, TERMINATION_GRACE_MS)
         close_fd(pipe.read_fd)
@@ -515,5 +521,5 @@ def _spawn_jev_stub(
     if space >= 0:
         reported_port = Int(String(ready_line[byte = space + 1 :]))
     return SpawnedJevStubAuto(
-        port=reported_port, stub=SpawnedJevStub(pid, pipe.read_fd)
+        port=reported_port, stub=SpawnedJevStub(pid, pipe.read_fd, deadline_ms)
     )

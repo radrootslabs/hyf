@@ -10,7 +10,15 @@ from std.testing import TestSuite, assert_true, assert_equal
 from flare.net import SocketAddr
 from flare.tcp import TcpListener, TcpStream
 
-from parent_lifecycle import open_fd_count, pid_not_waitable
+from parent_lifecycle import (
+    close_fd,
+    make_pipe,
+    open_fd_count,
+    pid_not_waitable,
+    read_all_bounded,
+    read_line_bounded,
+    write_raw,
+)
 from strict_fixture import (
     ExchangeScript,
     FramedRequest,
@@ -727,17 +735,64 @@ def test_scripted_persistent_counters_and_close_semantics() raises:
 
 def test_startup_failure_distinct_from_exchange_failure() raises:
     # Occupy a port so the fixture child cannot bind; the parent must observe
-    # a startup failure (no ready line), not a script/parser rejection.
+    # a bounded startup/serve_failed report, not a generic exception or a
+    # script/parser rejection (FX07 / R61).
     var blocker = TcpListener.bind(SocketAddr.localhost(0))
     var port = Int(blocker.local_addr().port)
-    var raised = False
+    var message = ""
     try:
         var stub = spawn_max_local_stub(port, "count_requests", 1)
         stub.terminate()
-    except:
-        raised = True
+    except e:
+        message = String(e)
     blocker.close()
-    assert_true(raised)
+    assert_true(message.find("phase=startup") >= 0)
+    assert_true(message.find("reason=serve_failed") >= 0)
+    assert_true(message.find("exited=") >= 0 or message.find("signal=") >= 0)
+
+
+def test_provider_stub_parent_deadline_watchdog() raises:
+    # No client connects, so the child blocks in accept until the parent's own
+    # finite deadline fires and the owned child is terminated and reaped.
+    var stub = spawn_max_local_stub(0, "count_requests", 1, 800)
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.phase(), "watchdog")
+    assert_equal(stub.reason(), "timeout")
+    assert_true(pid_not_waitable(stub.pid))
+
+
+def test_jev_stub_parent_deadline_watchdog() raises:
+    var started = spawn_jev_stub_auto("ok", 1, 800)
+    started.stub.reap()
+    assert_true(not started.stub.ok())
+    assert_equal(started.stub.phase(), "watchdog")
+    assert_equal(started.stub.reason(), "timeout")
+    assert_true(pid_not_waitable(started.stub.pid))
+
+
+def test_bounded_read_caps_fail_for_intended_cause() raises:
+    var ready_pipe = make_pipe()
+    write_raw(ready_pipe.write_fd, "no newline here")
+    var ready_message = ""
+    try:
+        _ = read_line_bounded(ready_pipe.read_fd, 8, 500)
+    except e:
+        ready_message = String(e)
+    close_fd(ready_pipe.read_fd)
+    close_fd(ready_pipe.write_fd)
+    assert_true(ready_message.find("ready_output_overflow") >= 0)
+
+    var stdout_pipe = make_pipe()
+    write_raw(stdout_pipe.write_fd, "0123456789")
+    close_fd(stdout_pipe.write_fd)
+    var stdout_message = ""
+    try:
+        _ = read_all_bounded(stdout_pipe.read_fd, 4, 500)
+    except e:
+        stdout_message = String(e)
+    close_fd(stdout_pipe.read_fd)
+    assert_true(stdout_message.find("stdout_overflow") >= 0)
 
 
 def test_owned_child_reaped_after_early_terminate() raises:

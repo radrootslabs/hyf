@@ -10,7 +10,7 @@ from std.testing import TestSuite, assert_true, assert_equal
 from flare.net import SocketAddr
 from flare.tcp import TcpListener, TcpStream
 
-from parent_lifecycle import pid_not_waitable
+from parent_lifecycle import open_fd_count, pid_not_waitable
 from strict_fixture import (
     ExchangeScript,
     FramedRequest,
@@ -426,6 +426,63 @@ def test_strict_framing_conflicting_and_transfer_modes() raises:
     assert_equal(duplicate.reason(), "duplicate_transfer_encoding")
 
 
+def test_strict_framing_premature_eof() raises:
+    var stub = _framing_failure(
+        "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\n"
+        "content-length: 100\r\nconnection: close\r\n\r\nshort"
+    )
+    assert_equal(stub.phase(), "read")
+    assert_equal(stub.reason(), "premature_eof")
+
+
+def test_strict_framing_duplicate_content_length() raises:
+    var stub = _framing_failure(
+        "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\n"
+        "content-length: 2\r\ncontent-length: 2\r\n"
+        "connection: close\r\n\r\n{}"
+    )
+    assert_equal(stub.phase(), "read")
+    assert_equal(stub.reason(), "duplicate_content_length")
+
+
+def test_strict_framing_body_cap_exceeded() raises:
+    var stub = _framing_failure(
+        "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\n"
+        "content-length: 1048577\r\nconnection: close\r\n\r\n"
+    )
+    assert_equal(stub.phase(), "read")
+    assert_equal(stub.reason(), "body_too_large")
+
+
+def test_strict_framing_header_cap_exceeded() raises:
+    var filler = String("")
+    for _ in range(70000):
+        filler += "a"
+    var stub = _framing_failure(
+        (
+            "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\nx-big: "
+            + filler
+            + "\r\n\r\n"
+        )
+    )
+    assert_equal(stub.phase(), "read")
+    assert_equal(stub.reason(), "header_too_large")
+
+
+def test_jev_echo_authorization_ignores_x_authorization() raises:
+    var started = spawn_jev_stub_auto("echo_authorization", 1)
+    var response = _request(
+        started.port,
+        "POST",
+        "/v1/systemone",
+        "{}",
+        "x-authorization: Bearer spoof\r\n",
+    )
+    assert_true(response.find("401") >= 0)
+    assert_true(response.find("spoof") < 0)
+    started.stub.wait()
+
+
 def test_strict_framing_split_utf8_body() raises:
     var scripts = List[ExchangeScript]()
     var script = exchange_script(
@@ -705,6 +762,18 @@ def test_repeated_failures_leave_no_owned_child() raises:
         assert_true(not stub.ok())
         assert_equal(stub.reason(), "path_mismatch")
         assert_true(pid_not_waitable(stub.pid))
+
+
+def test_repeated_teardown_does_not_leak_descriptors() raises:
+    var before = open_fd_count()
+    assert_true(before > 0)
+    for _ in range(5):
+        var stub = spawn_max_local_stub(0, "count_requests", 1)
+        stub.terminate()
+        assert_true(pid_not_waitable(stub.pid))
+    var after = open_fd_count()
+    assert_true(after > 0)
+    assert_true(after <= before)
 
 
 def test_timeout_terminates_and_reaps_stalled_child() raises:

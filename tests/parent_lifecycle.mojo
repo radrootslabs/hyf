@@ -312,3 +312,40 @@ def pid_not_waitable(pid: Int) -> Bool:
     test did not fork and never scans by process name.
     """
     return wait_nohang(pid).state == "gone"
+
+
+def open_fd_count() -> Int:
+    """Count this process's open descriptors by probing ``/dev/fd/N``.
+
+    A bounded, read-only descriptor census used to evidence that repeated
+    teardown leaks no descriptors. Returns -1 if the platform probe is
+    unavailable (never treated as a pass).
+    """
+    var probe = String("/dev/fd")
+    var dir = Int(
+        external_call["open", c_int](
+            probe.as_c_string_slice().unsafe_ptr(), c_int(0)
+        )
+    )
+    if dir < 0:
+        probe = "/proc/self/fd"
+        dir = Int(
+            external_call["open", c_int](
+                probe.as_c_string_slice().unsafe_ptr(), c_int(0)
+            )
+        )
+        if dir < 0:
+            return -1
+    close_fd(dir)
+    var count = 0
+    for n in range(3, 1024):
+        var path = probe + "/" + String(n)
+        var fd = Int(
+            external_call["open", c_int](
+                path.as_c_string_slice().unsafe_ptr(), c_int(0)
+            )
+        )
+        if fd >= 0:
+            count += 1
+            close_fd(fd)
+    return count

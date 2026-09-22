@@ -1021,11 +1021,12 @@ def test_wait_error_taxonomy_distinguishes_causes() raises:
     assert_equal(classify_wait_errno(Int(ErrNo.ECHILD.value)), "gone")
     assert_equal(classify_wait_errno(9999), "wait_error")
     assert_equal(wait_nohang(0).state, "wait_error")
-    var stub = spawn_max_local_stub(0, "count_requests", 1)
-    var live_pid = stub.pid
-    assert_equal(wait_nohang(live_pid).state, "running")
-    stub.terminate()
-    assert_equal(wait_nohang(live_pid).state, "gone")
+    var live_pid = 0
+    with spawn_max_local_stub(0, "count_requests", 1) as stub:
+        live_pid = stub.pid
+        assert_equal(wait_nohang(live_pid).state, "running")
+        stub.terminate()
+        assert_equal(wait_nohang(live_pid).state, "gone")
     assert_true(pid_not_waitable(live_pid))
 
 

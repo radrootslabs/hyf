@@ -442,29 +442,6 @@ def read_line_bounded(
     return reader.read_line(deadline_ms)
 
 
-def drain_fd_bounded(
-    fd: Int, max_bytes: Int, deadline_ms: Int
-) raises -> String:
-    """Read available bytes up to ``max_bytes`` under deadline."""
-    var out = List[UInt8]()
-    var buf = InlineArray[Byte, 1024](fill=0)
-    var start = now_ms()
-    while len(out) < max_bytes:
-        if now_ms() - start >= deadline_ms:
-            break
-        var ev = poll_fd(fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
-        if ev == 0:
-            continue
-        var n = read_fd(fd, buf.unsafe_ptr(), 1024)
-        if n <= 0:
-            break
-        var room = max_bytes - len(out)
-        var take = min(Int(n), room)
-        for index in range(take):
-            out.append(UInt8(Int(buf[index])))
-    return bytes_to_string(out)
-
-
 def read_all_bounded(
     fd: Int, max_bytes: Int, deadline_ms: Int
 ) raises -> String:

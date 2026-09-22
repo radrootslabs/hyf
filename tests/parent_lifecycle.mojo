@@ -1,8 +1,10 @@
 """Governed test-only POSIX process/pipe lifecycle and deadline helpers.
 
-ADR-0014 D33 FX06/FX08 require *parent-enforced*, finite startup/read/write/
-wait deadlines and exception-safe cleanup/reaping for provider fixture
-children and ``run_stdio_entrypoint``. A child ``alarm(2)`` watchdog is
+ADR-0012 D29, ADR-0014 D33 FX06/FX08 and ADR-0015 D35 LC01-LC06 require
+*parent-enforced*, finite startup/read/write/wait deadlines, exception-safe
+cleanup/reaping for provider fixture children and ``run_stdio_entrypoint``, a
+truthful wait-error taxonomy, byte caps enforced inside each read chunk and a
+non-opening numeric descriptor census. A child ``alarm(2)`` watchdog is
 defense in depth, never the parent's lifecycle proof.
 
 Mojo's ``std.os.Pipe`` wrapper does not expose stable raw descriptors for
@@ -14,10 +16,27 @@ Ownership rules:
 * ``make_pipe``/``fork_pid`` create resources owned by the calling test.
 * ``terminate_owned`` only signals a pid this process forked and has not yet
   reaped, so a reused PID can never be targeted by a repeated teardown.
+* ``PipedChildState`` is the single shared mutable lifecycle record for one
+  owned fixture child; every copy of a provider handle shares it, so cleanup is
+  idempotent across the ``with`` manager, the body handle and repeated calls.
 * No broad ``pkill``/name matching is performed anywhere.
+
+This toolchain exposes ``std.ffi.get_errno``/``ErrNo``, so the wait-error
+taxonomy classifies a negative ``waitpid`` by real ``EINTR`` (retain and
+retry ownership), ``ECHILD`` (no waitable owned child remains) and every other
+errno (``wait_error``, never completed cleanup).
 """
 
-from std.ffi import c_int, c_uint, c_ssize_t, c_size_t, external_call
+from std.collections import List
+from std.ffi import (
+    ErrNo,
+    c_int,
+    c_uint,
+    c_ssize_t,
+    c_size_t,
+    external_call,
+    get_errno,
+)
 from std.sys._libc import close
 from std.time import perf_counter_ns
 
@@ -29,8 +48,12 @@ comptime POLLERR: Int = 8
 comptime POLLHUP: Int = 16
 comptime POLLNVAL: Int = 32
 comptime SIGALRM: Int = 14
+comptime SIGPIPE: Int = 13
 comptime SIGKILL: Int = 9
 comptime SIGTERM: Int = 15
+comptime SIG_IGN: Int = 1
+comptime F_GETFD: Int = 1
+comptime CENSUS_MAX_FDS: Int = 65536
 
 comptime FIXTURE_DEFAULT_DEADLINE_MS: Int = 20000
 comptime TERMINATION_GRACE_MS: Int = 2000
@@ -50,7 +73,17 @@ struct PipeFds(Movable):
     var write_fd: Int
 
 
+def ignore_sigpipe():
+    """Ignore SIGPIPE so a peer-close race surfaces as EPIPE, not parent death.
+
+    Inherited across ``fork``, so owned fixture children get the same bounded
+    write-failure behaviour instead of dying on an interrupted report write.
+    """
+    _ = external_call["signal", Int](c_int(SIGPIPE), c_int(SIG_IGN))
+
+
 def make_pipe() raises -> PipeFds:
+    ignore_sigpipe()
     var fds = InlineArray[c_int, 2](fill=0)
     if Int(external_call["pipe", c_int](fds.unsafe_ptr())) != 0:
         raise Error("lifecycle: pipe failed")
@@ -108,12 +141,66 @@ def poll_fd(fd: Int, events: Int, timeout_ms: Int) -> Int:
     return (Int(cell[1]) >> 16) & 0xFFFF
 
 
+@fieldwise_init
+struct PollThree(Movable):
+    """Bounded three-descriptor ``poll(2)`` result; ``count`` is -1 on error."""
+
+    var count: Int
+    var r0: Int
+    var r1: Int
+    var r2: Int
+
+
+def poll_three(
+    fd0: Int,
+    events0: Int,
+    fd1: Int,
+    events1: Int,
+    fd2: Int,
+    events2: Int,
+    timeout_ms: Int,
+) -> PollThree:
+    """Poll exactly three descriptors with one finite timeout."""
+    var cell = InlineArray[Int32, 12](fill=0)
+    cell[0] = Int32(fd0)
+    cell[1] = Int32(events0)
+    cell[2] = Int32(fd1)
+    cell[3] = Int32(events1)
+    cell[4] = Int32(fd2)
+    cell[5] = Int32(events2)
+    var n = Int(
+        external_call["poll", c_int](
+            cell.unsafe_ptr(), c_uint(3), c_int(timeout_ms)
+        )
+    )
+    if n < 0:
+        return PollThree(-1, 0, 0, 0)
+    if n == 0:
+        return PollThree(0, 0, 0, 0)
+    return PollThree(
+        n,
+        (Int(cell[1]) >> 16) & 0xFFFF,
+        (Int(cell[3]) >> 16) & 0xFFFF,
+        (Int(cell[5]) >> 16) & 0xFFFF,
+    )
+
+
 def read_fd(fd: Int, buf: UnsafePointer[Byte, ...], max_bytes: Int) -> Int:
-    return Int(external_call["read", c_ssize_t](fd, buf, c_size_t(max_bytes)))
+    while True:
+        var n = Int(
+            external_call["read", c_ssize_t](fd, buf, c_size_t(max_bytes))
+        )
+        if n >= 0 or get_errno() != ErrNo.EINTR:
+            return n
 
 
 def _write_fd(fd: Int, ptr: UnsafePointer[UInt8, ...], n: Int) -> Int:
-    return Int(external_call["write", c_ssize_t](fd, ptr, c_size_t(n)))
+    while True:
+        var written = Int(
+            external_call["write", c_ssize_t](fd, ptr, c_size_t(n))
+        )
+        if written >= 0 or get_errno() != ErrNo.EINTR:
+            return written
 
 
 def write_raw(fd: Int, text: String) -> Int:
@@ -122,11 +209,16 @@ def write_raw(fd: Int, text: String) -> Int:
     return n
 
 
+comptime WRITE_CHUNK_BYTES: Int = 512
+
+
 def write_fd_bounded(fd: Int, data: String, deadline_ms: Int) -> String:
     """Write ``data`` with a parent-enforced deadline.
 
-    Returns ``""`` on success or a bounded reason such as
-    ``write_deadline_expired`` / ``write_pipe_closed``.
+    Chunks are capped at ``PIPE_BUF``-safe size so a ``POLLOUT`` readiness
+    never lets a blocking write stall past the deadline. Returns ``""`` on
+    success or a bounded reason such as ``write_deadline_expired`` /
+    ``write_pipe_closed``.
     """
     var total = data.byte_length()
     var sent = 0
@@ -139,7 +231,7 @@ def write_fd_bounded(fd: Int, data: String, deadline_ms: Int) -> String:
             continue
         if (ev & (POLLERR | POLLHUP | POLLNVAL)) != 0:
             return "write_pipe_closed"
-        var chunk = min(4096, total - sent)
+        var chunk = min(WRITE_CHUNK_BYTES, total - sent)
         var slice = data[byte = sent : sent + chunk]
         var n = _write_fd(fd, slice.as_bytes().unsafe_ptr(), chunk)
         if n <= 0:
@@ -148,33 +240,130 @@ def write_fd_bounded(fd: Int, data: String, deadline_ms: Int) -> String:
     return ""
 
 
+@fieldwise_init
+struct ChunkWrite(Movable):
+    var reason: String
+    var written: Int
+
+
+def write_fd_chunk(fd: Int, data: String, offset: Int) -> ChunkWrite:
+    """Write one ``PIPE_BUF``-safe chunk after a readiness poll.
+
+    Returns the bounded failure reason and the bytes actually written so a
+    caller can interleave writing with draining other descriptors.
+    """
+    var total = data.byte_length()
+    if offset >= total:
+        return ChunkWrite("", 0)
+    var chunk = min(WRITE_CHUNK_BYTES, total - offset)
+    var slice = data[byte = offset : offset + chunk]
+    var n = _write_fd(fd, slice.as_bytes().unsafe_ptr(), chunk)
+    if n <= 0:
+        return ChunkWrite("write_failed", 0)
+    return ChunkWrite("", n)
+
+
+# ── Bounded line reader with surplus retention ──────────────────────────────
+
+
+@fieldwise_init
+struct BoundedLineReader(Movable):
+    """Byte-bounded, deadline-bounded line reader that never discards surplus.
+
+    The byte cap is enforced *inside* every read chunk, so a coalesced chunk of
+    ``ready`` + ``report`` lines cannot smuggle an oversized line past the cap
+    and bytes after a returned newline stay available to the next reader call.
+    """
+
+    var fd: Int
+    var max_bytes: Int
+    var _pending: List[UInt8]
+    var _pos: Int
+    var _eof: Bool
+    var _closed: Bool
+
+    def __init__(out self, fd: Int, max_bytes: Int):
+        self.fd = fd
+        self.max_bytes = max_bytes
+        self._pending = List[UInt8]()
+        self._pos = 0
+        self._eof = False
+        self._closed = False
+
+    def close(mut self):
+        if not self._closed:
+            close_fd(self.fd)
+            self._closed = True
+
+    def has_pending(self) -> Bool:
+        return self._pos < len(self._pending)
+
+    def _compact(mut self):
+        if self._pos == 0:
+            return
+        if self._pos >= len(self._pending):
+            self._pending = List[UInt8]()
+            self._pos = 0
+            return
+        var rest = List[UInt8]()
+        for index in range(self._pos, len(self._pending)):
+            rest.append(self._pending[index])
+        self._pending = rest^
+        self._pos = 0
+
+    def _take_available(mut self, mut out: List[UInt8], stop: Int):
+        for index in range(self._pos, stop):
+            out.append(self._pending[index])
+
+    def read_line(mut self, deadline_ms: Int) raises -> String:
+        """Read one newline-terminated line with bounded size and deadline.
+
+        Raises ``ready_output_overflow`` once the line exceeds ``max_bytes``
+        and ``read_deadline_expired`` when the deadline elapses first. EOF
+        before a newline returns the bytes read so far (possibly empty).
+        """
+        var out = List[UInt8]()
+        var start = now_ms()
+        while True:
+            var found = -1
+            for index in range(self._pos, len(self._pending)):
+                if Int(self._pending[index]) == 10:
+                    found = index
+                    break
+            if found >= 0:
+                self._take_available(out, found)
+                self._pos = found + 1
+                self._compact()
+                if len(out) > self.max_bytes:
+                    raise Error("ready_output_overflow")
+                return bytes_to_string(out)
+            self._take_available(out, len(self._pending))
+            self._pos = len(self._pending)
+            self._compact()
+            if len(out) > self.max_bytes:
+                raise Error("ready_output_overflow")
+            if self._eof:
+                return bytes_to_string(out)
+            if now_ms() - start >= deadline_ms:
+                raise Error("read_deadline_expired")
+            var ev = poll_fd(self.fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            if ev == 0:
+                continue
+            var buf = InlineArray[Byte, 512](fill=0)
+            var n = read_fd(self.fd, buf.unsafe_ptr(), 512)
+            if n <= 0:
+                self._eof = True
+                continue
+            for index in range(n):
+                self._pending.append(UInt8(Int(buf[index])))
+
+
 def read_line_bounded(
     fd: Int, max_bytes: Int, deadline_ms: Int
 ) raises -> String:
-    """Read one newline-terminated line with bounded size and deadline.
-
-    Raises on overflow or deadline. An EOF before a newline returns whatever
-    bytes were read (possibly empty).
-    """
-    var out = List[UInt8]()
-    var buf = InlineArray[Byte, 512](fill=0)
-    var start = now_ms()
-    while True:
-        if len(out) >= max_bytes:
-            raise Error("ready_output_overflow")
-        if now_ms() - start >= deadline_ms:
-            raise Error("read_deadline_expired")
-        var ev = poll_fd(fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
-        if ev == 0:
-            continue
-        var n = read_fd(fd, buf.unsafe_ptr(), 512)
-        if n <= 0:
-            break
-        for index in range(n):
-            if Int(buf[index]) == 10:
-                return _bytes_to_string(out)
-            out.append(UInt8(Int(buf[index])))
-    return _bytes_to_string(out)
+    """One-shot bounded line read for callers without surplus to preserve."""
+    var reader = BoundedLineReader(fd, max_bytes)
+    return reader.read_line(deadline_ms)
 
 
 def drain_fd_bounded(
@@ -193,9 +382,11 @@ def drain_fd_bounded(
         var n = read_fd(fd, buf.unsafe_ptr(), 1024)
         if n <= 0:
             break
-        for index in range(n):
+        var room = max_bytes - len(out)
+        var take = min(Int(n), room)
+        for index in range(take):
             out.append(UInt8(Int(buf[index])))
-    return _bytes_to_string(out)
+    return bytes_to_string(out)
 
 
 def read_all_bounded(
@@ -222,10 +413,10 @@ def read_all_bounded(
             raise Error("stdout_overflow")
         for index in range(n):
             out.append(UInt8(Int(buf[index])))
-    return _bytes_to_string(out)
+    return bytes_to_string(out)
 
 
-def _bytes_to_string(bytes: List[UInt8]) raises -> String:
+def bytes_to_string(bytes: List[UInt8]) raises -> String:
     if len(bytes) == 0:
         return ""
     return String(from_utf8=Span(ptr=bytes.unsafe_ptr(), length=len(bytes)))
@@ -235,18 +426,33 @@ def _bytes_to_string(bytes: List[UInt8]) raises -> String:
 
 
 @fieldwise_init
-struct ProcessStatus(Movable):
+struct ProcessStatus(Copyable, Movable):
     var state: String
     var exited: Bool
     var exit_code: Int
     var signal: Int
     var raw: Int
+    var error: String
+
+    def __copyinit__(out self, existing: Self):
+        self.state = existing.state
+        self.exited = existing.exited
+        self.exit_code = existing.exit_code
+        self.signal = existing.signal
+        self.raw = existing.raw
+        self.error = existing.error
 
     def reaped(self) -> Bool:
         return self.state == "reaped"
 
+    def cleanup_proved(self) -> Bool:
+        """True only when no waitable owned child can remain for this pid."""
+        return self.state == "reaped" or self.state == "gone"
+
     def describe(self) -> String:
         if self.state != "reaped":
+            if self.error != "":
+                return self.state + ":" + self.error
             return self.state
         if self.exited:
             return "exited=" + String(self.exit_code)
@@ -256,13 +462,37 @@ struct ProcessStatus(Movable):
 def _decode_status(raw: Int) -> ProcessStatus:
     var low = raw & 0x7F
     if low == 0:
-        return ProcessStatus("reaped", True, (raw >> 8) & 0xFF, 0, raw)
+        return ProcessStatus("reaped", True, (raw >> 8) & 0xFF, 0, raw, "")
     if low == 0x7F:
-        return ProcessStatus("stopped", False, -1, 0, raw)
-    return ProcessStatus("reaped", False, -1, low, raw)
+        return ProcessStatus("stopped", False, -1, 0, raw, "")
+    return ProcessStatus("reaped", False, -1, low, raw, "")
+
+
+def classify_wait_errno(errno_value: Int) -> String:
+    """Map a real ``waitpid`` errno to the ownership taxonomy.
+
+    ``interrupted`` (EINTR) retains ownership and is retried; ``gone``
+    (ECHILD) proves no waitable child remains; anything else is
+    ``wait_error`` and must never be reported as completed cleanup.
+    """
+    if errno_value == Int(ErrNo.EINTR.value):
+        return "interrupted"
+    if errno_value == Int(ErrNo.ECHILD.value):
+        return "gone"
+    return "wait_error"
 
 
 def wait_nohang(pid: Int) -> ProcessStatus:
+    """Non-blocking wait with an exact errno ownership taxonomy.
+
+    ``reaped``/``running`` are exact. A negative ``waitpid`` is classified by
+    the real errno: ``EINTR`` retains ownership and is retried by callers;
+    ``ECHILD`` proves no waitable child remains; any other error is a
+    ``wait_error`` that must not be reported as completed cleanup. A
+    non-positive pid is never waited on.
+    """
+    if pid <= 0:
+        return ProcessStatus("wait_error", False, -1, 0, -1, "invalid_pid")
     var status = InlineArray[c_int, 1](fill=0)
     var r = Int(
         external_call["waitpid", c_int](
@@ -271,16 +501,22 @@ def wait_nohang(pid: Int) -> ProcessStatus:
     )
     if r == pid:
         return _decode_status(Int(status[0]))
-    if r < 0:
-        return ProcessStatus("gone", False, -1, -1, -1)
-    return ProcessStatus("running", False, -1, 0, 0)
+    if r == 0:
+        return ProcessStatus("running", False, -1, 0, 0, "")
+    var errno_value = Int(get_errno().value)
+    var klass = classify_wait_errno(errno_value)
+    if klass == "gone":
+        return ProcessStatus("gone", False, -1, -1, -1, "")
+    return ProcessStatus(
+        klass, False, -1, 0, -1, "errno_" + String(errno_value)
+    )
 
 
 def wait_bounded(pid: Int, deadline_ms: Int) -> ProcessStatus:
     var start = now_ms()
     while True:
         var st = wait_nohang(pid)
-        if st.state != "running":
+        if st.state != "running" and st.state != "interrupted":
             return st^
         if now_ms() - start >= deadline_ms:
             return st^
@@ -291,14 +527,20 @@ def terminate_owned(pid: Int, grace_ms: Int) -> ProcessStatus:
     """Reap a child this test owns, escalating SIGTERM -> SIGKILL.
 
     A pid already reaped or not waitable (``gone``) is never signaled, so a
-    reused PID from an unrelated process can never be targeted.
+    reused PID from an unrelated process can never be targeted. An
+    ``interrupted``/``wait_error`` status still owns a live child, so it is
+    signaled and reaped; the returned status is only ``reaped`` when the child
+    was actually collected.
     """
     var st = wait_nohang(pid)
-    if st.state != "running":
+    if st.cleanup_proved():
+        return st^
+    if st.state == "wait_error":
+        # Identity/ownership is unproved; never signal and never claim cleanup.
         return st^
     _ = kill_pid(pid, SIGTERM)
     st = wait_bounded(pid, grace_ms)
-    if st.state == "running":
+    if st.state == "running" or st.state == "interrupted":
         _ = kill_pid(pid, SIGKILL)
         st = wait_bounded(pid, grace_ms)
     return st^
@@ -314,38 +556,180 @@ def pid_not_waitable(pid: Int) -> Bool:
     return wait_nohang(pid).state == "gone"
 
 
-def open_fd_count() -> Int:
-    """Count this process's open descriptors by probing ``/dev/fd/N``.
+# ── Shared owned-child lifecycle state ──────────────────────────────────────
 
-    A bounded, read-only descriptor census used to evidence that repeated
-    teardown leaks no descriptors. Returns -1 if the platform probe is
-    unavailable (never treated as a pass).
+
+@fieldwise_init
+struct PipedChildState(Movable):
+    """Single mutable lifecycle record shared by every copy of one handle.
+
+    Holds no ``List``: in-place container mutation through a shared reference
+    is avoided so the record stays safe to share across handle copies. The
+    retained line surplus is an immutable ``String`` reassigned in place.
     """
-    var probe = String("/dev/fd")
-    var dir = Int(
-        external_call["open", c_int](
-            probe.as_c_string_slice().unsafe_ptr(), c_int(0)
-        )
-    )
-    if dir < 0:
-        probe = "/proc/self/fd"
-        dir = Int(
-            external_call["open", c_int](
-                probe.as_c_string_slice().unsafe_ptr(), c_int(0)
-            )
-        )
-        if dir < 0:
-            return -1
-    close_fd(dir)
+
+    var pid: Int
+    var report_fd: Int
+    var pending: String
+    var eof: Bool
+    var closed: Bool
+    var deadline_ms: Int
+    var expected_requests: Int
+    var reaped: Bool
+    var ok: Bool
+    var phase: String
+    var case_label: String
+    var reason: String
+    var requests: Int
+    var connections: Int
+    var cleanup_error: String
+    var status: ProcessStatus
+
+    def store(
+        mut self,
+        ok: Bool,
+        phase: String,
+        case_label: String,
+        reason: String,
+        requests: Int,
+        connections: Int,
+    ):
+        self.ok = ok
+        self.phase = String(phase)
+        self.case_label = String(case_label)
+        self.reason = String(reason)
+        self.requests = requests
+        self.connections = connections
+
+    def close_reader(mut self):
+        if not self.closed:
+            close_fd(self.report_fd)
+            self.closed = True
+
+    def read_line(mut self, max_bytes: Int, deadline_ms: Int) raises -> String:
+        """Bounded line read that retains surplus after each newline.
+
+        The byte cap is enforced inside every read chunk (including a newline
+        in the same chunk), and bytes after the returned newline are retained
+        for the next consumer. Raises ``ready_output_overflow`` past the cap
+        and ``read_deadline_expired`` when the deadline elapses first.
+        """
+        var out = List[UInt8]()
+        var start = now_ms()
+        while True:
+            var nl = self.pending.find("\n")
+            if nl >= 0:
+                var line = String(self.pending[byte=0:nl])
+                var rest = String(self.pending[byte = nl + 1 :])
+                if rest.byte_length() > max_bytes:
+                    raise Error("ready_output_overflow")
+                self.pending = rest^
+                if line.byte_length() > max_bytes:
+                    raise Error("ready_output_overflow")
+                return line^
+            for byte in self.pending.as_bytes():
+                out.append(UInt8(Int(byte)))
+            self.pending = ""
+            if len(out) > max_bytes:
+                raise Error("ready_output_overflow")
+            if self.eof:
+                return bytes_to_string(out)
+            if now_ms() - start >= deadline_ms:
+                raise Error("read_deadline_expired")
+            var ev = poll_fd(self.report_fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            if ev == 0:
+                continue
+            var buf = InlineArray[Byte, 512](fill=0)
+            var n = read_fd(self.report_fd, buf.unsafe_ptr(), 512)
+            if n <= 0:
+                self.eof = True
+                continue
+            var newline_at = -1
+            for index in range(n):
+                if Int(buf[index]) == 10:
+                    newline_at = index
+                    break
+            if newline_at < 0:
+                for index in range(n):
+                    out.append(UInt8(Int(buf[index])))
+                if len(out) > max_bytes:
+                    raise Error("ready_output_overflow")
+                continue
+            for index in range(newline_at):
+                out.append(UInt8(Int(buf[index])))
+            if len(out) > max_bytes:
+                raise Error("ready_output_overflow")
+            var rest = List[UInt8]()
+            for index in range(newline_at + 1, n):
+                rest.append(UInt8(Int(buf[index])))
+            var surplus = bytes_to_string(rest)
+            if surplus.byte_length() > max_bytes:
+                raise Error("ready_output_overflow")
+            self.pending = surplus^
+            return bytes_to_string(out)
+
+
+def parse_ready_line(line: String, max_bytes: Int) raises -> Int:
+    """Parse the exact ``ready <port>`` grammar with a valid TCP port range."""
+    if line.byte_length() == 0:
+        raise Error("ready_empty")
+    if line.byte_length() > max_bytes:
+        raise Error("ready_too_large")
+    if not line.startswith("ready "):
+        raise Error("ready_grammar")
+    var digits = String(line[byte=6:])
+    if digits.byte_length() == 0:
+        raise Error("ready_missing_port")
+    if digits.byte_length() > 5:
+        raise Error("ready_port_range")
+    for byte in digits.as_bytes():
+        var b = Int(byte)
+        if b < 48 or b > 57:
+            raise Error("ready_non_digit")
+    var port = Int(digits)
+    if port < 1 or port > 65535:
+        raise Error("ready_port_range")
+    return port
+
+
+# ── Non-opening descriptor census ───────────────────────────────────────────
+
+
+def descriptor_census(limit: Int) -> Int:
+    """Count open descriptors numerically via ``fcntl(F_GETFD)``.
+
+    Never opens a target path, so device nodes cannot block it and sockets and
+    high descriptors are counted the same as regular files. Returns -1 when the
+    census cannot be established (invalid bound or no standard descriptors),
+    which callers must treat as a failed unavailable census, never a pass.
+    """
+    if limit <= 0:
+        return -1
     var count = 0
-    for n in range(3, 1024):
-        var path = probe + "/" + String(n)
-        var fd = Int(
-            external_call["open", c_int](
-                path.as_c_string_slice().unsafe_ptr(), c_int(0)
-            )
-        )
-        if fd >= 0:
+    for fd in range(0, limit):
+        if Int(external_call["fcntl", c_int](c_int(fd), c_int(F_GETFD))) >= 0:
             count += 1
-            close_fd(fd)
+    if count == 0:
+        return -1
+    return count
+
+
+def fd_scan_limit() -> Int:
+    var n = Int(external_call["getdtablesize", c_int]())
+    if n <= 0:
+        return -1
+    if n > CENSUS_MAX_FDS:
+        n = CENSUS_MAX_FDS
+    return n
+
+
+def open_fd_count() -> Int:
+    """Numeric open-descriptor census for this process (-1 if unavailable)."""
+    return descriptor_census(fd_scan_limit())
+
+
+def open_fd_count_checked() raises -> Int:
+    var count = open_fd_count()
+    if count < 0:
+        raise Error("descriptor_census_unavailable")
     return count

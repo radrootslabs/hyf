@@ -261,33 +261,35 @@ def test_max_local_transport_boundary_rejects_invalid_health_url() raises:
 
 
 def test_max_local_transport_boundary_reports_unknown_chat_transport() raises:
-    var provider_stub = spawn_max_local_stub(
+    with spawn_max_local_stub(
         0, "query_rewrite_malformed_http", 1
-    )
-    var provider_port = provider_stub.port
-    var outcome = post_max_local_chat_completion(
-        _provider_config_for_port(provider_port), loads("{}")
-    )
+    ) as provider_stub:
+        var provider_port = provider_stub.port
+        var outcome = post_max_local_chat_completion(
+            _provider_config_for_port(provider_port), loads("{}")
+        )
 
-    assert_true(outcome.failure)
-    assert_true(not outcome.response)
-    assert_equal(outcome.failure.value().kind, "transport")
-    assert_equal(outcome.failure.value().reason, "unknown_transport")
+        assert_true(outcome.failure)
+        assert_true(not outcome.response)
+        assert_equal(outcome.failure.value().kind, "transport")
+        assert_equal(outcome.failure.value().reason, "unknown_transport")
 
-    provider_stub.wait()
+        provider_stub.wait()
 
 
 def test_max_local_transport_boundary_reports_unknown_health_transport() raises:
-    var provider_stub = spawn_max_local_stub(0, "health_malformed_http", 1)
-    var provider_port = provider_stub.port
-    var outcome = get_max_local_health(_provider_config_for_port(provider_port))
+    with spawn_max_local_stub(0, "health_malformed_http", 1) as provider_stub:
+        var provider_port = provider_stub.port
+        var outcome = get_max_local_health(
+            _provider_config_for_port(provider_port)
+        )
 
-    assert_true(outcome.failure)
-    assert_true(not outcome.response)
-    assert_equal(outcome.failure.value().kind, "transport")
-    assert_equal(outcome.failure.value().reason, "unknown_transport")
+        assert_true(outcome.failure)
+        assert_true(not outcome.response)
+        assert_equal(outcome.failure.value().kind, "transport")
+        assert_equal(outcome.failure.value().reason, "unknown_transport")
 
-    provider_stub.wait()
+        provider_stub.wait()
 
 
 def test_query_rewrite_request_body_sets_schema_contract() raises:

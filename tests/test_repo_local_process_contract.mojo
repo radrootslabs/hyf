@@ -1,12 +1,15 @@
 from std.testing import TestSuite, assert_equal, assert_true
+from std.collections import List
 from safe_tempdir import SafeTempDir
 
 from json import Value
 from fixture_assertions import load_scenario_request_json
+from parent_lifecycle import POLLIN, close_fd, make_pipe, write_raw
 from stdio_process_helper import (
     HYF_PATHS_PROFILE_ENV,
     HYF_PATHS_REPO_LOCAL_ROOT_ENV,
     ScopedEnvVar,
+    drain_ready,
     run_stdio_entrypoint,
     run_stdio_entrypoint_with_deadline,
 )
@@ -114,6 +117,51 @@ def test_run_stdio_entrypoint_classifies_loader_failure() raises:
         message = String(e)
     assert_true(message.find("child_failed") >= 0)
     assert_true(message.find("timeout") < 0)
+
+
+def test_run_stdio_entrypoint_drains_stdout_concurrently() raises:
+    # LC04: a child that floods stdout before reading stdin must not deadlock
+    # the parent's large request write; a correct interleaving succeeds.
+    var request = String("")
+    for _ in range(150000):
+        request += "r"
+    var response = Value(None)
+    var message = ""
+    var failed = False
+    try:
+        response = run_stdio_entrypoint_with_deadline(
+            "tests/stdio_stdout_flood_entrypoint.mojo",
+            request,
+            "",
+            "",
+            30000,
+        )
+    except e:
+        failed = True
+        message = String(e)
+    assert_true(not failed)
+    assert_equal(message, "")
+    assert_true(response["ok"].bool_value())
+
+
+def test_diagnostics_overflow_is_bounded_with_cause() raises:
+    # LC04: stderr diagnostics are capped and an overflow is a distinct cause.
+    var pipe = make_pipe()
+    var chunk = String("")
+    for _ in range(4096):
+        chunk += "e"
+    var out = List[UInt8]()
+    var overflow_reason = ""
+    for _ in range(20):
+        _ = write_raw(pipe.write_fd, chunk)
+        var d = drain_ready(pipe.read_fd, out, 65536, POLLIN)
+        if d.reason != "":
+            overflow_reason = d.reason
+            break
+    close_fd(pipe.read_fd)
+    close_fd(pipe.write_fd)
+    assert_equal(overflow_reason, "stream_overflow")
+    assert_true(len(out) <= 65536)
 
 
 def main() raises:

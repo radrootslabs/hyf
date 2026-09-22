@@ -1,29 +1,40 @@
 """Bounded, parent-owned stdio entrypoint runner for HYF process tests.
 
-ADR-0014 D33 FX06/FX08: the *parent* enforces finite startup/read/write/wait
-deadlines, bounds stdout/ready output, and reaps/closes every owned descriptor
-on success, assertion failure, timeout or early return. The child ``alarm`` is
-defense in depth only.
+ADR-0014 D33 FX06/FX08 and ADR-0015 D35 LC04: the *parent* enforces one finite
+startup/write/read/wait budget, bounds stdout/stderr/ready output, drains
+stdout and stderr concurrently with writing the request so a chatty child
+cannot deadlock, ignores SIGPIPE so a peer-close race cannot kill the parent,
+and reaps/closes every owned descriptor on success, assertion failure, timeout
+or early return. The child ``alarm`` is defense in depth only.
 
 The request/response API is unchanged so existing call sites keep working.
 """
 
 import std.os
+from std.collections import List
 from std.ffi import CStringSlice, c_int, external_call
 
 from parent_lifecycle import (
+    LIFECYCLE_POLL_SLICE_MS,
+    POLLERR,
+    POLLHUP,
+    POLLIN,
+    POLLNVAL,
+    POLLOUT,
     TERMINATION_GRACE_MS,
-    FIXTURE_DEFAULT_DEADLINE_MS,
+    bytes_to_string,
     child_exit,
     close_fd,
     dup2_fd,
     fork_pid,
     make_pipe,
-    read_all_bounded,
+    now_ms,
+    poll_three,
+    read_fd,
     set_alarm,
     terminate_owned,
     wait_bounded,
-    write_fd_bounded,
+    write_fd_chunk,
 )
 from safe_tempdir import SafeTempDir
 
@@ -34,7 +45,9 @@ comptime HYF_PATHS_PROFILE_ENV = "HYF_PATHS_PROFILE"
 comptime HYF_PATHS_REPO_LOCAL_ROOT_ENV = "HYF_PATHS_REPO_LOCAL_ROOT"
 
 # The entrypoint compiles and runs a real Mojo program; this is a finite
-# build/run lane budget, not a fixture lifetime and not a product SLO.
+# build/run lane budget, not a fixture lifetime and not a product SLO. One
+# budget covers compile, write, drain and wait; only the bounded cleanup grace
+# is added for reaping.
 comptime STDIO_ENTRYPOINT_DEADLINE_MS = 120000
 comptime STDIO_CHILD_ALARM_SECONDS = 180
 comptime STDIO_MAX_STDOUT_BYTES = 2097152
@@ -63,6 +76,29 @@ struct ScopedEnvVar:
             _ = std.os.unsetenv(self.name)
 
 
+@fieldwise_init
+struct DrainOutcome(Movable):
+    var eof: Bool
+    var reason: String
+
+
+def drain_ready(
+    fd: Int, mut out: List[UInt8], cap: Int, revents: Int
+) -> DrainOutcome:
+    """Read one ready descriptor into a capped buffer; preserve the cause."""
+    if (revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) == 0:
+        return DrainOutcome(False, "")
+    var buf = InlineArray[Byte, 4096](fill=0)
+    var n = read_fd(fd, buf.unsafe_ptr(), 4096)
+    if n <= 0:
+        return DrainOutcome(True, "")
+    if len(out) + n > cap:
+        return DrainOutcome(True, "stream_overflow")
+    for index in range(n):
+        out.append(UInt8(Int(buf[index])))
+    return DrainOutcome(False, "")
+
+
 def run_stdio_entrypoint(
     entrypoint: String, request_json: String
 ) raises -> Value:
@@ -78,13 +114,25 @@ def run_stdio_entrypoint(
 
 
 def _terminate_and_raise(
-    pid: Int, stdin_fd: Int, stdout_fd: Int, stderr_fd: Int, reason: String
+    pid: Int,
+    stdin_fd: Int,
+    stdout_fd: Int,
+    stderr_fd: Int,
+    reason: String,
 ) raises:
     var st = terminate_owned(pid, TERMINATION_GRACE_MS)
     close_fd(stdin_fd)
     close_fd(stdout_fd)
     close_fd(stderr_fd)
-    raise Error("stdio-entrypoint " + reason + " (child " + st.describe() + ")")
+    raise Error(
+        "stdio-entrypoint "
+        + reason
+        + " (child "
+        + st.describe()
+        + " cleanup_error="
+        + String("" if st.cleanup_proved() else "unreaped")
+        + ")"
+    )
 
 
 def run_stdio_entrypoint_with_2_args(
@@ -142,7 +190,17 @@ def run_stdio_entrypoint_with_deadline(
     var command_ptr = command.as_c_string_slice().unsafe_ptr()
     var argv_ptr = argv.unsafe_ptr()
 
-    var pid = fork_pid()
+    var pid = 0
+    try:
+        pid = fork_pid()
+    except e:
+        close_fd(stdin_read_fd)
+        close_fd(stdin_write_fd)
+        close_fd(stdout_read_fd)
+        close_fd(stdout_write_fd)
+        close_fd(stderr_read_fd)
+        close_fd(stderr_write_fd)
+        raise Error("stdio-entrypoint fork failed: " + String(e))
     if pid == 0:
         if dup2_fd(stdin_read_fd, 0) < 0:
             child_exit(126)
@@ -164,37 +222,100 @@ def run_stdio_entrypoint_with_deadline(
     close_fd(stdout_write_fd)
     close_fd(stderr_write_fd)
 
-    var write_reason = write_fd_bounded(
-        stdin_write_fd, request_json + "\n", deadline_ms
-    )
+    var request = request_json + "\n"
+    var sent = 0
+    var stdout = List[UInt8]()
+    var stderr_bytes = List[UInt8]()
+    var stdout_eof = False
+    var stderr_eof = False
+    var stdin_done = False
+    var write_reason = ""
+    var read_reason = ""
+    var start = now_ms()
+    var budget = deadline_ms
+    if budget <= 0:
+        budget = 1
+
+    while not (stdin_done and stdout_eof and stderr_eof):
+        var elapsed = now_ms() - start
+        if elapsed >= budget:
+            read_reason = "read_deadline_expired"
+            break
+        var remaining = budget - elapsed
+        var slice_ms = min(LIFECYCLE_POLL_SLICE_MS, remaining)
+        if slice_ms < 1:
+            slice_ms = 1
+        var ev_stdin = 0 if stdin_done else POLLOUT
+        var ev_out = 0 if stdout_eof else POLLIN
+        var ev_err = 0 if stderr_eof else POLLIN
+        var pr = poll_three(
+            stdin_write_fd,
+            ev_stdin,
+            stdout_read_fd,
+            ev_out,
+            stderr_read_fd,
+            ev_err,
+            slice_ms,
+        )
+        if pr.count < 0:
+            read_reason = "poll_failed"
+            break
+        if pr.count == 0:
+            continue
+        if not stdin_done:
+            if (pr.r0 & (POLLERR | POLLHUP | POLLNVAL)) != 0:
+                stdin_done = True
+            elif (pr.r0 & POLLOUT) != 0:
+                var cw = write_fd_chunk(stdin_write_fd, request, sent)
+                if cw.reason != "":
+                    write_reason = cw.reason
+                    stdin_done = True
+                else:
+                    sent += cw.written
+                    if sent >= request.byte_length():
+                        stdin_done = True
+                        close_fd(stdin_write_fd)
+                        stdin_write_fd = -1
+        if not stdout_eof:
+            var d = drain_ready(
+                stdout_read_fd, stdout, STDIO_MAX_STDOUT_BYTES, pr.r1
+            )
+            stdout_eof = d.eof
+            if d.reason != "":
+                read_reason = "stdout_" + d.reason
+                break
+        if not stderr_eof:
+            var d = drain_ready(
+                stderr_read_fd, stderr_bytes, STDIO_MAX_STDERR_BYTES, pr.r2
+            )
+            stderr_eof = d.eof
+            if d.reason != "":
+                read_reason = "stderr_" + d.reason
+                break
+
     close_fd(stdin_write_fd)
     if write_reason != "":
-        _terminate_and_raise(
-            pid, -1, stdout_read_fd, stderr_read_fd, "write_" + write_reason
-        )
-
-    var output = ""
-    try:
-        output = read_all_bounded(
-            stdout_read_fd, STDIO_MAX_STDOUT_BYTES, deadline_ms
-        )
-    except:
         _terminate_and_raise(
             pid,
             -1,
             stdout_read_fd,
             stderr_read_fd,
-            "stdout_bounded_read_failed",
+            "write_" + write_reason,
         )
-    close_fd(stdout_read_fd)
+    if read_reason != "":
+        _terminate_and_raise(
+            pid, -1, stdout_read_fd, stderr_read_fd, read_reason
+        )
 
-    var diagnostics = _diagnostics_or_empty(stderr_read_fd)
+    var st = wait_bounded(pid, TERMINATION_GRACE_MS)
+    if not st.reaped():
+        _terminate_and_raise(pid, -1, stdout_read_fd, stderr_read_fd, "timeout")
+    close_fd(stdout_read_fd)
     close_fd(stderr_read_fd)
 
-    var st = wait_bounded(pid, deadline_ms)
-    if not st.reaped():
-        var term = terminate_owned(pid, TERMINATION_GRACE_MS)
-        raise Error("stdio-entrypoint timeout (child " + term.describe() + ")")
+    var output = bytes_to_string(stdout)
+    var diagnostics = bytes_to_string(stderr_bytes)
+
     if st.exited and st.exit_code == 127:
         raise Error(
             "stdio-entrypoint exec_failed (stdout="
@@ -214,15 +335,6 @@ def run_stdio_entrypoint_with_deadline(
     if output == "":
         raise Error("hyf process returned no stdout payload")
     return loads(output)
-
-
-def _diagnostics_or_empty(fd: Int) -> String:
-    try:
-        return read_all_bounded(
-            fd, STDIO_MAX_STDERR_BYTES, TERMINATION_GRACE_MS
-        )
-    except:
-        return ""
 
 
 def run_hyf_stdio(request_json: String) raises -> Value:

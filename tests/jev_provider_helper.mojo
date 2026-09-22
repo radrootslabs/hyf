@@ -14,13 +14,15 @@ from flare.utils import usleep
 from parent_lifecycle import (
     FIXTURE_DEFAULT_DEADLINE_MS,
     TERMINATION_GRACE_MS,
+    PipedChildState,
+    PipeFds,
     ProcessStatus,
     child_exit,
     close_fd,
     dup2_fd,
     fork_pid,
     make_pipe,
-    read_line_bounded,
+    parse_ready_line,
     set_alarm,
     terminate_owned,
     wait_bounded,
@@ -38,6 +40,7 @@ from strict_fixture import (
     parse_report,
     render_response,
     report_line,
+    report_status_matches_exit,
     serve_scripts,
     validate_convenience,
     verify_exchange,
@@ -255,142 +258,252 @@ def serve_jev(port: Int, mode: String, requests: Int) raises -> ServeReport:
 
 
 struct SpawnedJevStub(Movable):
-    var pid: Int
-    var _report_fd: Int
-    var _deadline_ms: Int
-    var _reaped: Bool
-    var _ok: Bool
-    var _phase: String
-    var _case: String
-    var _reason: String
-    var _requests: Int
-    var _connections: Int
+    """Single-owner Jev fixture handle; the body receives a view."""
 
-    def __init__(out self, pid: Int, report_fd: Int, deadline_ms: Int):
+    var pid: Int
+    var state: PipedChildState
+
+    def __init__(out self, pid: Int, var state: PipedChildState):
         self.pid = pid
-        self._report_fd = report_fd
-        self._deadline_ms = deadline_ms
-        self._reaped = False
-        self._ok = False
-        self._phase = "pending"
-        self._case = "-"
-        self._reason = "not_reaped"
-        self._requests = 0
-        self._connections = 0
+        self.state = state^
+
+    def __enter__(mut self) -> SpawnedJevStubView:
+        return SpawnedJevStubView(self.pid, UnsafePointer(to=self))
+
+    def __exit__(mut self):
+        self.cleanup()
+
+    def cleanup(mut self):
+        """Fast, non-raising owned cleanup for assertion/error/early return."""
+        if self.state.reaped:
+            return
+        var status = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+        self.state.status = status.copy()
+        self.state.reaped = True
+        self.state.close_reader()
+        if not status.cleanup_proved():
+            self.state.cleanup_error = "unreaped:" + status.describe()
 
     def ok(self) -> Bool:
-        return self._ok
+        return self.state.ok
 
     def phase(self) -> String:
-        return String(self._phase)
+        return String(self.state.phase)
 
     def failure_case(self) -> String:
-        return String(self._case)
+        return String(self.state.case_label)
 
     def reason(self) -> String:
-        return String(self._reason)
+        return String(self.state.reason)
 
     def request_count(self) -> Int:
-        return self._requests
+        return self.state.requests
 
     def connection_count(self) -> Int:
-        return self._connections
+        return self.state.connections
+
+    def cleanup_error(self) -> String:
+        return String(self.state.cleanup_error)
 
     def describe(self) -> String:
         return (
             "phase="
-            + self._phase
+            + self.state.phase
             + " case="
-            + self._case
+            + self.state.case_label
             + " reason="
-            + self._reason
+            + self.state.reason
             + " requests="
-            + String(self._requests)
+            + String(self.state.requests)
             + " connections="
-            + String(self._connections)
+            + String(self.state.connections)
         )
 
     def status(self) -> ProcessStatus:
+        if self.state.reaped:
+            return self.state.status.copy()
         return wait_bounded(self.pid, 0)
 
-    def _store(
-        mut self,
-        ok: Bool,
-        phase: String,
-        case_label: String,
-        reason: String,
-        requests: Int,
-        connections: Int,
-    ):
-        self._ok = ok
-        self._phase = String(phase)
-        self._case = String(case_label)
-        self._reason = String(reason)
-        self._requests = requests
-        self._connections = connections
-
     def reap(mut self):
-        if self._reaped:
+        """Strictly reap the owned child and decode its bounded report."""
+        if self.state.reaped:
             return
-        var st = wait_bounded(self.pid, self._deadline_ms)
-        var report_text = ""
-        if st.state == "running":
+        var status = wait_bounded(self.pid, self.state.deadline_ms)
+        self.state.status = status.copy()
+        if status.state == "running" or status.state == "interrupted":
             var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
-            self._store(False, "watchdog", "-", "timeout", 0, 0)
-            if not term.reaped():
-                self._reason = "unreaped:" + term.describe()
-            self._reaped = True
-            close_fd(self._report_fd)
+            self.state.status = term.copy()
+            self.state.store(False, "watchdog", "-", "timeout", 0, 0)
+            if not term.cleanup_proved():
+                self.state.cleanup_error = "unreaped:" + term.describe()
+                self.state.reason = "timeout_unreaped"
+            self.state.reaped = True
+            self.state.close_reader()
             return
-        if self._report_fd >= 0:
-            try:
-                report_text = read_line_bounded(
-                    self._report_fd, STRICT_MAX_REPORT_BYTES, 1000
+        if status.state == "gone" or status.state == "wait_error":
+            self.state.store(False, "watchdog", "-", status.state, 0, 0)
+            if status.state == "wait_error":
+                self.state.cleanup_error = "wait_error:" + status.error
+            self.state.reaped = True
+            self.state.close_reader()
+            return
+        var report_text = ""
+        var read_error = ""
+        try:
+            report_text = self.state.read_line(STRICT_MAX_REPORT_BYTES, 1000)
+        except e:
+            read_error = String(e)
+        self.state.close_reader()
+        if report_text == "":
+            if status.exited and status.exit_code == 0:
+                self.state.store(False, "startup", "-", "missing_report", 0, 0)
+            elif status.exited:
+                self.state.store(
+                    False,
+                    "startup",
+                    "-",
+                    "exit_" + String(status.exit_code),
+                    0,
+                    0,
                 )
-            except:
-                report_text = ""
-        if report_text.startswith("result "):
-            var parsed = parse_report(report_text)
-            self._store(
-                parsed.ok,
-                parsed.phase,
-                parsed.case_label,
-                parsed.reason,
-                parsed.requests,
-                parsed.connections,
-            )
-        elif st.exited and st.exit_code == 0:
-            self._store(True, "complete", "-", "ok", 0, 0)
-        elif st.exited:
-            self._store(
-                False, "startup", "-", "exit_" + String(st.exit_code), 0, 0
-            )
-        else:
-            self._store(
-                False, "watchdog", "-", "signal_" + String(st.signal), 0, 0
-            )
-        self._reaped = True
-        close_fd(self._report_fd)
+            else:
+                self.state.store(
+                    False,
+                    "watchdog",
+                    "-",
+                    "signal_" + String(status.signal),
+                    0,
+                    0,
+                )
+            if read_error != "":
+                self.state.cleanup_error = "report_read:" + read_error
+            self.state.reaped = True
+            return
+        var parsed = parse_report(report_text)
+        if parsed.phase == "parse":
+            self.state.store(False, "parse", "-", parsed.reason, -1, -1)
+            if read_error != "":
+                self.state.cleanup_error = "report_read:" + read_error
+            self.state.reaped = True
+            return
+        self.state.store(
+            parsed.ok,
+            parsed.phase,
+            parsed.case_label,
+            parsed.reason,
+            parsed.requests,
+            parsed.connections,
+        )
+        if not report_status_matches_exit(
+            status.exited, status.exit_code, parsed.ok
+        ):
+            self.state.ok = False
+            self.state.phase = "startup"
+            self.state.reason = "report_status_mismatch_" + status.describe()
+        elif parsed.ok and parsed.requests != self.state.expected_requests:
+            self.state.ok = False
+            self.state.phase = "accounting"
+            self.state.reason = "request_count_mismatch"
+        elif parsed.ok and (
+            parsed.connections < 1
+            or parsed.connections > self.state.expected_requests
+        ):
+            self.state.ok = False
+            self.state.phase = "accounting"
+            self.state.reason = "connection_count_invalid"
+        self.state.reaped = True
 
     def wait(mut self) raises:
         self.reap()
-        if not self._ok:
+        if not self.state.ok:
             raise Error("fixture-failure " + self.describe())
 
     def terminate(mut self) raises:
-        if self._reaped:
+        if self.state.reaped:
             return
-        var st = terminate_owned(self.pid, TERMINATION_GRACE_MS)
-        if not st.reaped():
-            raise Error("lifecycle: owned child not reaped: " + st.describe())
-        self._reaped = True
-        close_fd(self._report_fd)
+        var status = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+        self.state.status = status.copy()
+        self.state.reaped = True
+        self.state.close_reader()
+        if not status.cleanup_proved():
+            raise Error(
+                "lifecycle: owned child not reaped: " + status.describe()
+            )
+
+
+struct SpawnedJevStubView(Movable):
+    """Body-scope view of an owned Jev fixture handle."""
+
+    var pid: Int
+    var target: UnsafePointer[SpawnedJevStub, MutAnyOrigin]
+
+    def __init__(
+        out self, pid: Int, target: UnsafePointer[SpawnedJevStub, MutAnyOrigin]
+    ):
+        self.pid = pid
+        self.target = target
+
+    def ok(self) -> Bool:
+        return self.target[].ok()
+
+    def phase(self) -> String:
+        return self.target[].phase()
+
+    def failure_case(self) -> String:
+        return self.target[].failure_case()
+
+    def reason(self) -> String:
+        return self.target[].reason()
+
+    def request_count(self) -> Int:
+        return self.target[].request_count()
+
+    def connection_count(self) -> Int:
+        return self.target[].connection_count()
+
+    def cleanup_error(self) -> String:
+        return self.target[].cleanup_error()
+
+    def describe(self) -> String:
+        return self.target[].describe()
+
+    def status(self) -> ProcessStatus:
+        return self.target[].status()
+
+    def reap(mut self):
+        self.target[].reap()
+
+    def wait(mut self) raises:
+        self.target[].wait()
+
+    def terminate(mut self) raises:
+        self.target[].terminate()
 
 
 @fieldwise_init
 struct SpawnedJevStubAuto(Movable):
     var port: Int
     var stub: SpawnedJevStub
+
+    def __enter__(mut self) -> SpawnedJevStubAutoView:
+        return SpawnedJevStubAutoView(
+            self.port,
+            SpawnedJevStubView(self.stub.pid, UnsafePointer(to=self.stub)),
+        )
+
+    def __exit__(mut self):
+        self.stub.cleanup()
+
+
+struct SpawnedJevStubAutoView(Movable):
+    """Body-scope view of an auto-port Jev fixture handle."""
+
+    var port: Int
+    var stub: SpawnedJevStubView
+
+    def __init__(out self, port: Int, var stub: SpawnedJevStubView):
+        self.port = port
+        self.stub = stub^
 
 
 def reserve_jev_port() raises -> Int:
@@ -425,13 +538,6 @@ def serve_jev_scripted(
     return serve_scripts(listener, scripts^, "scripted")
 
 
-def _read_ready_line(fd: Int, deadline_ms: Int) -> String:
-    try:
-        return read_line_bounded(fd, 256, deadline_ms)
-    except:
-        return ""
-
-
 def spawn_jev_scripted_auto(
     var scripts: List[ExchangeScript],
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
@@ -439,12 +545,78 @@ def spawn_jev_scripted_auto(
     return _spawn_jev_scripted(0, scripts^, deadline_ms)
 
 
+def _spawn_child_or_cleanup(
+    pipe: PipeFds, pid: Int, mode: String, deadline_ms: Int, requests: Int
+) raises -> SpawnedJevStubAuto:
+    """Build the owned state, read exact readiness, or clean up and raise."""
+    var state = PipedChildState(
+        pid=pid,
+        report_fd=pipe.read_fd,
+        pending="",
+        eof=False,
+        closed=False,
+        deadline_ms=deadline_ms,
+        expected_requests=requests,
+        reaped=False,
+        ok=False,
+        phase="pending",
+        case_label="-",
+        reason="not_reaped",
+        requests=0,
+        connections=0,
+        cleanup_error="",
+        status=ProcessStatus("pending", False, -1, 0, 0, ""),
+    )
+    var ready_line = ""
+    try:
+        ready_line = state.read_line(STRICT_MAX_REPORT_BYTES, deadline_ms)
+    except e:
+        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
+        state.status = st.copy()
+        state.reaped = True
+        state.close_reader()
+        raise Error(
+            "jev stub readiness failed ("
+            + String(e)
+            + " / "
+            + st.describe()
+            + ")"
+        )
+    var reported_port = 0
+    try:
+        reported_port = parse_ready_line(ready_line, 256)
+    except e:
+        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
+        state.status = st.copy()
+        state.reaped = True
+        state.close_reader()
+        raise Error(
+            "jev stub malformed readiness ("
+            + String(e)
+            + " / report="
+            + ready_line
+            + " / "
+            + st.describe()
+            + ")"
+        )
+    _ = mode
+    return SpawnedJevStubAuto(
+        port=reported_port, stub=SpawnedJevStub(pid, state^)
+    )
+
+
 def _spawn_jev_scripted(
     port: Int, var scripts: List[ExchangeScript], deadline_ms: Int
 ) raises -> SpawnedJevStubAuto:
     var total = len(scripts)
     var pipe = make_pipe()
-    var pid = fork_pid()
+    var pid = 0
+    try:
+        pid = fork_pid()
+    except e:
+        close_fd(pipe.read_fd)
+        close_fd(pipe.write_fd)
+        raise Error("jev stub fork failed: " + String(e))
     if pid == 0:
         if dup2_fd(pipe.write_fd, 1) < 0:
             child_exit(126)
@@ -462,32 +634,20 @@ def _spawn_jev_scripted(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    var ready_line = _read_ready_line(pipe.read_fd, deadline_ms)
-    if not ready_line.startswith("ready"):
-        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
-        close_fd(pipe.read_fd)
-        raise Error(
-            "jev stub failed to report ready ("
-            + ready_line
-            + " / "
-            + st.describe()
-            + ")"
-        )
-    var reported_port = port
-    var space = ready_line.find(" ")
-    if space >= 0:
-        reported_port = Int(String(ready_line[byte = space + 1 :]))
-    _ = total
-    return SpawnedJevStubAuto(
-        port=reported_port, stub=SpawnedJevStub(pid, pipe.read_fd, deadline_ms)
-    )
+    return _spawn_child_or_cleanup(pipe, pid, "scripted", deadline_ms, total)
 
 
 def _spawn_jev_stub(
     port: Int, mode: String, requests: Int, deadline_ms: Int
 ) raises -> SpawnedJevStubAuto:
     var pipe = make_pipe()
-    var pid = fork_pid()
+    var pid = 0
+    try:
+        pid = fork_pid()
+    except e:
+        close_fd(pipe.read_fd)
+        close_fd(pipe.write_fd)
+        raise Error("jev stub fork failed: " + String(e))
     if pid == 0:
         if dup2_fd(pipe.write_fd, 1) < 0:
             child_exit(126)
@@ -505,21 +665,4 @@ def _spawn_jev_stub(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    var ready_line = _read_ready_line(pipe.read_fd, deadline_ms)
-    if not ready_line.startswith("ready"):
-        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
-        close_fd(pipe.read_fd)
-        raise Error(
-            "jev stub failed to report ready ("
-            + ready_line
-            + " / "
-            + st.describe()
-            + ")"
-        )
-    var reported_port = port
-    var space = ready_line.find(" ")
-    if space >= 0:
-        reported_port = Int(String(ready_line[byte = space + 1 :]))
-    return SpawnedJevStubAuto(
-        port=reported_port, stub=SpawnedJevStub(pid, pipe.read_fd, deadline_ms)
-    )
+    return _spawn_child_or_cleanup(pipe, pid, mode, deadline_ms, requests)

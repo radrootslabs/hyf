@@ -25,6 +25,7 @@ distinct and verified.
 
 from std.collections import List
 
+from flare.net import Timeout
 from flare.tcp import TcpListener
 from flare.tcp import TcpStream
 from flare.utils import usleep
@@ -216,6 +217,22 @@ def _valid_header_value(value: String) -> Bool:
     return True
 
 
+def _trim_ows(value: String) -> String:
+    """Trim only legal HTTP optional whitespace (SP / HTAB)."""
+    var start = 0
+    var end = value.byte_length()
+    var bytes = value.as_bytes()
+    while start < end and (Int(bytes[start]) == 32 or Int(bytes[start]) == 9):
+        start += 1
+    while end > start and (
+        Int(bytes[end - 1]) == 32 or Int(bytes[end - 1]) == 9
+    ):
+        end -= 1
+    if start == 0 and end == value.byte_length():
+        return String(value)
+    return String(value[byte=start:end])
+
+
 def _ascii_digits(value: String) -> Bool:
     if value.byte_length() == 0:
         return False
@@ -294,10 +311,13 @@ struct ConnectionReader(Movable):
                 outcome.error = "header_too_large"
                 return outcome^
             _ = self._read_more()
-            if len(self._buffer) > STRICT_MAX_HEADER_BYTES + 4:
+            # Recompute the terminator before any total-length check: a single
+            # coalesced chunk may carry a small header plus a large body, and
+            # only the header bytes count against the header cap.
+            header_end = self._header_end()
+            if header_end < 0 and len(self._buffer) > STRICT_MAX_HEADER_BYTES:
                 outcome.error = "header_too_large"
                 return outcome^
-            header_end = self._header_end()
         if header_end > STRICT_MAX_HEADER_BYTES:
             outcome.error = "header_too_large"
             return outcome^
@@ -341,8 +361,12 @@ struct ConnectionReader(Movable):
                 outcome.error = "malformed_header"
                 return outcome^
             var name = String(line[byte=0:colon])
-            var value = String(line[byte = colon + 1 :].strip())
-            if not _valid_header_name(name) or not _valid_header_value(value):
+            var raw_value = String(line[byte = colon + 1 :])
+            if not _valid_header_name(name):
+                outcome.error = "malformed_header"
+                return outcome^
+            var value = _trim_ows(raw_value)
+            if not _valid_header_value(value):
                 outcome.error = "malformed_header"
                 return outcome^
             var lower = name.lower()
@@ -411,13 +435,19 @@ struct ConnectionReader(Movable):
         try:
             self._stream.set_recv_timeout(grace_ms)
         except:
-            return ""
+            return "completion_probe_config_error"
         try:
-            var n = self._read_more()
-            if n > 0:
-                return "extra_exchange_after_completion"
-        except:
-            return ""
+            try:
+                var n = self._read_more()
+                if n > 0:
+                    return "extra_exchange_after_completion"
+            except Timeout:
+                # A bounded grace elapsed with no extra bytes: success.
+                return ""
+        except e:
+            # An unexpected I/O error is not a successful completion.
+            _ = String(e)
+            return "completion_probe_error"
         return ""
 
 
@@ -499,9 +529,11 @@ def verify_exchange(script: ExchangeScript, framed: FramedRequest) -> String:
             continue
         var split = expected.find(":")
         if split <= 0:
-            continue
+            return "malformed_script_header"
         var name = String(expected[byte=0:split])
-        var value = String(expected[byte = split + 1 :].strip())
+        if name.byte_length() == 0 or not _valid_header_name(name):
+            return "malformed_script_header"
+        var value = _trim_ows(String(expected[byte = split + 1 :]))
         var values = header_values(framed.headers_raw, name)
         if len(values) == 0:
             return "header_missing:" + name
@@ -720,42 +752,113 @@ struct ServeReport(Movable):
         )
 
 
+def report_status_matches_exit(
+    exited: Bool, exit_code: Int, report_ok: Bool
+) -> Bool:
+    """The fixture child exits 0 for a successful report and 125 for a failed
+    one; any other exit (including a signal) contradicts the report."""
+    if not exited:
+        return False
+    if report_ok:
+        return exit_code == 0
+    return exit_code == 125
+
+
 def report_line(report: ServeReport) -> String:
     var state = "ok" if report.ok else "fail"
     return "result " + state + " " + report.describe()
 
 
-def _safe_int(value: String) -> Int:
-    try:
-        return Int(value)
-    except:
-        return 0
+def _strict_nonneg(value: String) -> Int:
+    """Parse a nonnegative decimal count; -1 for empty/non-digit/overflow."""
+    if value.byte_length() == 0 or value.byte_length() > 12:
+        return -1
+    var total = 0
+    for byte in value.as_bytes():
+        var b = Int(byte)
+        if b < 48 or b > 57:
+            return -1
+        total = total * 10 + (b - 48)
+    return total
+
+
+def _report_failure(reason: String) -> ServeReport:
+    return ServeReport(False, "parse", "-", reason, -1, -1)
 
 
 def parse_report(line: String) -> ServeReport:
-    var report = ServeReport(False, "unknown", "-", "missing_report", 0, 0)
+    """Strictly parse one bounded ``result`` report line.
+
+    Missing/truncated/duplicate/malformed/unknown/missing-count fields fail
+    with a bounded cause instead of defaulting counts to zero, and only the
+    exact ``ok``/``fail`` status is accepted.
+    """
     if not line.startswith("result "):
-        return report^
-    var remainder = String(line[byte=7:])
-    var parts = remainder.split(" ")
+        return _report_failure("missing_result_prefix")
+    var parts = String(line[byte=7:]).split(" ")
     if len(parts) == 0:
-        return report^
-    report.ok = String(parts[0]) == "ok"
+        return _report_failure("missing_status")
+    var status = String(parts[0])
+    if status != "ok" and status != "fail":
+        return _report_failure("unknown_status")
+    var phase = ""
+    var case_label = ""
+    var reason = ""
+    var requests = -1
+    var connections = -1
+    var have_phase = False
+    var have_case = False
+    var have_reason = False
+    var have_requests = False
+    var have_connections = False
     for index in range(1, len(parts)):
         var field = String(parts[index])
+        if field.byte_length() == 0:
+            return _report_failure("empty_field")
         var eq = field.find("=")
         if eq <= 0:
-            continue
+            return _report_failure("malformed_field")
         var key = String(field[byte=0:eq])
         var value = String(field[byte = eq + 1 :])
         if key == "phase":
-            report.phase = value
+            if have_phase:
+                return _report_failure("duplicate_field")
+            have_phase = True
+            phase = value
         elif key == "case":
-            report.case_label = value
+            if have_case:
+                return _report_failure("duplicate_field")
+            have_case = True
+            case_label = value
         elif key == "reason":
-            report.reason = value
+            if have_reason:
+                return _report_failure("duplicate_field")
+            have_reason = True
+            reason = value
         elif key == "requests":
-            report.requests = _safe_int(value)
+            if have_requests:
+                return _report_failure("duplicate_field")
+            have_requests = True
+            requests = _strict_nonneg(value)
+            if requests < 0:
+                return _report_failure("invalid_count")
         elif key == "connections":
-            report.connections = _safe_int(value)
-    return report^
+            if have_connections:
+                return _report_failure("duplicate_field")
+            have_connections = True
+            connections = _strict_nonneg(value)
+            if connections < 0:
+                return _report_failure("invalid_count")
+        else:
+            return _report_failure("unknown_field")
+    if not (
+        have_phase
+        and have_case
+        and have_reason
+        and have_requests
+        and have_connections
+    ):
+        return _report_failure("missing_field")
+    return ServeReport(
+        status == "ok", phase, case_label, reason, requests, connections
+    )

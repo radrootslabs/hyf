@@ -152,8 +152,9 @@ def run_stdio_entrypoint_with_deadline(
     arg1: String,
     deadline_ms: Int,
 ) raises -> Value:
-    var pipes = make_three_pipes()
-
+    # Build argv before owning any descriptors so no exception window can leak
+    # pipes between creation and the fork; fork failure alone is handled by the
+    # rollback helper.
     var command = String("mojo")
     var include_flag = String("-I")
     var include_path = String("src")
@@ -181,6 +182,7 @@ def run_stdio_entrypoint_with_deadline(
             process_arg1.as_c_string_slice()
         )
 
+    var pipes = make_three_pipes()
     var stdin_read_fd = pipes.stdin_pipe.read_fd
     var stdin_write_fd = pipes.stdin_pipe.write_fd
     var stdout_read_fd = pipes.stdout_pipe.read_fd

@@ -78,10 +78,15 @@ struct PipeFds(Copyable, Movable):
 
 
 @fieldwise_init
-struct PipeTriple(Movable):
+struct PipeTriple(Copyable, Movable):
     var stdin_pipe: PipeFds
     var stdout_pipe: PipeFds
     var stderr_pipe: PipeFds
+
+    def __copyinit__(out self, existing: Self):
+        self.stdin_pipe = existing.stdin_pipe.copy()
+        self.stdout_pipe = existing.stdout_pipe.copy()
+        self.stderr_pipe = existing.stderr_pipe.copy()
 
 
 def close_pipe(pipe: PipeFds):

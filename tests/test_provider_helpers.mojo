@@ -21,6 +21,7 @@ from parent_lifecycle import (
     descriptor_census,
     dup2_fd,
     fork_owned_or_close,
+    fork_owned_or_close3,
     fork_pid,
     make_pipe,
     make_three_pipes,
@@ -1273,6 +1274,19 @@ def test_fork_failure_closes_owned_pipes() raises:
     var message = ""
     try:
         _ = fork_owned_or_close(pipe.copy(), True)
+    except e:
+        message = String(e)
+    assert_true(message.find("injected fork failure") >= 0)
+    assert_equal(open_fd_count_checked(), before)
+
+
+def test_stdio_fork_failure_closes_all_owned_pipes() raises:
+    # LC01: the stdio helper's fork failure must close all three pipe pairs.
+    var before = open_fd_count_checked()
+    var pipes = make_three_pipes()
+    var message = ""
+    try:
+        _ = fork_owned_or_close3(pipes.copy(), True)
     except e:
         message = String(e)
     assert_true(message.find("injected fork failure") >= 0)

@@ -860,6 +860,29 @@ def piped_child_state(
     )
 
 
+def finalize_owned_failure(
+    mut state: PipedChildState, pid: Int, label: String
+) -> ProcessStatus:
+    """Reap-or-retain an owned child after a startup/readiness failure.
+
+    Uses the same ownership truth as ``cleanup``: ownership is released only
+    when no waitable child can remain. An unproved or uncertain termination
+    keeps ``reaped=False`` and records the failure in the caller-owned ledger,
+    so a startup failure can neither claim nor hide an uncollected child. The
+    report descriptor is invalidated in both cases because the failed startup
+    will never consume a report.
+    """
+    var st = terminate_owned(pid, TERMINATION_GRACE_MS)
+    state.status = st.copy()
+    state.close_reader()
+    if st.cleanup_proved():
+        state.reaped = True
+    else:
+        state.cleanup_error = "unreaped:" + st.describe()
+        state.ledger.record(label + " pid=" + String(pid) + " " + st.describe())
+    return st^
+
+
 def parse_ready_line(line: String, max_bytes: Int) raises -> Int:
     """Parse the exact ``ready <port>`` grammar with a valid TCP port range."""
     if line.byte_length() == 0:

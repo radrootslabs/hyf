@@ -21,6 +21,7 @@ from parent_lifecycle import (
     child_exit,
     close_fd,
     dup2_fd,
+    finalize_owned_failure,
     fork_owned_or_close,
     make_pipe,
     now_ms,
@@ -620,24 +621,34 @@ def _spawn_child_or_cleanup(
     try:
         ready_line = state.read_line(STRICT_MAX_REPORT_BYTES, deadline_ms)
     except e:
-        var st = terminate_owned(pid, TERMINATION_GRACE_MS)
-        state.status = st.copy()
-        state.reaped = True
-        state.close_reader()
+        var st = finalize_owned_failure(
+            state, pid, "jev startup readiness cleanup unproved"
+        )
         raise Error(
             "jev stub readiness failed ("
             + String(e)
+            + " pid="
+            + String(pid)
             + " / "
             + st.describe()
+            + " cleanup="
+            + ("proved" if st.cleanup_proved() else "unreaped")
             + ")"
         )
     var reported_port = 0
     try:
         reported_port = parse_ready_or_cleanup(pid, ready_line, 256)
     except e:
-        state.reaped = True
-        state.close_reader()
-        raise Error("jev stub malformed readiness (" + String(e) + ")")
+        _ = finalize_owned_failure(
+            state, pid, "jev startup malformed-readiness cleanup unproved"
+        )
+        raise Error(
+            "jev stub malformed readiness ("
+            + String(e)
+            + " pid="
+            + String(pid)
+            + ")"
+        )
     _ = mode
     return SpawnedJevStubAuto(
         port=reported_port, stub=SpawnedJevStub(pid, state^)

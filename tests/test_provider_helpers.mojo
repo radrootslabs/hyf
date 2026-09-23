@@ -22,6 +22,7 @@ from parent_lifecycle import (
     close_fd,
     descriptor_census,
     dup2_fd,
+    finalize_owned_failure,
     fork_owned_or_close,
     fork_owned_or_close3,
     fork_pid,
@@ -1589,6 +1590,59 @@ def test_report_stream_controls_both_providers() raises:
         0,
         "missing_field",
     )
+    _report_controls(
+        (
+            "result maybe phase=complete case=- reason=ok requests=1"
+            " connections=1\n"
+        ),
+        0,
+        "unknown_status",
+    )
+    _report_controls(
+        "result ok phase=complete case=- reason=ok requests=x connections=1\n",
+        0,
+        "invalid_count",
+    )
+    _report_controls(
+        (
+            "result ok phase=complete case=- reason=ok requests=1 connections=1"
+            " extra=z\n"
+        ),
+        0,
+        "unknown_field",
+    )
+    _report_controls(
+        (
+            "result ok phase=complete case=- reason=ok requests=1 requests=1"
+            " connections=1\n"
+        ),
+        0,
+        "duplicate_field",
+    )
+
+
+def test_startup_failure_cleanup_ownership_is_truthful() raises:
+    # PC02/LC01: the shared startup-failure finalizer used by both provider
+    # spawners must not claim an unproved termination as reaped; it records the
+    # exact pid and reap status in the caller-owned ledger.
+    var recorded = List[String]()
+    var ledger = CleanupLedger(UnsafePointer(to=recorded))
+    var state = piped_child_state(0, -1, 100, 1, ledger)
+    var status = finalize_owned_failure(state, 0, "startup cleanup unproved")
+    assert_true(not status.cleanup_proved())
+    assert_true(not state.reaped)
+    assert_true(state.cleanup_error.startswith("unreaped"))
+    assert_equal(len(recorded), 1)
+    assert_true(recorded[0].find("startup cleanup unproved") >= 0)
+    assert_true(recorded[0].find("pid=0") >= 0)
+
+    var stub = _owned_report_child(0, "")
+    var owned = stub.pid
+    var proved = finalize_owned_failure(stub.state, owned, "startup cleanup")
+    assert_true(proved.cleanup_proved())
+    assert_true(stub.state.reaped)
+    assert_true(pid_not_waitable(owned))
+    assert_equal(len(recorded), 1)
 
 
 def test_descriptor_read_error_is_distinct_from_eof() raises:

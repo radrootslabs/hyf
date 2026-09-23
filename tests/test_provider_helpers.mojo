@@ -1672,6 +1672,72 @@ def test_cleanup_failure_preserves_retryable_ownership() raises:
     assert_true(pid_not_waitable(jev_actual))
 
 
+def test_reap_wait_error_retains_ownership_both_providers() raises:
+    # PC02: an unproved/uncertain wait consumed by reap() must not mark the
+    # child collected or discard retryable ownership; a later retry with the
+    # restored exact identity still collects it.
+    var recorded = List[String]()
+    var ledger = CleanupLedger(UnsafePointer(to=recorded))
+    var stub = spawn_max_local_stub(0, "count_requests", 1, 2000, ledger)
+    var actual = stub.pid
+    stub.pid = 0
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_true(not stub.status().cleanup_proved())
+    assert_equal(len(recorded), 1)
+    stub.pid = actual
+    stub.cleanup()
+    assert_true(stub.status().cleanup_proved())
+    assert_true(pid_not_waitable(actual))
+
+    var jev_stub = spawn_jev_stub_auto("ok", 1, 2000, ledger)
+    var jev_actual = jev_stub.stub.pid
+    jev_stub.stub.pid = 0
+    jev_stub.stub.reap()
+    assert_true(not jev_stub.stub.ok())
+    assert_true(not jev_stub.stub.status().cleanup_proved())
+    assert_equal(len(recorded), 2)
+    jev_stub.stub.pid = jev_actual
+    jev_stub.stub.cleanup()
+    assert_true(jev_stub.stub.status().cleanup_proved())
+    assert_true(pid_not_waitable(jev_actual))
+
+
+def test_provider_reap_descriptor_read_error_both_paths() raises:
+    # PC01: the descriptor-read control executes through BOTH provider reap
+    # paths, not only the shared reader: a real owned child with an unavailable
+    # report descriptor fails with read_error, never a silent EOF/empty report.
+    var pipe = make_pipe()
+    var closed_fd = pipe.read_fd
+    close_fd(pipe.read_fd)
+    close_fd(pipe.write_fd)
+    var pid = fork_pid()
+    if pid == 0:
+        child_exit(0)
+    var state = piped_child_state(pid, closed_fd, 2000, 1, CleanupLedger())
+    var stub = SpawnedMaxLocalStub(pid, 0, state^)
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.reason(), "read_error")
+    assert_true(pid_not_waitable(pid))
+
+    var jev_pipe = make_pipe()
+    var jev_closed_fd = jev_pipe.read_fd
+    close_fd(jev_pipe.read_fd)
+    close_fd(jev_pipe.write_fd)
+    var jev_pid = fork_pid()
+    if jev_pid == 0:
+        child_exit(0)
+    var jev_state = piped_child_state(
+        jev_pid, jev_closed_fd, 2000, 1, CleanupLedger()
+    )
+    var jev_stub = SpawnedJevStub(jev_pid, jev_state^)
+    jev_stub.reap()
+    assert_true(not jev_stub.ok())
+    assert_equal(jev_stub.reason(), "read_error")
+    assert_true(pid_not_waitable(jev_pid))
+
+
 def test_cleanup_failure_survives_scope_exit() raises:
     # PC02: cleanup failure must remain observable after the owning handle is
     # destroyed at scope exit, not merely stored in an inaccessible object.

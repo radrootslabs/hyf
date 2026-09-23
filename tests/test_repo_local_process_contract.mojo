@@ -4,7 +4,7 @@ from safe_tempdir import SafeTempDir
 
 from json import Value
 from fixture_assertions import load_scenario_request_json
-from parent_lifecycle import POLLIN, close_fd, make_pipe, write_raw
+from parent_lifecycle import POLLIN, close_fd, make_pipe, now_ms, write_raw
 from stdio_process_helper import (
     HYF_PATHS_PROFILE_ENV,
     HYF_PATHS_REPO_LOCAL_ROOT_ENV,
@@ -124,6 +124,29 @@ def test_run_stdio_entrypoint_rejects_unread_request() raises:
         message = String(e)
     assert_true(message.find("write_") >= 0)
     assert_true(message.find("cleanup_error=") >= 0)
+
+
+def test_run_stdio_entrypoint_rejects_late_success() raises:
+    # PC03: a child that emits valid JSON, closes stdio and delays exit past the
+    # declared budget must be rejected within the budget; the bounded cleanup
+    # grace is not extra successful work.
+    var start = now_ms()
+    var message = ""
+    try:
+        _ = run_stdio_entrypoint_with_deadline(
+            "tests/stdio_late_exit_entrypoint.mojo", "{}", "", "", 1200
+        )
+    except e:
+        message = String(e)
+    var elapsed = now_ms() - start
+    assert_true(message.find("stdio-entrypoint") >= 0)
+    assert_true(
+        message.find("timeout") >= 0
+        or message.find("read_deadline_expired") >= 0
+    )
+    assert_true(message.find("cleanup_error=") >= 0)
+    assert_true(elapsed >= 1000)
+    assert_true(elapsed <= 3700)
 
 
 def test_run_stdio_entrypoint_classifies_loader_failure() raises:

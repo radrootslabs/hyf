@@ -363,18 +363,31 @@ struct SpawnedJevStub(Movable):
             var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
             self.state.status = term.copy()
             self.state.store(False, "watchdog", "-", "timeout", 0, 0)
-            if not term.cleanup_proved():
+            if term.cleanup_proved():
+                self.state.reaped = True
+                self.state.close_reader()
+            else:
                 self.state.cleanup_error = "unreaped:" + term.describe()
                 self.state.reason = "timeout_unreaped"
+                self.state.ledger.record(
+                    "owned-child cleanup unproved " + term.describe()
+                )
+            return
+        if status.state == "gone":
+            # No waitable owned child remains: cleanup is proved without a
+            # signal and the report cannot be trusted, but ownership is done.
+            self.state.store(False, "watchdog", "-", "gone", 0, 0)
             self.state.reaped = True
             self.state.close_reader()
             return
-        if status.state == "gone" or status.state == "wait_error":
-            self.state.store(False, "watchdog", "-", status.state, 0, 0)
-            if status.state == "wait_error":
-                self.state.cleanup_error = "wait_error:" + status.error
-            self.state.reaped = True
-            self.state.close_reader()
+        if status.state == "wait_error":
+            # Identity/ownership is unproved: retain it for a retry and record
+            # the uncertainty instead of claiming the child was collected.
+            self.state.store(False, "watchdog", "-", "wait_error", 0, 0)
+            self.state.cleanup_error = "wait_error:" + status.error
+            self.state.ledger.record(
+                "owned-child wait unproved " + status.describe()
+            )
             return
         var report_text = ""
         var report_error = ""

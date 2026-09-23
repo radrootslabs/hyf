@@ -2031,6 +2031,38 @@ def test_cleanup_recovery_through_guard_both_providers() raises:
     assert_true(open_fd_count_checked() <= jev_fd_before)
 
 
+def test_released_retained_descriptor_is_not_reclaimed_both_providers() raises:
+    # MC03/RA02: once a retained report descriptor is released, a following
+    # owned child that reuses that descriptor number must close its own
+    # descriptor. The shared guard must not claim a reused number, which would
+    # leak one descriptor per recovered failure (period-11 R73).
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var stub = spawn_max_local_stub(0, "count_requests", 1, guard, 2000)
+    stub.state.faults.cleanup_failures = 1
+    stub.cleanup()
+    assert_equal(guard.retained(), 1)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
+    var reused = spawn_max_local_stub(0, "count_requests", 1, guard, 2000)
+    reused.cleanup()
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked() - fd_before, 0)
+
+    var jev_guard = CleanupGuard()
+    var jev_fd_before = open_fd_count_checked()
+    var jev_stub = spawn_jev_stub_auto("ok", 1, jev_guard, 2000)
+    jev_stub.stub.state.faults.cleanup_failures = 1
+    jev_stub.stub.cleanup()
+    assert_equal(jev_guard.retained(), 1)
+    assert_equal(jev_guard.recover_all(), 0)
+    jev_guard.assert_clean()
+    var jev_reused = spawn_jev_stub_auto("ok", 1, jev_guard, 2000)
+    jev_reused.stub.cleanup()
+    jev_guard.assert_clean()
+    assert_equal(open_fd_count_checked() - jev_fd_before, 0)
+
+
 def test_reap_wait_error_retains_ownership_both_providers() raises:
     # RA02: a transient wait error consumed by reap() must stay retryable and
     # must not become a cached terminal result; the retry reports success.

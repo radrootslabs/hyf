@@ -22,6 +22,9 @@ dependency or lock.
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_true
 
+import std.os
+from std.pathlib import Path
+
 from safe_tempdir import SafeTempDir
 
 from parent_lifecycle import (
@@ -45,9 +48,15 @@ from measurement_process_helper import (
     measure_persistent_process,
     measurement_poll,
     measurement_poll_retry,
+    measurement_tooling_files,
+    require_clean_source,
     run_capture,
     sample_fd_count,
     sample_rss_kb,
+    sha256_file_set,
+    source_identity,
+    source_manifest_sha256,
+    tooling_manifest_sha256,
     validate_status_frame,
 )
 from json import Value, loads
@@ -91,6 +100,23 @@ def _sh(args_text: String) -> List[String]:
     args.append("-c")
     args.append(args_text)
     return args^
+
+
+def _multi_response() -> String:
+    """A well-behaved responder for any frame count.
+
+    Request ids/trace ids are deterministic (``meas-status-<index>``), so a
+    counter reproduces the exact expected correlation for each frame in order.
+    """
+    return (
+        "i=0\n"
+        "while IFS= read -r line; do\n"
+        'printf \'{"version":1,"request_id":"meas-status-%s",'
+        '"trace_id":"meas-trace-%s","ok":true,'
+        '"output":{"daemon":"hyfd"}}\\n\' "$i" "$i"\n'
+        "i=$((i+1))\n"
+        "done"
+    )
 
 
 def _run_sh_measurement(
@@ -856,6 +882,289 @@ def test_frame_validation_controls() raises:
         ).reason,
         "outcome_mismatch",
     )
+
+
+# ── MC01 corrected timing windows ───────────────────────────────────────────
+
+
+def test_measurement_zero_warmup_timing_is_initialized() raises:
+    # ADR-0020 MC01: a zero-warmup measurement must open a bounded measured wall
+    # interval before its first request. The period-11 defect left the start
+    # uninitialized, so an 804 ms run reported 347472213 ms (host uptime).
+    var guard = CleanupGuard()
+    var session = _run_sh_measurement(_one_response(), 0, 1, guard)
+    assert_equal(session.warmup_frames, 0)
+    assert_equal(session.ok_frames, 1)
+    assert_equal(session.warmup_ms, 0)
+    assert_true(session.measured_wall_ms >= 0)
+    assert_true(session.measured_wall_ms <= session.run_wall_ms)
+    assert_true(session.measured_ms >= 0)
+    assert_true(session.measured_sampling_ms >= 0)
+    assert_true(session.measured_ms <= session.measured_wall_ms)
+    assert_equal(session.accounting_error_ms(), 0)
+    assert_true(session.rss_kb_after_warmup > 0)
+    guard.assert_clean()
+
+
+def test_measurement_positive_warmup_timing_accounting() raises:
+    # ADR-0020 MC01: with a positive warmup the boundary instrumentation is
+    # taken before the measured interval opens and must not be subtracted from
+    # the instrumentation total afterwards (that overstated measured time).
+    var guard = CleanupGuard()
+    var session = _run_sh_measurement(_multi_response(), 3, 2, guard)
+    assert_equal(session.warmup_frames, 3)
+    assert_equal(session.ok_frames, 5)
+    assert_true(session.warmup_ms >= 0)
+    assert_true(session.measured_wall_ms >= 0)
+    assert_true(session.measured_wall_ms <= session.run_wall_ms)
+    assert_true(session.measured_sampling_ms >= 0)
+    assert_true(session.measured_ms >= 0)
+    assert_true(session.measured_ms <= session.measured_wall_ms)
+    assert_equal(session.accounting_error_ms(), 0)
+    guard.assert_clean()
+
+
+def test_measurement_known_delayed_request_is_observed() raises:
+    # ADR-0020 MC01: a known delayed request is reflected in both the per-request
+    # timing and the measured wall interval, which stay internally consistent.
+    var guard = CleanupGuard()
+    var delayed = (
+        "IFS= read -r line; sleep 0.15; printf '%s\\n' '"
+        + STATUS0
+        + "'; while IFS= read -r line; do :; done"
+    )
+    var session = _run_sh_measurement(delayed, 0, 1, guard)
+    assert_equal(session.ok_frames, 1)
+    assert_true(session.request_total_ms >= 100)
+    assert_true(session.request_max_ms >= 100)
+    assert_true(session.measured_wall_ms >= 100)
+    assert_true(session.measured_wall_ms <= session.run_wall_ms)
+    assert_true(session.measured_ms >= 0)
+    assert_equal(session.accounting_error_ms(), 0)
+    guard.assert_clean()
+
+
+def test_measurement_slow_boundary_sampler_is_excluded_once() raises:
+    # ADR-0020 MC01: a slow after-warmup boundary sampler runs before the
+    # measured wall interval opens. It must be excluded exactly once: the
+    # period-11 code subtracted it from the instrumentation total and reported
+    # more measured time than the interval contained.
+    var guard = CleanupGuard()
+    with SafeTempDir() as temp_dir:
+        var counter = temp_dir + "/calls"
+        var sampler = temp_dir + "/slow_rss.sh"
+        var body = (
+            '#!/bin/sh\nn=$(cat "'
+            + counter
+            + '" 2>/dev/null || echo 0)\n'
+            + "n=$((n+1))\n"
+            + 'printf \'%s\' "$n" > "'
+            + counter
+            + '"\n'
+            + 'if [ "$n" -le 2 ]; then sleep 1.2; fi\n'
+            + "echo 17000\n"
+        )
+        Path(sampler).write_text(body)
+        var chmod_args = List[String]()
+        chmod_args.append("+x")
+        chmod_args.append(sampler)
+        var made = run_capture("chmod", chmod_args^, 10000, guard)
+        assert_equal(made.exit_code, 0)
+        var session = _run_sh_measurement(
+            _multi_response(),
+            1,
+            1,
+            guard,
+            sampler,
+            "lsof",
+            MEASUREMENT_DEADLINE_MS,
+        )
+        assert_equal(session.ok_frames, 2)
+        assert_true(session.measured_sampling_ms >= 0)
+        assert_true(session.measured_ms >= 0)
+        assert_true(session.measured_ms <= session.measured_wall_ms)
+        assert_equal(session.accounting_error_ms(), 0)
+        # The two 1.2 s boundary samples stayed outside the measured interval.
+        assert_true(session.measured_wall_ms < 1000)
+    guard.assert_clean()
+
+
+# ── MC02 fail-closed provenance ─────────────────────────────────────────────
+
+
+def test_measurement_tooling_manifest_rejects_missing_inputs() raises:
+    # ADR-0020 MC02: a missing tooling input must fail, never return the valid
+    # empty-input digest that the period-11 masked pipeline produced.
+    var guard = CleanupGuard()
+    with SafeTempDir() as temp_dir:
+        var message = ""
+        try:
+            _ = tooling_manifest_sha256(temp_dir + "/absent-root", guard)
+        except e:
+            message = String(e)
+        assert_true(message.find("sha256") >= 0)
+        assert_true(message.find("e3b0c442") < 0)
+    guard.assert_clean()
+
+
+def test_measurement_source_manifest_rejects_missing_repository() raises:
+    # ADR-0020 MC02: a failed git stage must be an error, not an empty digest.
+    var guard = CleanupGuard()
+    with SafeTempDir() as temp_dir:
+        var message = ""
+        try:
+            _ = source_manifest_sha256(temp_dir, guard)
+        except e:
+            message = String(e)
+        assert_true(message.find("source content manifest") >= 0)
+        assert_true(message.find("e3b0c442") < 0)
+    guard.assert_clean()
+
+
+def test_measurement_digest_handles_path_characters() raises:
+    # ADR-0020 MC02: paths are argv data, so apostrophes and spaces in a path
+    # must be handled literally (the period-11 tooling pipeline interpolated
+    # paths into a single-quoted shell string and could mis-hash or fail).
+    var guard = CleanupGuard()
+    with SafeTempDir() as base:
+        var weird = base + "/hyf 'quoted' dir"
+        _ = std.os.makedirs(weird, exist_ok=True)
+        var one = weird + "/a 'one'.txt"
+        var two = weird + "/b two.txt"
+        Path(one).write_text("alpha")
+        Path(two).write_text("beta")
+        var files = List[String]()
+        files.append(one)
+        files.append(two)
+        var digest = sha256_file_set("weird path set", files^, guard)
+        assert_equal(digest.byte_length(), 64)
+        Path(two).write_text("gamma")
+        var files_two = List[String]()
+        files_two.append(one)
+        files_two.append(two)
+        var digest_two = sha256_file_set("weird path set", files_two^, guard)
+        assert_true(digest != digest_two)
+    guard.assert_clean()
+
+
+def test_measurement_tooling_manifest_binds_imported_helpers() raises:
+    # ADR-0020 MC02: the tooling identity must bind the imported helper closure,
+    # not only the three top-level tooling files. Mutating an *imported* helper
+    # in an isolated copy changes the digest.
+    var guard = CleanupGuard()
+    with SafeTempDir() as root:
+        var tests_dir = root + "/tests"
+        _ = std.os.makedirs(tests_dir, exist_ok=True)
+        var sources = measurement_tooling_files(".")
+        var cp_args = List[String]()
+        for index in range(len(sources)):
+            cp_args.append(sources[index])
+        cp_args.append(tests_dir)
+        var copied = run_capture("cp", cp_args^, 20000, guard)
+        assert_equal(copied.exit_code, 0)
+        var before = tooling_manifest_sha256(root, guard)
+        assert_equal(before.byte_length(), 64)
+        Path(tests_dir + "/parent_lifecycle.mojo").write_text("// mutated\n")
+        var after = tooling_manifest_sha256(root, guard)
+        assert_true(before != after)
+    guard.assert_clean()
+
+
+def test_measurement_rejects_dirty_measured_tree() raises:
+    # ADR-0020 MC02/MR04: a dirty measured build input is rejected at capture.
+    # The control uses an isolated owned git repository, never the real
+    # checkout, and never changes real index or host flags.
+    var guard = CleanupGuard()
+    with SafeTempDir() as root:
+        _ = std.os.makedirs(root + "/src", exist_ok=True)
+        Path(root + "/src/main.mojo").write_text("fn main():\n    pass\n")
+        Path(root + "/pixi.toml").write_text("[workspace]\n")
+        Path(root + "/pixi.lock").write_text("version: 4\n")
+        var init_args = List[String]()
+        init_args.append("init")
+        init_args.append("--quiet")
+        var initialized = run_capture("git", init_args^, 20000, guard, root)
+        assert_equal(initialized.exit_code, 0)
+        var add_args = List[String]()
+        add_args.append("add")
+        add_args.append("-A")
+        var added = run_capture("git", add_args^, 20000, guard, root)
+        assert_equal(added.exit_code, 0)
+        var commit_args = List[String]()
+        commit_args.append("-c")
+        commit_args.append("user.email=hyf-test@invalid")
+        commit_args.append("-c")
+        commit_args.append("user.name=hyf test")
+        commit_args.append("-c")
+        commit_args.append("commit.gpgsign=false")
+        commit_args.append("commit")
+        commit_args.append("--no-verify")
+        commit_args.append("--quiet")
+        commit_args.append("-m")
+        commit_args.append("init")
+        var committed = run_capture("git", commit_args^, 20000, guard, root)
+        assert_equal(committed.exit_code, 0)
+        Path(root + "/src/main.mojo").write_text("fn main():\n    return\n")
+        var identity = source_identity(root, guard)
+        assert_true(identity.dirty_status != "")
+        var message = ""
+        try:
+            require_clean_source(identity, "test capture")
+        except e:
+            message = String(e)
+        assert_true(message.find("dirty") >= 0)
+    guard.assert_clean()
+
+
+# ── MC03 isolated late exit and ownership reuse ─────────────────────────────
+
+
+def test_measurement_rejects_isolated_late_child_exit() raises:
+    # ADR-0020 MC03: valid output AND closed stdout/stderr must be proved before
+    # the late-exit phase. The child answers, closes its own stdout/stderr and
+    # then stays alive past the budget, so the bounded failure is the child-exit
+    # wait rather than an output-drain timeout.
+    var guard = CleanupGuard()
+    var script = (
+        "while IFS= read -r line; do printf '%s\\n' '"
+        + STATUS0
+        + "'; done; exec 1>&- 2>&-; sleep 2"
+    )
+    var message = _run_sh_failure(script, 0, 1, guard, "ps", "lsof", 400)
+    assert_true(message.find("did not exit within its budget") >= 0)
+    assert_true(message.find("output drain") < 0)
+    assert_true(message.find("frame invalid") < 0)
+    guard.assert_clean()
+
+
+def test_measurement_recovery_then_valid_call_leaks_nothing() raises:
+    # ADR-0020 MC03/R73: after a retained-and-recovered cleanup, a following
+    # valid measurement with the same guard must not skip closing a descriptor
+    # number that was reused. The period-11 probe observed FD delta +1 here.
+    var guard = CleanupGuard()
+    var self_pid = owned_pid()
+    var child_before = child_process_count(self_pid, guard)
+    var fd_before = open_fd_count_checked()
+    var message = _run_sh_failure(
+        "while IFS= read -r line; do printf 'not-json\\n'; done",
+        0,
+        1,
+        guard,
+        "ps",
+        "lsof",
+        MEASUREMENT_DEADLINE_MS,
+        MeasurementFaults(cleanup_failures=1),
+    )
+    assert_true(message.find("not_json") >= 0)
+    assert_true(guard.retained() >= 1)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
+    var recovered = _run_sh_measurement(_one_response(), 0, 1, guard)
+    assert_equal(recovered.ok_frames, 1)
+    assert_equal(recovered.failed_frames, 0)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked() - fd_before, 0)
+    assert_equal(child_process_count(self_pid, guard), child_before)
 
 
 def main() raises:

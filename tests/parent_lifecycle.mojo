@@ -739,23 +739,33 @@ struct CleanupGuard(Movable):
     def close_retained_fd(mut self, fd: Int) -> Bool:
         """Close a retained report descriptor at most once.
 
-        Returns True when this guard owns an entry for ``fd`` (closed now or
-        already closed earlier), so the owning handle must not close that
-        number again and can never target a reused descriptor. Returns False
-        when the guard holds no retained entry, letting the normal proved path
-        keep its own descriptor ownership.
+        Returns True only when this guard still owns an *open* retained
+        descriptor with number ``fd`` and closes it now. An entry whose
+        descriptor was already closed has released that number, so it must not
+        claim or close a later descriptor that reused the same number (the
+        period-11 R73/MC03 defect: a recovered entry matched a new measurement's
+        descriptor and made it skip its own close, leaking one descriptor).
+        Returns False when the guard holds no open retained entry, letting the
+        normal proved path keep its own descriptor ownership.
         """
         if fd < 0:
             return False
-        var owned = False
+        var claimed = -1
         for index in range(len(self.failures)):
             if self.failures[index].report_fd != fd:
                 continue
-            owned = True
-            if not self.failures[index].fd_closed:
-                close_fd(fd)
+            if self.failures[index].fd_closed:
+                # Already released: this number now belongs to a new owner.
+                continue
+            claimed = index
+            break
+        if claimed < 0:
+            return False
+        close_fd(fd)
+        for index in range(len(self.failures)):
+            if self.failures[index].report_fd == fd:
                 self.failures[index].fd_closed = True
-        return owned
+        return True
 
     def recover_all(mut self) -> Int:
         """Retry cleanup for every retained exact-owned child.

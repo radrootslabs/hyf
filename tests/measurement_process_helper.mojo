@@ -60,6 +60,9 @@ from std.ffi import (
 )
 
 from json import Value, loads
+from std.pathlib import Path
+
+from safe_tempdir import SafeTempDir
 
 from parent_lifecycle import (
     IO_DEADLINE_EXPIRED,
@@ -489,30 +492,165 @@ def source_tree_id(
     return text^
 
 
+# ── Fail-closed checked digest pipelines (ADR-0020 MC02) ────────────────────
+
+
+def _path_basename(path: String) -> String:
+    """Last path component, used to keep manifest text path-independent."""
+    var slash = -1
+    var index = 0
+    for byte in path.as_bytes():
+        if Int(byte) == 47:
+            slash = index
+        index += 1
+    if slash < 0:
+        return String(path)
+    return String(path[byte = slash + 1 :])
+
+
+def _checked_file_digests(
+    var files: List[String], mut guard: CleanupGuard
+) raises -> List[String]:
+    """Per-file sha256 of explicit argv paths, fail-closed.
+
+    Every path is passed as argv data, so apostrophes, spaces and other shell
+    characters are handled literally and no interpolation is performed. A
+    missing or unreadable input, an empty input list, a failed hasher stage or
+    an unavailable hasher raises instead of yielding a valid empty digest. This
+    replaces the former status-masking shell pipeline whose final stage could
+    succeed on empty input and report the empty-input digest as success.
+    """
+    if len(files) == 0:
+        raise Error("measurement: refusing to digest an empty input list")
+    var shasum_args = List[String]()
+    shasum_args.append("-a")
+    shasum_args.append("256")
+    for index in range(len(files)):
+        shasum_args.append(files[index])
+    var out = run_capture(
+        "shasum", shasum_args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard
+    )
+    if out.exit_code != 0:
+        var sum_args = List[String]()
+        for index in range(len(files)):
+            sum_args.append(files[index])
+        out = run_capture(
+            "sha256sum", sum_args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard
+        )
+        if out.exit_code != 0:
+            raise Error(
+                "measurement: sha256 unavailable for "
+                + String(len(files))
+                + " input(s) ("
+                + out.describe()
+                + ")"
+            )
+    var digests = List[String]()
+    for line in out.stdout.split("\n"):
+        var entry = String(line).strip()
+        if entry.byte_length() == 0:
+            continue
+        if entry.byte_length() < 64:
+            raise Error("measurement: truncated sha256 output line")
+        var digest = String(entry[byte=0:64])
+        _require_hex(digest, 64, "sha256 input")
+        digests.append(digest)
+    if len(digests) != len(files):
+        raise Error(
+            "measurement: sha256 digest count mismatch ("
+            + String(len(digests))
+            + " of "
+            + String(len(files))
+            + ")"
+        )
+    return digests^
+
+
+def sha256_text(
+    text: String, label: String, mut guard: CleanupGuard
+) raises -> String:
+    """sha256 of exact text via a private temp file and a checked argv call."""
+    with SafeTempDir() as temp_dir:
+        var path = temp_dir + "/measurement-manifest.txt"
+        try:
+            Path(path).write_text(text)
+        except:
+            raise Error("measurement: " + label + " staging failed")
+        var files = List[String]()
+        files.append(path)
+        var digests = _checked_file_digests(files^, guard)
+        _require_hex(digests[0], 64, label)
+        return digests[0]
+
+
+def sha256_file_set(
+    label: String, var files: List[String], mut guard: CleanupGuard
+) raises -> String:
+    """Deterministic, path-independent digest of an explicit file set.
+
+    Each declared file's exact content digest is checked first, then the
+    manifest text ``<basename> <digest>`` (in declared order) is hashed, so the
+    result depends only on the declared files' content and names, never on the
+    checkout location.
+    """
+    var names = List[String]()
+    for index in range(len(files)):
+        names.append(_path_basename(files[index]))
+    var digests = _checked_file_digests(files^, guard)
+    var canonical = ""
+    for index in range(len(names)):
+        canonical += names[index] + " " + digests[index] + "\n"
+    return sha256_text(canonical, label, guard)
+
+
+def measurement_tooling_files(source_root: String) -> List[String]:
+    """Bounded closure of the test-only tooling that produced the evidence.
+
+    The set is enumerated explicitly — never a workspace scan — and covers the
+    measurement helper/runner, the contract test and the shared helpers those
+    import (lifecycle, stdio, temp, fixtures). A change to an imported helper
+    therefore changes the recorded tooling identity (ADR-0020 MC02). Product
+    ``src`` inputs are bound separately by the clean source content manifest.
+    """
+    var files = List[String]()
+    files.append(source_root + "/tests/measurement_process_helper.mojo")
+    files.append(source_root + "/tests/measurement_runner.mojo")
+    files.append(source_root + "/tests/test_measurement_contract.mojo")
+    files.append(source_root + "/tests/parent_lifecycle.mojo")
+    files.append(source_root + "/tests/safe_tempdir.mojo")
+    files.append(source_root + "/tests/stdio_process_helper.mojo")
+    files.append(source_root + "/tests/max_local_process_helper.mojo")
+    files.append(source_root + "/tests/strict_fixture.mojo")
+    return files^
+
+
 def source_manifest_sha256(
     source_root: String, mut guard: CleanupGuard
 ) raises -> String:
     """Deterministic content digest of the tracked ``src`` build inputs.
 
-    The digest covers the index entries (mode/blob/path) of every tracked file
-    under ``src`` — the exact inputs of ``mojo build -I src src/main.mojo``.
-    It never reads or hashes secrets or arbitrary workspace files.
+    The digest covers the exact ``git ls-files -s -- src`` index listing
+    (mode/blob/path) — the inputs of ``mojo build -I src src/main.mojo``. The
+    git stage and the digest stage are both checked, so a missing repository, a
+    failed git command or an empty listing is an error, never a valid empty
+    digest. It never reads or hashes secrets or arbitrary workspace files.
     """
     var args = List[String]()
-    args.append("-c")
-    args.append(
-        "git ls-files -s -- src | LC_ALL=C sort | shasum -a 256 | cut -d' ' -f1"
-    )
-    var out = run_capture(
-        "sh", args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard, source_root
-    )
-    var text = String(out.stdout.strip())
+    args.append("ls-files")
+    args.append("-s")
+    args.append("--")
+    args.append("src")
+    var out = git_capture(source_root, args^, guard)
     if out.exit_code != 0:
         raise Error(
             "measurement: source content manifest unavailable in " + source_root
         )
-    _require_hex(text, 64, "source content manifest")
-    return text^
+    var listing = String(out.stdout)
+    if listing.strip().byte_length() == 0:
+        raise Error(
+            "measurement: source content manifest is empty in " + source_root
+        )
+    return sha256_text(listing, "source content manifest", guard)
 
 
 def source_dirty_status(
@@ -541,31 +679,13 @@ def tooling_manifest_sha256(
 
     The tooling is test-only source outside the product build inputs, so it is
     not covered by the clean-tree build binding. Recording its exact content
-    digest ties the emitted evidence to the reviewed tooling revision without
-    requiring the working tree to be committed at capture time.
+    digest ties the emitted evidence to the reviewed tooling revision and its
+    imported helper closure without requiring the working tree to be committed
+    at capture time. A missing input or failed hasher stage is a bounded error,
+    never a valid empty digest.
     """
-    var args = List[String]()
-    args.append("-c")
-    args.append(
-        "shasum -a 256 '"
-        + source_root
-        + "/tests/measurement_process_helper.mojo' '"
-        + source_root
-        + "/tests/measurement_runner.mojo' '"
-        + source_root
-        + "/tests/test_measurement_contract.mojo' | shasum -a 256 | cut -d'"
-        " ' -f1"
-    )
-    var out = run_capture(
-        "sh", args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard, source_root
-    )
-    var text = String(out.stdout.strip())
-    if out.exit_code != 0:
-        raise Error(
-            "measurement: tooling manifest unavailable in " + source_root
-        )
-    _require_hex(text, 64, "tooling manifest")
-    return text^
+    var files = measurement_tooling_files(source_root)
+    return sha256_file_set("tooling manifest", files^, guard)
 
 
 def source_identity(
@@ -1561,6 +1681,7 @@ struct MeasurementSession(Movable):
     var measured_wall_ms: Int
     var measured_sampling_ms: Int
     var measured_ms: Int
+    var run_wall_ms: Int
     var request_total_ms: Int
     var request_min_ms: Int
     var request_max_ms: Int
@@ -1576,6 +1697,17 @@ struct MeasurementSession(Movable):
     var stderr_excerpt: String
     var sampling_method: String
     var sampling_cadence: String
+
+    def accounting_error_ms(self) -> Int:
+        """Coherent accounting identity: wall = measured + instrumentation (ms).
+
+        ``measured_ms`` and ``measured_sampling_ms`` are both milliseconds
+        inside the same measured wall interval, so a truthful session returns
+        exactly zero here (ADR-0020 MC01).
+        """
+        return (
+            self.measured_wall_ms - self.measured_ms - self.measured_sampling_ms
+        )
 
     def summary(self) -> String:
         return (
@@ -1599,6 +1731,8 @@ struct MeasurementSession(Movable):
             + String(self.measured_wall_ms)
             + " measured_sampling_ms="
             + String(self.measured_sampling_ms)
+            + " run_wall_ms="
+            + String(self.run_wall_ms)
             + " request_total_ms="
             + String(self.request_total_ms)
             + " request_min_ms="
@@ -1634,6 +1768,34 @@ def argv_profile_of(binary_path: String, var argv: List[String]) -> String:
     for index in range(len(argv)):
         profile += " " + argv[index]
     return profile^
+
+
+def sample_warmup_boundary(
+    mut process: MeasurementProcess,
+    rss_sampler: String,
+    fd_sampler: String,
+    mut guard: CleanupGuard,
+    mut rss_peak: Int,
+    mut fd_peak: Int,
+) raises -> Int:
+    """Instrumentation between warmup and the measured wall interval.
+
+    Both samples are taken *before* the measured interval opens, so they are
+    recorded as after-warmup/peak observations and are neither subtracted from
+    nor added to the measured instrumentation total. Subtracting this interval
+    afterwards (the period-11 defect) biased the measured time upward; ADR-0020
+    MC01 requires it to be excluded exactly once by staying outside the
+    interval. Returns the recorded after-warmup RSS in kB.
+    """
+    var remaining = process.work_remaining_ms()
+    var rss = sample_rss_kb(process.pid, rss_sampler, guard, remaining)
+    var remaining_fd = process.work_remaining_ms()
+    var fds = sample_fd_count(process.pid, fd_sampler, guard, remaining_fd)
+    if rss > rss_peak:
+        rss_peak = rss
+    if fds > fd_peak:
+        fd_peak = fds
+    return rss
 
 
 def measure_persistent_process(
@@ -1718,6 +1880,7 @@ def measure_persistent_process(
     var measured_wall_ms = 0
     var measured_sampling_ms = 0
     var measured_ms = 0
+    var run_wall_ms = 0
     var request_total_ms = 0
     var request_min_ms = -1
     var request_max_ms = 0
@@ -1750,6 +1913,16 @@ def measure_persistent_process(
         var warmup_start = now_ms()
         var measured_start = -1
         var total = warmup_frames + measured_frames
+        if warmup_frames == 0:
+            # ADR-0020 MC01: a zero-warmup measurement must open the measured
+            # wall interval before its first measured request. Leaving it unset
+            # reported host uptime as a duration (the period-11 defect: an
+            # 804 ms run reported 347472213 ms). No warmup ran, so the
+            # after-warmup checkpoint is the pre-warmup observation and the
+            # measured instrumentation total starts empty.
+            warmup_ms = 0
+            rss_after_warmup = rss_before
+            measured_start = now_ms()
         for index in range(total):
             var pair = build_status_frame(index)
             var frame = pair[0]
@@ -1790,22 +1963,13 @@ def measure_persistent_process(
                 raise Error("measurement: frame invalid " + first_failure)
             if index == warmup_frames - 1:
                 warmup_ms = now_ms() - warmup_start
-                var s_start = now_ms()
-                var s_remaining = process.work_remaining_ms()
-                rss_after_warmup = sample_rss_kb(
-                    process.pid, rss_sampler, guard, s_remaining
+                # Boundary instrumentation is taken before the measured wall
+                # interval opens, so it is excluded exactly once by never
+                # entering that interval; it is never subtracted afterwards.
+                rss_after_warmup = sample_warmup_boundary(
+                    process, rss_sampler, fd_sampler, guard, rss_peak, fd_peak
                 )
-                var s_remaining_fd = process.work_remaining_ms()
-                fd_peak = max(
-                    fd_peak,
-                    sample_fd_count(
-                        process.pid, fd_sampler, guard, s_remaining_fd
-                    ),
-                )
-                if rss_after_warmup > rss_peak:
-                    rss_peak = rss_after_warmup
                 measured_start = now_ms()
-                measured_sampling_ms -= now_ms() - s_start
             if index >= warmup_frames:
                 var measured_index = index - warmup_frames
                 request_total_ms += latency
@@ -1843,8 +2007,24 @@ def measure_persistent_process(
             rss_peak = rss_after_measured
         if fd_after > fd_peak:
             fd_peak = fd_after
+        if measured_start < 0:
+            raise Error("measurement: measured phase was never initialized")
         measured_wall_ms = now_ms() - measured_start
+        if measured_wall_ms < 0 or measured_sampling_ms < 0:
+            raise Error("measurement: inconsistent measured timing window")
         measured_ms = measured_wall_ms - measured_sampling_ms
+        if measured_ms < 0:
+            raise Error(
+                "measurement: instrumentation exceeds the measured wall"
+                " interval"
+            )
+        # The measured interval is bounded by the observed run, not by host
+        # uptime: an uninitialized start would report the latter (ADR-0020 MC01).
+        run_wall_ms = now_ms() - process.spawn_ms
+        if measured_wall_ms > run_wall_ms:
+            raise Error(
+                "measurement: measured interval exceeds the observed run"
+            )
         var st = process.finish_expected(total)
         child_exit = st.describe() + " cleanup=proved"
         stderr_excerpt = process.stderr_text()
@@ -1887,6 +2067,7 @@ def measure_persistent_process(
         measured_wall_ms=measured_wall_ms,
         measured_sampling_ms=measured_sampling_ms,
         measured_ms=measured_ms,
+        run_wall_ms=run_wall_ms,
         request_total_ms=request_total_ms,
         request_min_ms=request_min_ms,
         request_max_ms=request_max_ms,

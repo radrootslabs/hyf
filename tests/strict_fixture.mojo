@@ -467,6 +467,7 @@ struct ExchangeScript(Copyable, Movable):
     var response_body: String
     var raw_response: String
     var delay_ms: Int
+    var stall_after_head_ms: Int
     var close_connection: Bool
     var echo_authorization: Bool
 
@@ -483,6 +484,7 @@ struct ExchangeScript(Copyable, Movable):
         self.response_body = existing.response_body
         self.raw_response = existing.raw_response
         self.delay_ms = existing.delay_ms
+        self.stall_after_head_ms = existing.stall_after_head_ms
         self.close_connection = existing.close_connection
         self.echo_authorization = existing.echo_authorization
 
@@ -507,6 +509,7 @@ def exchange_script(
         response_body=body,
         raw_response="",
         delay_ms=0,
+        stall_after_head_ms=0,
         close_connection=True,
         echo_authorization=False,
     )
@@ -674,14 +677,46 @@ def serve_scripts(
                 request_count = next_index
                 if script.delay_ms > 0:
                     usleep(script.delay_ms * 1000)
-                reader.write_all(
-                    render_response(
-                        script,
-                        framed.headers_raw,
-                        request_count,
-                        connection_count,
-                    )
+                var tolerant = (
+                    script.stall_after_head_ms > 0 or script.delay_ms > 0
                 )
+                try:
+                    if script.stall_after_head_ms > 0:
+                        # Headers-then-stall control (H007): write the complete
+                        # response head, flush it, hold the connection open for
+                        # the declared bounded stall, then attempt the body. This
+                        # separates a body-read stall from a connection timeout
+                        # and from the overall budget using a bounded fixture
+                        # delay that never hangs the owning test.
+                        var rendered = render_response(
+                            script,
+                            framed.headers_raw,
+                            request_count,
+                            connection_count,
+                        )
+                        var separator = rendered.find("\r\n\r\n")
+                        if separator >= 0:
+                            var head_end = separator + 4
+                            reader.write_all(String(rendered[byte=0:head_end]))
+                            usleep(script.stall_after_head_ms * 1000)
+                            reader.write_all(String(rendered[byte=head_end:]))
+                        else:
+                            reader.write_all(rendered)
+                    else:
+                        reader.write_all(
+                            render_response(
+                                script,
+                                framed.headers_raw,
+                                request_count,
+                                connection_count,
+                            )
+                        )
+                except:
+                    # A deliberate delay or stall lets the peer time out and
+                    # close; that peer close must not turn the bounded stall
+                    # control into a fixture failure.
+                    if not tolerant:
+                        raise
                 if script.close_connection:
                     break
         if request_count < total:

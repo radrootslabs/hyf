@@ -462,6 +462,39 @@ from jev_provider_helper import (
     spawn_jev_scripted_auto,
 )
 from strict_fixture import ExchangeScript, exchange_script
+from parent_lifecycle import now_ms
+
+
+def test_jev_headers_then_stall_is_bounded() raises:
+    # H007: current Jev client behavior for a response that sends headers and
+    # then stalls the body is a bounded transport failure inside the declared
+    # timeout, not a hang. No provider client policy is changed here; this
+    # characterizes the pre-migration gap.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_headers_then_stall", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 1200
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var timeout_ms = 300
+        var start = now_ms()
+        var raised = False
+        try:
+            _ = post_jev_systemone(
+                "http://127.0.0.1:" + String(started.port),
+                _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
+                timeout_ms,
+            )
+        except:
+            raised = True
+        var elapsed = now_ms() - start
+        assert_true(not raised)
+        assert_true(elapsed >= 1200)
+        assert_true(elapsed < 5000)
+        started.stub.wait()
+    guard.assert_clean()
 
 
 def _raw_jev_exchange(port: Int, raw: String) raises -> String:

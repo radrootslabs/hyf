@@ -302,6 +302,30 @@ def test_shared_budget_does_not_reset_per_stage() raises:
     assert_equal(capped.cap_ms, 2000)
 
 
+def test_budget_boundaries_are_deterministic() raises:
+    # H007: deterministic budget-unit controls that stay green before any
+    # transport migration. The unit is one monotonic budget with no per-stage
+    # reset, exact boundary behavior and non-negative remaining time.
+    var no_deadline = budget_from_clock(0, 400, 0)
+    assert_equal(no_deadline.cap_ms, 400)
+    assert_equal(budget_remaining_ms(no_deadline, 0), 400)
+
+    var negative_deadline = budget_from_clock(-5, 400, 0)
+    assert_equal(negative_deadline.cap_ms, 400)
+
+    var exact = budget_from_clock(250, 400, 0)
+    assert_equal(budget_remaining_ms(exact, 0), 250)
+    assert_equal(budget_remaining_ms(exact, 249_000_000), 1)
+    assert_equal(budget_remaining_ms(exact, 250_000_000), 0)
+    assert_true(not budget_exhausted(exact, 249_999_999))
+    assert_true(budget_exhausted(exact, 250_000_000))
+
+    # A later stage cannot extend the budget: the same cap is reused.
+    var stage_two = budget_from_clock(250, 400, 249_000_000)
+    assert_equal(stage_two.cap_ms, 250)
+    assert_equal(budget_remaining_ms(stage_two, 249_000_000), 250)
+
+
 from hyf_runtime.jev_composition import compose_jev
 
 

@@ -1,3 +1,4 @@
+from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from json import Value, loads
@@ -26,11 +27,13 @@ from hyf_runtime.config import (
     HyfServiceRuntimeConfig,
     default_loaded_runtime_config,
 )
-from parent_lifecycle import CleanupGuard
+from parent_lifecycle import CleanupGuard, now_ms
 from max_local_process_helper import (
     reserve_loopback_port,
+    spawn_max_local_scripted,
     spawn_max_local_stub,
 )
+from strict_fixture import ExchangeScript, exchange_script
 
 
 def _provider_runtime_config() -> HyfLoadedRuntimeConfig:
@@ -373,6 +376,113 @@ def test_chat_completion_response_rejects_top_level_array() raises:
 def test_chat_completion_response_rejects_top_level_null() raises:
     with assert_raises():
         _ = parse_query_analysis_from_chat_completion(loads("null"))
+
+
+def _bounded_timeout_provider_config(
+    port: Int, timeout_ms: Int
+) -> MaxLocalProviderConfig:
+    return MaxLocalProviderConfig(
+        base_url="http://127.0.0.1:" + String(port) + "/v1/",
+        health_url="http://127.0.0.1:" + String(port) + "/health",
+        model="max-local-query-rewrite",
+        request_timeout_ms=timeout_ms,
+    )
+
+
+def test_provider_connect_timeout_is_bounded_and_specific() raises:
+    # H007: a refused connection is a bounded, cause-specific transport failure,
+    # not a hang. No provider client policy is changed here.
+    var guard = CleanupGuard()
+    var dead_port = reserve_loopback_port()
+    var config = _bounded_timeout_provider_config(dead_port, 300)
+    var context = default_request_context()
+    var body = build_query_rewrite_request_body(config, "eggs near me", context)
+    var start = now_ms()
+    var outcome = post_max_local_chat_completion(config, body)
+    var elapsed = now_ms() - start
+    assert_true(outcome.failure)
+    assert_true(not outcome.response)
+    assert_equal(outcome.failure.value().kind, "transport")
+    # Current characterized gap: a fast refused connection is not distinguished
+    # from an unknown transport error, because the elapsed time is below the
+    # declared request budget.
+    assert_equal(outcome.failure.value().reason, "unknown_transport")
+    assert_true(elapsed < 5000)
+    guard.assert_clean()
+
+
+def test_provider_headers_then_stall_is_bounded_and_specific() raises:
+    # H007: the fixture delivers the response head and then stalls the body.
+    # Characterized current gap: the declared request timeout does not bound a
+    # body-read stall, so the response is returned only after the stall
+    # completes. The control is non-hanging and does not change client policy.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "headers_then_stall",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 1200
+    scripts.append(script^)
+    var guard_2 = CleanupGuard()
+    var timeout_ms = 300
+    with spawn_max_local_scripted(0, scripts^, guard_2) as provider_stub:
+        var config = _bounded_timeout_provider_config(
+            provider_stub.port, timeout_ms
+        )
+        var context = default_request_context()
+        var body = build_query_rewrite_request_body(
+            config, "eggs near me", context
+        )
+        var start = now_ms()
+        var outcome = post_max_local_chat_completion(config, body)
+        var elapsed = now_ms() - start
+        assert_true(not outcome.failure)
+        assert_true(outcome.response)
+        assert_equal(outcome.response.value().status, 200)
+        assert_true(elapsed >= 1200)
+        assert_true(elapsed < 5000)
+        provider_stub.wait()
+    guard_2.assert_clean()
+
+
+def test_provider_delayed_head_is_bounded_and_specific() raises:
+    # H007: a fixture that delays the whole response beyond the request budget
+    # is characterized as the same pre-migration gap: the declared timeout does
+    # not bound the delayed response, which is still returned after it arrives.
+    # The control is non-hanging and does not change client policy.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "delayed_head",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.delay_ms = 1200
+    scripts.append(script^)
+    var guard_3 = CleanupGuard()
+    var timeout_ms = 300
+    with spawn_max_local_scripted(0, scripts^, guard_3) as provider_stub:
+        var config = _bounded_timeout_provider_config(
+            provider_stub.port, timeout_ms
+        )
+        var context = default_request_context()
+        var body = build_query_rewrite_request_body(
+            config, "eggs near me", context
+        )
+        var start = now_ms()
+        var outcome = post_max_local_chat_completion(config, body)
+        var elapsed = now_ms() - start
+        assert_true(not outcome.failure)
+        assert_true(outcome.response)
+        assert_equal(outcome.response.value().status, 200)
+        assert_true(elapsed >= 1200)
+        assert_true(elapsed < 5000)
+        provider_stub.wait()
+    guard_3.assert_clean()
 
 
 def main() raises:

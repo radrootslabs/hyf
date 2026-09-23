@@ -320,10 +320,18 @@ def test_budget_boundaries_are_deterministic() raises:
     assert_true(not budget_exhausted(exact, 249_999_999))
     assert_true(budget_exhausted(exact, 250_000_000))
 
-    # A later stage cannot extend the budget: the same cap is reused.
-    var stage_two = budget_from_clock(250, 400, 249_000_000)
-    assert_equal(stage_two.cap_ms, 250)
-    assert_equal(budget_remaining_ms(stage_two, 249_000_000), 250)
+    # The same budget object across staged clock advancement must not reset: a
+    # freshly constructed object would report the full cap again, which cannot
+    # prove the original budget was preserved (ADR-0020 TC03).
+    var staged = budget_from_clock(250, 400, 0)
+    assert_equal(staged.cap_ms, 250)
+    assert_equal(budget_remaining_ms(staged, 0), 250)
+    assert_equal(budget_remaining_ms(staged, 200_000_000), 50)
+    assert_equal(budget_remaining_ms(staged, 249_000_000), 1)
+    assert_equal(budget_remaining_ms(staged, 250_000_000), 0)
+    assert_equal(budget_remaining_ms(staged, 400_000_000), 0)
+    assert_true(not budget_exhausted(staged, 249_999_999))
+    assert_true(budget_exhausted(staged, 250_000_000))
 
 
 from hyf_runtime.jev_composition import compose_jev

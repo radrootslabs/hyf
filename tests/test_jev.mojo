@@ -462,14 +462,33 @@ from jev_provider_helper import (
     spawn_jev_scripted_auto,
 )
 from strict_fixture import ExchangeScript, exchange_script
+from bounded_call_helper import run_bounded_call
 from parent_lifecycle import now_ms
 
 
+def _raw_jev_request_text(path: String) -> String:
+    return (
+        "POST "
+        + path
+        + " HTTP/1.1\r\nhost: 127.0.0.1\r\ncontent-length: 2\r\n"
+        "connection: close\r\n\r\n{}"
+    )
+
+
+def _raw_jev_send_then_close(port: Int, path: String) raises:
+    """Owned raw client that closes right after its request (real peer close).
+    """
+    var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
+    client.write_all(Span[UInt8, _](_raw_jev_request_text(path).as_bytes()))
+    client.close()
+
+
 def test_jev_headers_then_stall_is_bounded() raises:
-    # H007: current Jev client behavior for a response that sends headers and
-    # then stalls the body is a bounded transport failure inside the declared
-    # timeout, not a hang. No provider client policy is changed here; this
-    # characterizes the pre-migration gap.
+    # H007/TC01-TC02: the Jev client call against a headers-then-stall peer runs
+    # under the exact-owned parent-bounded mechanism. Characterized current gap:
+    # the declared timeout does not bound a body-read stall, so the call returns
+    # only after the stall completes (elapsed >= 1200 ms) instead of failing
+    # inside the declared 300 ms timeout. No provider client policy is changed.
     var guard = CleanupGuard()
     var scripts = List[ExchangeScript]()
     var script = exchange_script(
@@ -478,22 +497,107 @@ def test_jev_headers_then_stall_is_bounded() raises:
     script.stall_after_head_ms = 1200
     scripts.append(script^)
     with spawn_jev_scripted_auto(scripts^, guard) as started:
-        var timeout_ms = 300
-        var start = now_ms()
-        var raised = False
-        try:
-            _ = post_jev_systemone(
-                "http://127.0.0.1:" + String(started.port),
-                _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
-                timeout_ms,
-            )
-        except:
-            raised = True
-        var elapsed = now_ms() - start
-        assert_true(not raised)
-        assert_true(elapsed >= 1200)
-        assert_true(elapsed < 5000)
+        var report = run_bounded_call("jev", started.port, 300, 5000, guard)
+        assert_true(report.completed)
+        assert_true(not report.stopped)
+        assert_true(report.cleanup_proved)
+        assert_true(report.elapsed_ms >= 1200)
+        assert_true(report.elapsed_ms < 5000)
+        assert_true(report.report.find("ok jev") >= 0)
         started.stub.wait()
+    guard.assert_clean()
+
+
+def test_jev_strict_delayed_success_under_bounded_harness() raises:
+    # TC01/TC02: a delayed response is not permission to swallow errors; with a
+    # client budget above the delay the strict scripted Jev exchange succeeds
+    # and the risky call is parent-bounded.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_delayed_success", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.delay_ms = 300
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call("jev", started.port, 5000, 5000, guard)
+        assert_true(report.completed)
+        assert_true(not report.stopped)
+        assert_true(report.report.find("ok jev 200") >= 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_scripted_permitted_peer_close_is_declared() raises:
+    # TC01: the Jev serve path verifies an explicitly declared expected peer
+    # close (exact bounded cause and phase) and records the observed outcome.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_permitted_close", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 300
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _raw_jev_send_then_close(started.port, "/v1/systemone")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+        assert_true(started.stub.failure_case().find("_peer_close_") >= 0)
+        assert_true(started.stub.failure_case().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def test_jev_scripted_unexpected_peer_close_fails() raises:
+    # TC01: an undeclared peer close through the Jev serve path fails with a
+    # bounded, cause-specific reason instead of being swallowed.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_unexpected_close", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 300
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _raw_jev_send_then_close(started.port, "/v1/systemone")
+        started.stub.reap()
+        assert_true(not started.stub.ok())
+        assert_equal(started.stub.phase(), "peer_close")
+        assert_true(started.stub.reason().find("unexpected_write_") >= 0)
+        assert_true(started.stub.reason().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def test_jev_scripted_injected_write_error_fails() raises:
+    # TC01: an unrelated injected handler error (here an invalid descriptor)
+    # must fail the Jev serve path even when a peer close was declared.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_injected_error", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 200
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    script.inject_write_error = "Bad file descriptor"
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _ = _raw_jev_exchange(
+            started.port, _raw_jev_request_text("/v1/systemone")
+        )
+        started.stub.reap()
+        assert_true(not started.stub.ok())
+        assert_equal(started.stub.phase(), "peer_close")
+        assert_true(
+            started.stub.reason().find(
+                "unexpected_write_unrelated_error_body_stall"
+            )
+            >= 0
+        )
     guard.assert_clean()
 
 

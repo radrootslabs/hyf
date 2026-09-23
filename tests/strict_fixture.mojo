@@ -470,6 +470,10 @@ struct ExchangeScript(Copyable, Movable):
     var stall_after_head_ms: Int
     var close_connection: Bool
     var echo_authorization: Bool
+    var expect_peer_close: Bool
+    var expected_close_cause: String
+    var expected_close_phase: String
+    var inject_write_error: String
 
     def __copyinit__(out self, existing: Self):
         self.case_label = existing.case_label
@@ -487,6 +491,10 @@ struct ExchangeScript(Copyable, Movable):
         self.stall_after_head_ms = existing.stall_after_head_ms
         self.close_connection = existing.close_connection
         self.echo_authorization = existing.echo_authorization
+        self.expect_peer_close = existing.expect_peer_close
+        self.expected_close_cause = existing.expected_close_cause
+        self.expected_close_phase = existing.expected_close_phase
+        self.inject_write_error = existing.inject_write_error
 
 
 def exchange_script(
@@ -512,6 +520,10 @@ def exchange_script(
         stall_after_head_ms=0,
         close_connection=True,
         echo_authorization=False,
+        expect_peer_close=False,
+        expected_close_cause="",
+        expected_close_phase="",
+        inject_write_error="",
     )
 
 
@@ -609,6 +621,24 @@ def render_response(
 # ── Convenience-mode validation + reports ────────────────────────────────────
 
 
+def classify_write_error_cause(text: String) -> String:
+    """Bounded cause class for a response-write error observed by the fixture.
+
+    Mojo's error model cannot discriminate handler types, so the exact rendered
+    cause is classified. A script that declares an expected peer close must
+    match one of these bounded classes *and* the exact phase; every other write
+    error (an injected handler failure, a write timeout, an invalid descriptor)
+    is surfaced as a bounded fixture failure rather than tolerated.
+    """
+    if text.find("ConnectionReset") >= 0:
+        return "peer_reset"
+    if text.find("BrokenPipe") >= 0:
+        return "broken_pipe"
+    if text.find("Timeout") >= 0:
+        return "write_timeout"
+    return "unrelated_error"
+
+
 def serve_scripts(
     listener: TcpListener, var scripts: List[ExchangeScript], label: String
 ) raises -> ServeReport:
@@ -677,8 +707,9 @@ def serve_scripts(
                 request_count = next_index
                 if script.delay_ms > 0:
                     usleep(script.delay_ms * 1000)
-                var tolerant = (
-                    script.stall_after_head_ms > 0 or script.delay_ms > 0
+                var phase = (
+                    "body_stall" if script.stall_after_head_ms
+                    > 0 else "delayed_write"
                 )
                 try:
                     if script.stall_after_head_ms > 0:
@@ -699,10 +730,14 @@ def serve_scripts(
                             var head_end = separator + 4
                             reader.write_all(String(rendered[byte=0:head_end]))
                             usleep(script.stall_after_head_ms * 1000)
+                            if script.inject_write_error != "":
+                                raise Error(script.inject_write_error)
                             reader.write_all(String(rendered[byte=head_end:]))
                         else:
                             reader.write_all(rendered)
                     else:
+                        if script.inject_write_error != "":
+                            raise Error(script.inject_write_error)
                         reader.write_all(
                             render_response(
                                 script,
@@ -711,12 +746,39 @@ def serve_scripts(
                                 connection_count,
                             )
                         )
-                except:
-                    # A deliberate delay or stall lets the peer time out and
-                    # close; that peer close must not turn the bounded stall
-                    # control into a fixture failure.
-                    if not tolerant:
-                        raise
+                except e:
+                    # A delay/stall is not permission to swallow every write
+                    # error. Only an explicitly declared expected peer close
+                    # whose exact bounded cause and phase match is accepted;
+                    # unexpected/wrong-phase closes, write timeouts, invalid
+                    # descriptors and unrelated handler errors fail the fixture
+                    # with a bounded, cause-specific reason.
+                    var observed = classify_write_error_cause(String(e))
+                    if (
+                        script.expect_peer_close
+                        and observed == script.expected_close_cause
+                        and phase == script.expected_close_phase
+                    ):
+                        return ServeReport(
+                            True,
+                            "complete",
+                            script.case_label
+                            + "_peer_close_"
+                            + observed
+                            + "_"
+                            + phase,
+                            "ok",
+                            request_count,
+                            connection_count,
+                        )
+                    return ServeReport(
+                        False,
+                        "peer_close",
+                        script.case_label,
+                        "unexpected_write_" + observed + "_" + phase,
+                        request_count,
+                        connection_count,
+                    )
                 if script.close_connection:
                     break
         if request_count < total:

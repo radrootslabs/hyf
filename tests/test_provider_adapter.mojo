@@ -33,7 +33,11 @@ from max_local_process_helper import (
     spawn_max_local_scripted,
     spawn_max_local_stub,
 )
+from bounded_call_helper import BoundedCallReport, run_bounded_call
 from strict_fixture import ExchangeScript, exchange_script
+
+from flare.net import SocketAddr
+from flare.tcp import TcpStream
 
 
 def _provider_runtime_config() -> HyfLoadedRuntimeConfig:
@@ -483,6 +487,254 @@ def test_provider_delayed_head_is_bounded_and_specific() raises:
         assert_true(elapsed < 5000)
         provider_stub.wait()
     guard_3.assert_clean()
+
+
+def _raw_request_text(path: String) -> String:
+    return (
+        "POST "
+        + path
+        + " HTTP/1.1\r\nhost: 127.0.0.1\r\ncontent-length: 2\r\n"
+        "connection: close\r\n\r\n{}"
+    )
+
+
+def _raw_send_then_close(port: Int, path: String) raises:
+    """A deliberately owned raw client that closes right after its request.
+
+    Used to produce a real peer close during the scripted delayed/body-stall
+    write without any host or policy change.
+    """
+    var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
+    client.write_all(Span[UInt8, _](_raw_request_text(path).as_bytes()))
+    client.close()
+
+
+def _raw_send_and_read(port: Int, path: String) raises -> String:
+    var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
+    client.write_all(Span[UInt8, _](_raw_request_text(path).as_bytes()))
+    var response = String("")
+    var buffer = InlineArray[Byte, 1024](fill=0)
+    while True:
+        var n = client.read(buffer.unsafe_ptr(), 1024)
+        if n <= 0:
+            break
+        response += String(
+            unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n))
+        )
+    client.close()
+    return response^
+
+
+def _delayed_script(label: String, delay_ms: Int) -> ExchangeScript:
+    var script = exchange_script(
+        label, "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.delay_ms = delay_ms
+    return script^
+
+
+def test_provider_strict_delayed_success_under_bounded_harness() raises:
+    # TC01/TC02: a delayed response is not permission to swallow errors. With a
+    # client budget above the delay the strict scripted exchange must succeed,
+    # and the risky call runs under the exact-owned parent-bounded mechanism.
+    var scripts = List[ExchangeScript]()
+    var script = _delayed_script("delayed_success", 300)
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "max_local", provider_stub.port, 5000, 5000, guard
+        )
+        assert_true(report.completed)
+        assert_true(not report.stopped)
+        assert_true(report.cleanup_proved)
+        assert_true(report.report.find("ok max_local 200") >= 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+        assert_equal(provider_stub.request_count(), 1)
+        assert_equal(provider_stub.connection_count(), 1)
+    guard.assert_clean()
+
+
+def test_provider_stall_sends_headers_before_body() raises:
+    # TC02: prove the fixture delivered the response head before the bounded
+    # body stall, so the stall control characterizes a body-read stall rather
+    # than an unrelated connect/refusal condition.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "head_then_stall", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 800
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var client = TcpStream.connect(
+            SocketAddr.localhost(UInt16(provider_stub.port))
+        )
+        var start = now_ms()
+        client.write_all(
+            Span[UInt8, _](_raw_request_text("/v1/chat/completions").as_bytes())
+        )
+        var head = String("")
+        var buffer = InlineArray[Byte, 1024](fill=0)
+        while head.find("\r\n\r\n") < 0:
+            var n = client.read(buffer.unsafe_ptr(), 1024)
+            assert_true(n > 0)
+            head += String(
+                unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n))
+            )
+        var head_ms = now_ms() - start
+        var body = String("")
+        while True:
+            var n2 = client.read(buffer.unsafe_ptr(), 1024)
+            if n2 <= 0:
+                break
+            body += String(
+                unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n2))
+            )
+        var total_ms = now_ms() - start
+        client.close()
+        assert_true(head_ms < 400)
+        assert_true(total_ms >= 700)
+        assert_true(body.find("choices") >= 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_scripted_permitted_peer_close_is_declared() raises:
+    # TC01: a script may declare an expected peer close with an exact bounded
+    # cause and phase. The fixture verifies that declaration and records the
+    # observed outcome; it no longer tolerates arbitrary write errors.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "permitted_close", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 300
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _raw_send_then_close(provider_stub.port, "/v1/chat/completions")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+        assert_true(provider_stub.failure_case().find("_peer_close_") >= 0)
+        assert_true(provider_stub.failure_case().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def test_provider_scripted_unexpected_peer_close_fails() raises:
+    # TC01: an ordinary delayed/stalled script that never declared an expected
+    # close must fail with a bounded, cause-specific reason instead of
+    # swallowing the write error.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "unexpected_close",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 300
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _raw_send_then_close(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(provider_stub.reason().find("unexpected_write_") >= 0)
+        assert_true(provider_stub.reason().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def test_provider_scripted_wrong_phase_close_fails() raises:
+    # TC01: a declaration whose phase does not match the observed phase is
+    # rejected, so a close in the wrong phase can never pass as expected.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "wrong_phase", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 300
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "delayed_write"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _raw_send_then_close(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_true(provider_stub.reason().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def test_provider_scripted_injected_write_error_fails() raises:
+    # TC01: an unrelated injected handler error (here a write timeout) must not
+    # be accepted even when a peer close was declared, because the bounded
+    # observed cause differs from the declared cause.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "injected_error", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 200
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    script.inject_write_error = "Timeout"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(
+            provider_stub.reason().find(
+                "unexpected_write_write_timeout_body_stall"
+            )
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_stalled_call_is_parent_bounded() raises:
+    # TC02: a real risky client call against a stalling peer runs under the
+    # parent deadline and is stopped/reaped by the parent instead of hanging.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "bounded_stall", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 3000
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "max_local", provider_stub.port, 5000, 600, guard
+        )
+        assert_true(report.stopped)
+        assert_true(not report.completed)
+        assert_true(report.cleanup_proved)
+        assert_true(report.elapsed_ms >= 500)
+        assert_true(report.elapsed_ms < 3000)
+        provider_stub.wait()
+    guard.assert_clean()
+
+
+def test_provider_never_returning_call_is_stopped_and_reaped() raises:
+    # TC02: a deliberate never-returning control proves the parent can stop and
+    # reap the call; this is the bounded-harness proof an elapsed assertion
+    # after a synchronous call cannot provide.
+    var guard = CleanupGuard()
+    var report = run_bounded_call("never_return", 0, 300, 400, guard)
+    assert_true(report.stopped)
+    assert_true(not report.completed)
+    assert_true(report.cleanup_proved)
+    assert_true(report.elapsed_ms >= 350)
+    assert_true(report.elapsed_ms < 5000)
+    guard.assert_clean()
 
 
 def main() raises:

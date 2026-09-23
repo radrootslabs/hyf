@@ -36,6 +36,7 @@ from stdio_process_helper import (
     ScopedEnvVar,
 )
 from measurement_process_helper import (
+    MeasurementFaults,
     MeasurementSession,
     build_product_binary,
     build_status_frame,
@@ -100,6 +101,7 @@ def _run_sh_measurement(
     rss_sampler: String = "ps",
     fd_sampler: String = "lsof",
     deadline_ms: Int = MEASUREMENT_DEADLINE_MS,
+    faults: MeasurementFaults = MeasurementFaults(),
 ) raises -> MeasurementSession:
     var argv = _sh(args_text)
     return measure_persistent_process(
@@ -112,6 +114,10 @@ def _run_sh_measurement(
         guard,
         rss_sampler,
         fd_sampler,
+        "",
+        "",
+        "",
+        faults,
     )
 
 
@@ -123,6 +129,7 @@ def _run_sh_failure(
     rss_sampler: String = "ps",
     fd_sampler: String = "lsof",
     deadline_ms: Int = MEASUREMENT_DEADLINE_MS,
+    faults: MeasurementFaults = MeasurementFaults(),
 ) -> String:
     try:
         _ = _run_sh_measurement(
@@ -133,6 +140,7 @@ def _run_sh_failure(
             rss_sampler,
             fd_sampler,
             deadline_ms,
+            faults,
         )
     except e:
         return String(e)
@@ -218,6 +226,9 @@ def test_persistent_measurement_validates_every_frame() raises:
                 )
                 assert_equal(session.identity.source_tree_state, "clean")
                 assert_equal(session.identity.source_tree.byte_length(), 40)
+                assert_equal(
+                    session.identity.tooling_manifest_sha256.byte_length(), 64
+                )
                 assert_equal(
                     session.identity.pixi_lock_sha256.byte_length(), 64
                 )
@@ -666,6 +677,54 @@ def test_measurement_rejects_stderr_overflow() raises:
     )
     assert_true(message.find("stderr_overflow") >= 0)
     guard.assert_clean()
+
+
+def test_measurement_rejects_stderr_read_error() raises:
+    # MR02: a stderr read error fails explicitly instead of disappearing.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s\\n' '"
+            + STATUS0
+            + "'; printf 'x' 1>&2; while IFS= read -r line; do :; done"
+        ),
+        0,
+        1,
+        guard,
+        "ps",
+        "lsof",
+        MEASUREMENT_DEADLINE_MS,
+        MeasurementFaults(stderr_read_errors=1),
+    )
+    assert_true(message.find("stderr read_error") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_unproved_cleanup_is_retained_and_recovered() raises:
+    # MR03: an unproved cleanup keeps exact retryable ownership and surfaces to
+    # the caller; recovery against the real owned child then succeeds with no
+    # descriptor/child leak. The bounded seam leaves the real child running.
+    var guard = CleanupGuard()
+    var self_pid = owned_pid()
+    var child_before = child_process_count(self_pid, guard)
+    var fd_before = open_fd_count_checked()
+    var message = _run_sh_failure(
+        "while IFS= read -r line; do printf 'not-json\\n'; done",
+        0,
+        1,
+        guard,
+        "ps",
+        "lsof",
+        MEASUREMENT_DEADLINE_MS,
+        MeasurementFaults(cleanup_failures=1),
+    )
+    assert_true(message.find("not_json") >= 0)
+    assert_true(guard.pending() >= 1)
+    assert_true(guard.retained() >= 1)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked() - fd_before, 0)
+    assert_equal(child_process_count(self_pid, guard), child_before)
 
 
 def test_measurement_rejects_unavailable_rss_sampler() raises:

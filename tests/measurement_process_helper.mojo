@@ -100,6 +100,31 @@ comptime MEASUREMENT_SAMPLE_INTERVAL = 50
 comptime MEASUREMENT_POLL_SLICE_MS = 10
 
 
+struct MeasurementFaults(ImplicitlyCopyable, Movable):
+    """Bounded test-only fault seam for the measurement lifecycle.
+
+    Each counter is consumed once. ``stderr_read_errors`` makes the next ready
+    stderr drain report a real read-error cause without touching host state, so
+    the explicit stderr-error branch is deterministically executable.
+    ``cleanup_failures`` makes the next cleanup attempt report an unproved result
+    while the real forked child keeps running, so the retained-ownership and
+    recovery path is exercised against a real exact-owned child.
+    """
+
+    var stderr_read_errors: Int
+    var cleanup_failures: Int
+
+    def __init__(
+        out self, stderr_read_errors: Int = 0, cleanup_failures: Int = 0
+    ):
+        self.stderr_read_errors = stderr_read_errors
+        self.cleanup_failures = cleanup_failures
+
+    def __copyinit__(out self, existing: Self):
+        self.stderr_read_errors = existing.stderr_read_errors
+        self.cleanup_failures = existing.cleanup_failures
+
+
 # ── Bounded captured commands (identity and sampling) ───────────────────────
 
 
@@ -509,6 +534,40 @@ def source_dirty_status(
     return String(out.stdout.strip())
 
 
+def tooling_manifest_sha256(
+    source_root: String, mut guard: CleanupGuard
+) raises -> String:
+    """Content digest of the measurement tooling that produced the evidence.
+
+    The tooling is test-only source outside the product build inputs, so it is
+    not covered by the clean-tree build binding. Recording its exact content
+    digest ties the emitted evidence to the reviewed tooling revision without
+    requiring the working tree to be committed at capture time.
+    """
+    var args = List[String]()
+    args.append("-c")
+    args.append(
+        "shasum -a 256 '"
+        + source_root
+        + "/tests/measurement_process_helper.mojo' '"
+        + source_root
+        + "/tests/measurement_runner.mojo' '"
+        + source_root
+        + "/tests/test_measurement_contract.mojo' | shasum -a 256 | cut -d'"
+        " ' -f1"
+    )
+    var out = run_capture(
+        "sh", args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard, source_root
+    )
+    var text = String(out.stdout.strip())
+    if out.exit_code != 0:
+        raise Error(
+            "measurement: tooling manifest unavailable in " + source_root
+        )
+    _require_hex(text, 64, "tooling manifest")
+    return text^
+
+
 def source_identity(
     source_root: String, mut guard: CleanupGuard
 ) raises -> SourceTreeIdentity:
@@ -583,6 +642,7 @@ struct MeasurementIdentity(Movable):
     var source_tree: String
     var source_manifest_sha256: String
     var source_tree_state: String
+    var tooling_manifest_sha256: String
     var binding: String
     var cwd: String
     var binary_path: String
@@ -606,6 +666,8 @@ struct MeasurementIdentity(Movable):
             + self.source_manifest_sha256
             + " source_tree_state="
             + self.source_tree_state
+            + " tooling_manifest_sha256="
+            + self.tooling_manifest_sha256
             + " cwd="
             + self.cwd
             + " binary_sha256="
@@ -640,6 +702,7 @@ def measurement_identity(
         source_tree=observed.tree,
         source_manifest_sha256=observed.manifest_sha256,
         source_tree_state=("dirty" if observed.dirty_status != "" else "clean"),
+        tooling_manifest_sha256=tooling_manifest_sha256(source_root, guard),
         binding=binding,
         cwd=working_directory(guard),
         binary_path=binary_path,
@@ -824,6 +887,7 @@ struct MeasurementProcess(Movable):
     var spawn_ms: Int
     var deadline_at_ms: Int
     var stdout_total_bytes: Int
+    var faults: MeasurementFaults
     var guard: UnsafePointer[CleanupGuard, MutAnyOrigin]
 
     def work_remaining_ms(self) -> Int:
@@ -894,6 +958,9 @@ struct MeasurementProcess(Movable):
         """Drain ready stderr bytes; errors and overflow fail explicitly."""
         if (revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) == 0:
             return
+        if self.faults.stderr_read_errors > 0:
+            self.faults.stderr_read_errors -= 1
+            raise Error("measurement: stderr read_error")
         if budget_ms < 1:
             raise Error(
                 "measurement: work deadline expired during stderr drain"
@@ -1124,7 +1191,14 @@ struct MeasurementProcess(Movable):
         """Non-raising cleanup so a failing assertion still reaps the child."""
         self.close_stdin()
         if not self.reaped:
-            var st = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+            var st: ProcessStatus
+            if self.faults.cleanup_failures > 0:
+                self.faults.cleanup_failures -= 1
+                st = ProcessStatus(
+                    "wait_error", False, -1, 0, -1, "injected_cleanup_failure"
+                )
+            else:
+                st = terminate_owned(self.pid, TERMINATION_GRACE_MS)
             self.status = st.copy()
             if st.cleanup_proved():
                 self.reaped = True
@@ -1177,6 +1251,7 @@ def spawn_measurement_process(
     var argv: List[String],
     deadline_ms: Int,
     mut guard: CleanupGuard,
+    faults: MeasurementFaults = MeasurementFaults(),
 ) raises -> MeasurementProcess:
     """Fork exactly one persistent process for warmup and measured frames."""
     var parts = List[String]()
@@ -1241,6 +1316,7 @@ def spawn_measurement_process(
         spawn_ms=spawn_ms,
         deadline_at_ms=spawn_ms + deadline_ms,
         stdout_total_bytes=0,
+        faults=faults,
         guard=UnsafePointer(to=guard),
     )
 
@@ -1573,6 +1649,7 @@ def measure_persistent_process(
     expected_revision: String = "",
     expected_manifest_sha256: String = "",
     expected_binary_sha256: String = "",
+    faults: MeasurementFaults = MeasurementFaults(),
 ) raises -> MeasurementSession:
     """Drive warmup then measured frames over one persistent owned process.
 
@@ -1629,7 +1706,7 @@ def measure_persistent_process(
         guard,
     )
     var process = spawn_measurement_process(
-        binary_path, argv^, deadline_ms, guard
+        binary_path, argv^, deadline_ms, guard, faults
     )
     var ok_frames = 0
     var failed_frames = 0

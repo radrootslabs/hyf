@@ -753,7 +753,7 @@ def _spawn_max_local(
     try:
         reported_port = parse_ready_or_cleanup(pid, ready_line, 256)
     except e:
-        _ = finalize_owned_failure(
+        var st = finalize_owned_failure(
             state, pid, "max_local startup malformed-readiness cleanup unproved"
         )
         raise Error(
@@ -761,6 +761,8 @@ def _spawn_max_local(
             + String(e)
             + " pid="
             + String(pid)
+            + " cleanup="
+            + ("proved" if st.cleanup_proved() else "unreaped")
             + ")"
         )
     return SpawnedMaxLocalStub(pid, reported_port, state^)

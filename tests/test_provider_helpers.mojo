@@ -63,6 +63,7 @@ from max_local_process_helper import (
 from jev_provider_helper import (
     SpawnedJevStub,
     spawn_jev_scripted_auto,
+    spawn_jev_stub,
     spawn_jev_stub_auto,
 )
 
@@ -965,7 +966,7 @@ def _owned_jev_report_child(
         child_exit(exit_code)
     close_fd(pipe.write_fd)
     var state = piped_child_state(pid, pipe.read_fd, 2000, 1, CleanupLedger())
-    return SpawnedJevStub(pid, state^)
+    return SpawnedJevStub(pid, 0, state^)
 
 
 # ── LC01: automatic scope ownership ─────────────────────────────────────────
@@ -1022,6 +1023,49 @@ def test_jev_scope_cleanup_on_assertion_failure() raises:
     assert_true(caught)
     assert_true(held_pid > 0)
     assert_true(pid_not_waitable(held_pid))
+
+
+def test_jev_scope_cleanup_on_generic_error() raises:
+    var held_pid = 0
+    var message = ""
+    try:
+        with spawn_jev_stub_auto("ok", 1) as started:
+            held_pid = started.stub.pid
+            raise Error("intentional jev scope error")
+    except e:
+        message = String(e)
+    assert_equal(message, "intentional jev scope error")
+    assert_true(pid_not_waitable(held_pid))
+
+
+def _jev_early_return_owner() raises -> Int:
+    with spawn_jev_stub_auto("ok", 1) as started:
+        return started.stub.pid
+    return 0
+
+
+def test_jev_scope_cleanup_on_early_return() raises:
+    var held_pid = _jev_early_return_owner()
+    assert_true(held_pid > 0)
+    assert_true(pid_not_waitable(held_pid))
+
+
+def test_jev_startup_failure_is_truthful_and_cause_specific() raises:
+    # PC02/LC01: the Jev startup-readiness failure path executes against a real
+    # owned child, reports its cause and exposes the finalizer's cleanup truth.
+    var blocker = TcpListener.bind(SocketAddr.localhost(0))
+    var port = Int(blocker.local_addr().port)
+    var message = ""
+    try:
+        var started = spawn_jev_stub(port, "ok", 1)
+        started.cleanup()
+    except e:
+        message = String(e)
+    blocker.close()
+    assert_true(message.find("phase=startup") >= 0)
+    assert_true(message.find("reason=serve_failed") >= 0)
+    assert_true(message.find("cleanup=") >= 0)
+    assert_true(message.find("pid=") >= 0)
 
 
 def test_wait_error_taxonomy_distinguishes_causes() raises:
@@ -1568,6 +1612,18 @@ def test_report_stream_controls_both_providers() raises:
     assert_equal(first.byte_length(), 512)
     _report_controls(first + VALID_REPORT, 0, "duplicate_report")
     _report_controls(VALID_REPORT + VALID_REPORT, 0, "duplicate_report")
+    var split_first = "result ok phase=complete case="
+    while split_first.byte_length() + tail.byte_length() < 700:
+        split_first += "y"
+    split_first += tail
+    assert_equal(split_first.byte_length(), 700)
+    _report_controls(split_first + VALID_REPORT, 0, "duplicate_report")
+    var split_positive = _owned_report_child(0, split_first)
+    split_positive.reap()
+    assert_true(split_positive.ok())
+    var jev_split = _owned_jev_report_child(0, split_first)
+    jev_split.reap()
+    assert_true(jev_split.ok())
     var unterminated = String(
         VALID_REPORT[byte = 0 : VALID_REPORT.byte_length() - 1]
     )
@@ -1785,7 +1841,7 @@ def test_provider_reap_descriptor_read_error_both_paths() raises:
     var jev_state = piped_child_state(
         jev_pid, jev_closed_fd, 2000, 1, CleanupLedger()
     )
-    var jev_stub = SpawnedJevStub(jev_pid, jev_state^)
+    var jev_stub = SpawnedJevStub(jev_pid, 0, jev_state^)
     jev_stub.reap()
     assert_true(not jev_stub.ok())
     assert_equal(jev_stub.reason(), "read_error")
@@ -1794,7 +1850,7 @@ def test_provider_reap_descriptor_read_error_both_paths() raises:
 
 def test_cleanup_failure_survives_scope_exit() raises:
     # PC02: cleanup failure must remain observable after the owning handle is
-    # destroyed at scope exit, not merely stored in an inaccessible object.
+    # destroyed at scope exit, for BOTH provider handles.
     var recorded = List[String]()
     var ledger = CleanupLedger(UnsafePointer(to=recorded))
     var state = piped_child_state(0, -1, 100, 1, ledger)
@@ -1802,6 +1858,11 @@ def test_cleanup_failure_survives_scope_exit() raises:
         _ = holder
     assert_equal(len(recorded), 1)
     assert_true(recorded[0].find("unproved") >= 0)
+    var jev_state = piped_child_state(0, -1, 100, 1, ledger)
+    with SpawnedJevStub(0, 0, jev_state^) as jev_holder:
+        _ = jev_holder
+    assert_equal(len(recorded), 2)
+    assert_true(recorded[1].find("unproved") >= 0)
 
 
 def test_descriptor_census_unavailable_propagates() raises:

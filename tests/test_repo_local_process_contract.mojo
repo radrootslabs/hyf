@@ -145,7 +145,8 @@ def test_run_stdio_entrypoint_rejects_late_success() raises:
         or message.find("read_deadline_expired") >= 0
     )
     assert_true(message.find("cleanup_error=") >= 0)
-    assert_true(elapsed >= 1000)
+    assert_true(message.find("child_failed") < 0)
+    assert_true(elapsed >= 1150)
     assert_true(elapsed <= 3700)
 
 

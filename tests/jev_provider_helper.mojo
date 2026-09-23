@@ -266,10 +266,12 @@ struct SpawnedJevStub(Movable):
     """Single-owner Jev fixture handle; the body receives a view."""
 
     var pid: Int
+    var port: Int
     var state: PipedChildState
 
-    def __init__(out self, pid: Int, var state: PipedChildState):
+    def __init__(out self, pid: Int, port: Int, var state: PipedChildState):
         self.pid = pid
+        self.port = port
         self.state = state^
 
     def __enter__(mut self) -> SpawnedJevStubView:
@@ -575,7 +577,8 @@ def spawn_jev_stub_auto(
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
     ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedJevStubAuto:
-    return _spawn_jev_stub(0, mode, requests, deadline_ms, ledger)
+    var stub = _spawn_jev_stub(0, mode, requests, deadline_ms, ledger)
+    return SpawnedJevStubAuto(port=stub.port, stub=stub^)
 
 
 def spawn_jev_stub(
@@ -583,9 +586,9 @@ def spawn_jev_stub(
     mode: String,
     requests: Int,
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
+    ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedJevStub:
-    var started = _spawn_jev_stub(port, mode, requests, deadline_ms)
-    return started.stub^
+    return _spawn_jev_stub(port, mode, requests, deadline_ms, ledger)
 
 
 def serve_jev_scripted(
@@ -612,7 +615,7 @@ def _spawn_child_or_cleanup(
     deadline_ms: Int,
     requests: Int,
     ledger: CleanupLedger,
-) raises -> SpawnedJevStubAuto:
+) raises -> SpawnedJevStub:
     """Build the owned state, read exact readiness, or clean up and raise."""
     var state = piped_child_state(
         pid, pipe.read_fd, deadline_ms, requests, ledger
@@ -639,7 +642,7 @@ def _spawn_child_or_cleanup(
     try:
         reported_port = parse_ready_or_cleanup(pid, ready_line, 256)
     except e:
-        _ = finalize_owned_failure(
+        var st = finalize_owned_failure(
             state, pid, "jev startup malformed-readiness cleanup unproved"
         )
         raise Error(
@@ -647,12 +650,12 @@ def _spawn_child_or_cleanup(
             + String(e)
             + " pid="
             + String(pid)
+            + " cleanup="
+            + ("proved" if st.cleanup_proved() else "unreaped")
             + ")"
         )
     _ = mode
-    return SpawnedJevStubAuto(
-        port=reported_port, stub=SpawnedJevStub(pid, state^)
-    )
+    return SpawnedJevStub(pid, reported_port, state^)
 
 
 def _spawn_jev_scripted(
@@ -681,9 +684,10 @@ def _spawn_jev_scripted(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    return _spawn_child_or_cleanup(
+    var stub = _spawn_child_or_cleanup(
         pipe, pid, "scripted", deadline_ms, total, ledger
     )
+    return SpawnedJevStubAuto(port=stub.port, stub=stub^)
 
 
 def _spawn_jev_stub(
@@ -692,7 +696,7 @@ def _spawn_jev_stub(
     requests: Int,
     deadline_ms: Int,
     ledger: CleanupLedger = CleanupLedger(),
-) raises -> SpawnedJevStubAuto:
+) raises -> SpawnedJevStub:
     var pipe = make_pipe()
     var pid = fork_owned_or_close(pipe.copy())
     if pid == 0:

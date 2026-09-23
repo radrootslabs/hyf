@@ -651,11 +651,11 @@ def wait_bounded(pid: Int, deadline_ms: Int) -> ProcessStatus:
 def terminate_owned(pid: Int, grace_ms: Int) -> ProcessStatus:
     """Reap a child this test owns, escalating SIGTERM -> SIGKILL.
 
-    A pid already reaped or not waitable (``gone``) is never signaled, so a
-    reused PID from an unrelated process can never be targeted. An
-    ``interrupted``/``wait_error`` status still owns a live child, so it is
-    signaled and reaped; the returned status is only ``reaped`` when the child
-    was actually collected.
+    In ``terminate_owned`` a pid already reaped or not waitable (``gone``) is
+    never signaled, so a reused PID from an unrelated process can never be
+    targeted. An ``interrupted`` status still owns a live child and is
+    retried/signaled; a ``wait_error`` leaves identity/ownership unproved and is
+    returned without signalling and never as completed cleanup.
     """
     var st = wait_nohang(pid)
     if st.cleanup_proved():

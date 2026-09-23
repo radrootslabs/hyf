@@ -173,6 +173,43 @@ def _run_sh_failure(
     return ""
 
 
+def _failing_hasher(root: String, mut guard: CleanupGuard) raises -> String:
+    """Owned hasher stand-in that fails without touching live tools or host
+    settings (ADR-0021 MP01). The script is created inside the isolated owned
+    temp root and exits 7 with an explicit stage error.
+    """
+    var path = root + "/failing-hasher.sh"
+    Path(path).write_text(
+        "#!/bin/sh\nprintf 'failing hasher stage\\n' >&2\nexit 7\n"
+    )
+    var chmod_args = List[String]()
+    chmod_args.append("+x")
+    chmod_args.append(path)
+    var chmodded = run_capture("chmod", chmod_args^, 20000, guard)
+    assert_equal(chmodded.exit_code, 0)
+    return path^
+
+
+def _copy_tooling_files(
+    root: String, mut guard: CleanupGuard, start: Int = 0
+) raises:
+    """Copy declared tooling inputs into an isolated owned ``tests`` root.
+
+    ``start`` > 0 deliberately omits the leading declared inputs, producing a
+    present-but-partial input set for the missing-one-input control.
+    """
+    var tests_dir = root + "/tests"
+    _ = std.os.makedirs(tests_dir, exist_ok=True)
+    var sources = measurement_tooling_files(".")
+    assert_true(len(sources) > start + 1)
+    var cp_args = List[String]()
+    for index in range(start, len(sources)):
+        cp_args.append(sources[index])
+    cp_args.append(tests_dir)
+    var copied = run_capture("cp", cp_args^, 20000, guard)
+    assert_equal(copied.exit_code, 0)
+
+
 # ── Positive persistent measurement ─────────────────────────────────────────
 
 
@@ -1004,6 +1041,71 @@ def test_measurement_tooling_manifest_rejects_missing_inputs() raises:
             message = String(e)
         assert_true(message.find("sha256") >= 0)
         assert_true(message.find("e3b0c442") < 0)
+    guard.assert_clean()
+
+
+def test_measurement_digest_rejects_missing_one_input() raises:
+    # ADR-0021 MP01: the expressly required missing-one-input control. Seven of
+    # the eight declared tooling inputs are present valid regular files and one
+    # declared path is absent, so the checked pipeline must fail instead of
+    # returning a digest for the partial present set. The all-input-missing and
+    # failed-Git controls do not cover this case.
+    var guard = CleanupGuard()
+    with SafeTempDir() as root:
+        _copy_tooling_files(root, guard, 1)
+        var expected = tooling_manifest_sha256(".", guard)
+        assert_equal(expected.byte_length(), 64)
+        var message = ""
+        var reported = ""
+        try:
+            reported = tooling_manifest_sha256(root, guard)
+        except e:
+            message = String(e)
+        assert_true(message.find("sha256") >= 0)
+        assert_true(message.find("e3b0c442") < 0)
+        # No partial-set digest may be returned as a valid identity.
+        assert_true(reported != expected)
+        assert_equal(reported, "")
+    guard.assert_clean()
+
+
+def test_measurement_digest_rejects_total_hasher_failure() raises:
+    # ADR-0021 MP01: the expressly required failed-hasher-command control. All
+    # declared inputs are present valid regular files and both checked hasher
+    # stages fail, so the pipeline must reject. A different missing/unreadable
+    # input would not substitute for this control; the cause text must show the
+    # real nonzero hasher exit rather than only an unavailable command.
+    var guard = CleanupGuard()
+    with SafeTempDir() as root:
+        _copy_tooling_files(root, guard)
+        var failing = _failing_hasher(root, guard)
+        var message = ""
+        var reported = ""
+        try:
+            reported = tooling_manifest_sha256(root, guard, failing, failing)
+        except e:
+            message = String(e)
+        assert_true(message.find("sha256 unavailable") >= 0)
+        assert_true(message.find("exited=7") >= 0)
+        assert_true(message.find("e3b0c442") < 0)
+        assert_equal(reported, "")
+    guard.assert_clean()
+
+
+def test_measurement_digest_fallback_hasher_checked_correct() raises:
+    # ADR-0021 MP01: when the primary hasher stage fails but the supported
+    # fallback succeeds, the result must be the same checked digest as the
+    # default path — the fallback may never silently report a partial or empty
+    # identity.
+    var guard = CleanupGuard()
+    with SafeTempDir() as root:
+        _copy_tooling_files(root, guard)
+        var failing = _failing_hasher(root, guard)
+        var expected = tooling_manifest_sha256(root, guard)
+        assert_equal(expected.byte_length(), 64)
+        var fallback = tooling_manifest_sha256(root, guard, failing)
+        assert_equal(fallback.byte_length(), 64)
+        assert_true(fallback == expected)
     guard.assert_clean()
 
 

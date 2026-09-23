@@ -509,7 +509,10 @@ def _path_basename(path: String) -> String:
 
 
 def _checked_file_digests(
-    var files: List[String], mut guard: CleanupGuard
+    var files: List[String],
+    mut guard: CleanupGuard,
+    primary_hasher: String = "shasum",
+    fallback_hasher: String = "sha256sum",
 ) raises -> List[String]:
     """Per-file sha256 of explicit argv paths, fail-closed.
 
@@ -519,6 +522,12 @@ def _checked_file_digests(
     an unavailable hasher raises instead of yielding a valid empty digest. This
     replaces the former status-masking shell pipeline whose final stage could
     succeed on empty input and report the empty-input digest as success.
+
+    ``primary_hasher``/``fallback_hasher`` name the two checked stages. The
+    defaults are the supported host hashers; the parameters exist only as a
+    bounded test seam so the failed-hasher-stage and fallback controls can run
+    against present, valid regular-file inputs without altering live tools or
+    host settings (ADR-0021 MP01).
     """
     if len(files) == 0:
         raise Error("measurement: refusing to digest an empty input list")
@@ -528,14 +537,14 @@ def _checked_file_digests(
     for index in range(len(files)):
         shasum_args.append(files[index])
     var out = run_capture(
-        "shasum", shasum_args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard
+        primary_hasher, shasum_args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard
     )
     if out.exit_code != 0:
         var sum_args = List[String]()
         for index in range(len(files)):
             sum_args.append(files[index])
         out = run_capture(
-            "sha256sum", sum_args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard
+            fallback_hasher, sum_args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard
         )
         if out.exit_code != 0:
             raise Error(
@@ -584,19 +593,26 @@ def sha256_text(
 
 
 def sha256_file_set(
-    label: String, var files: List[String], mut guard: CleanupGuard
+    label: String,
+    var files: List[String],
+    mut guard: CleanupGuard,
+    primary_hasher: String = "shasum",
+    fallback_hasher: String = "sha256sum",
 ) raises -> String:
     """Deterministic, path-independent digest of an explicit file set.
 
     Each declared file's exact content digest is checked first, then the
     manifest text ``<basename> <digest>`` (in declared order) is hashed, so the
     result depends only on the declared files' content and names, never on the
-    checkout location.
+    checkout location. ``primary_hasher``/``fallback_hasher`` are the bounded
+    test seam documented on ``_checked_file_digests``.
     """
     var names = List[String]()
     for index in range(len(files)):
         names.append(_path_basename(files[index]))
-    var digests = _checked_file_digests(files^, guard)
+    var digests = _checked_file_digests(
+        files^, guard, primary_hasher, fallback_hasher
+    )
     var canonical = ""
     for index in range(len(names)):
         canonical += names[index] + " " + digests[index] + "\n"
@@ -673,7 +689,10 @@ def source_dirty_status(
 
 
 def tooling_manifest_sha256(
-    source_root: String, mut guard: CleanupGuard
+    source_root: String,
+    mut guard: CleanupGuard,
+    primary_hasher: String = "shasum",
+    fallback_hasher: String = "sha256sum",
 ) raises -> String:
     """Content digest of the measurement tooling that produced the evidence.
 
@@ -682,10 +701,13 @@ def tooling_manifest_sha256(
     digest ties the emitted evidence to the reviewed tooling revision and its
     imported helper closure without requiring the working tree to be committed
     at capture time. A missing input or failed hasher stage is a bounded error,
-    never a valid empty digest.
+    never a valid empty digest. The optional hasher parameters are the bounded
+    test seam described on ``_checked_file_digests``.
     """
     var files = measurement_tooling_files(source_root)
-    return sha256_file_set("tooling manifest", files^, guard)
+    return sha256_file_set(
+        "tooling manifest", files^, guard, primary_hasher, fallback_hasher
+    )
 
 
 def source_identity(

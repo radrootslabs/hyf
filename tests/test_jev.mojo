@@ -274,6 +274,7 @@ def test_circuit_opens_and_recovers() raises:
 
 
 from flare.http import HttpClient
+from parent_lifecycle import CleanupGuard
 from jev_provider_helper import (
     reserve_jev_port,
     spawn_jev_stub_auto,
@@ -281,7 +282,8 @@ from jev_provider_helper import (
 
 
 def test_local_provider_server_serves_scripted_jev() raises:
-    with spawn_jev_stub_auto("ok", 1) as started:
+    var guard_1 = CleanupGuard()
+    with spawn_jev_stub_auto("ok", 1, guard_1) as started:
         var port = started.port
         var url = "http://127.0.0.1:" + String(port) + "/v1/systemone"
         with HttpClient(timeout_ms=5000, max_redirects=0) as client:
@@ -293,9 +295,12 @@ def test_local_provider_server_serves_scripted_jev() raises:
             assert_equal(body["model"].string_value(), "jev-1.13.0")
         started.stub.wait()
 
+    guard_1.assert_clean()
+
 
 def test_local_provider_server_scripts_transport_failures() raises:
-    with spawn_jev_stub_auto("rate_limit", 1) as rate_port_started:
+    var guard_2 = CleanupGuard()
+    with spawn_jev_stub_auto("rate_limit", 1, guard_2) as rate_port_started:
         var rate_port = rate_port_started.port
         with HttpClient(timeout_ms=5000, max_redirects=0) as client:
             var response = client.post(
@@ -304,7 +309,10 @@ def test_local_provider_server_scripts_transport_failures() raises:
             assert_equal(response.status, 429)
         rate_port_started.stub.wait()
 
-        with spawn_jev_stub_auto("malformed_json", 1) as malformed_port_started:
+        var guard_3 = CleanupGuard()
+        with spawn_jev_stub_auto(
+            "malformed_json", 1, guard_3
+        ) as malformed_port_started:
             var malformed_port = malformed_port_started.port
             with HttpClient(timeout_ms=5000, max_redirects=0) as client:
                 var response = client.post(
@@ -316,7 +324,10 @@ def test_local_provider_server_scripts_transport_failures() raises:
                 assert_equal(response.text(), "not json")
             malformed_port_started.stub.wait()
 
-            with spawn_jev_stub_auto("server_error", 1) as err_port_started:
+            var guard_4 = CleanupGuard()
+            with spawn_jev_stub_auto(
+                "server_error", 1, guard_4
+            ) as err_port_started:
                 var err_port = err_port_started.port
                 with HttpClient(timeout_ms=5000, max_redirects=0) as client:
                     var response = client.post(
@@ -327,6 +338,10 @@ def test_local_provider_server_scripts_transport_failures() raises:
                     )
                     assert_equal(response.status, 500)
                 err_port_started.stub.wait()
+
+            guard_4.assert_clean()
+        guard_3.assert_clean()
+    guard_2.assert_clean()
 
 
 from hyf_provider.jev_client import post_jev_systemone, validate_jev_base_url
@@ -351,7 +366,8 @@ def test_jev_endpoint_policy_and_loopback_client() raises:
     with assert_raises():
         _ = validate_jev_base_url("ftp://api.typesafe.ai")
 
-    with spawn_jev_stub_auto("ok", 1) as started:
+    var guard_5 = CleanupGuard()
+    with spawn_jev_stub_auto("ok", 1, guard_5) as started:
         var port = started.port
         var outcome = post_jev_systemone(
             "http://127.0.0.1:" + String(port),
@@ -361,6 +377,8 @@ def test_jev_endpoint_policy_and_loopback_client() raises:
         assert_equal(outcome.status, 200)
         assert_true(outcome.body_text.find("jev-1.13.0") >= 0)
         started.stub.wait()
+
+    guard_5.assert_clean()
 
 
 from flare.tls import TlsVerify
@@ -380,7 +398,8 @@ def test_tls_and_redirect_policy() raises:
         assert_tls_verification_required(TlsConfig.insecure())
     assert_true(not redirects_forward_credentials())
 
-    with spawn_jev_stub_auto("redirect", 1) as started:
+    var guard_6 = CleanupGuard()
+    with spawn_jev_stub_auto("redirect", 1, guard_6) as started:
         var port = started.port
         with assert_raises():
             with HttpClient(timeout_ms=5000, max_redirects=0) as client:
@@ -388,6 +407,8 @@ def test_tls_and_redirect_policy() raises:
                     "http://127.0.0.1:" + String(port) + "/v1/systemone", "{}"
                 )
         started.stub.wait()
+
+    guard_6.assert_clean()
 
 
 from hyf_provider.jev_client import failure_kind_for_status, retry_decision
@@ -410,7 +431,8 @@ def test_bounded_retry_and_budget_behavior() raises:
 
 
 def test_transport_cleanup_and_local_cancellation() raises:
-    with spawn_jev_stub_auto("ok", 1) as started:
+    var guard_7 = CleanupGuard()
+    with spawn_jev_stub_auto("ok", 1, guard_7) as started:
         var port = started.port
         var outcome = post_jev_systemone(
             "http://127.0.0.1:" + String(port),
@@ -428,3 +450,5 @@ def test_transport_cleanup_and_local_cancellation() raises:
                 _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
                 150,
             )
+
+    guard_7.assert_clean()

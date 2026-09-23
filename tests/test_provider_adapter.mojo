@@ -26,6 +26,7 @@ from hyf_runtime.config import (
     HyfServiceRuntimeConfig,
     default_loaded_runtime_config,
 )
+from parent_lifecycle import CleanupGuard
 from max_local_process_helper import (
     reserve_loopback_port,
     spawn_max_local_stub,
@@ -261,8 +262,9 @@ def test_max_local_transport_boundary_rejects_invalid_health_url() raises:
 
 
 def test_max_local_transport_boundary_reports_unknown_chat_transport() raises:
+    var guard_1 = CleanupGuard()
     with spawn_max_local_stub(
-        0, "query_rewrite_malformed_http", 1
+        0, "query_rewrite_malformed_http", 1, guard_1
     ) as provider_stub:
         var provider_port = provider_stub.port
         var outcome = post_max_local_chat_completion(
@@ -276,9 +278,14 @@ def test_max_local_transport_boundary_reports_unknown_chat_transport() raises:
 
         provider_stub.wait()
 
+    guard_1.assert_clean()
+
 
 def test_max_local_transport_boundary_reports_unknown_health_transport() raises:
-    with spawn_max_local_stub(0, "health_malformed_http", 1) as provider_stub:
+    var guard_2 = CleanupGuard()
+    with spawn_max_local_stub(
+        0, "health_malformed_http", 1, guard_2
+    ) as provider_stub:
         var provider_port = provider_stub.port
         var outcome = get_max_local_health(
             _provider_config_for_port(provider_port)
@@ -290,6 +297,8 @@ def test_max_local_transport_boundary_reports_unknown_health_transport() raises:
         assert_equal(outcome.failure.value().reason, "unknown_transport")
 
         provider_stub.wait()
+
+    guard_2.assert_clean()
 
 
 def test_query_rewrite_request_body_sets_schema_contract() raises:

@@ -10,6 +10,7 @@ from fixture_assertions import (
     load_scenario_request_json,
     status_request_with_invalid_version_json,
 )
+from parent_lifecycle import CleanupGuard
 from max_local_process_helper import (
     reserve_loopback_port,
     spawn_max_local_stub,
@@ -198,7 +199,8 @@ def _assert_query_rewrite_provider_fallback_with_deadline(
     requests: Int,
 ) raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, mode, requests) as provider_stub:
+        var guard_1 = CleanupGuard()
+        with spawn_max_local_stub(0, mode, requests, guard_1) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -252,6 +254,8 @@ def _assert_query_rewrite_provider_fallback_with_deadline(
                     )
 
             provider_stub.wait()
+
+        guard_1.assert_clean()
 
 
 def _assert_query_rewrite_provider_fallback(
@@ -1003,7 +1007,10 @@ def test_status_reports_unconfigured_assisted_runtime_truthfully() raises:
 
 def test_status_reports_non_2xx_max_local_health_truthfully() raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, "health_non_2xx", 1) as provider_stub:
+        var guard_2 = CleanupGuard()
+        with spawn_max_local_stub(
+            0, "health_non_2xx", 1, guard_2
+        ) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1046,10 +1053,15 @@ def test_status_reports_non_2xx_max_local_health_truthfully() raises:
 
             provider_stub.wait()
 
+        guard_2.assert_clean()
+
 
 def test_status_reports_ready_max_local_provider_truthfully() raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, "query_rewrite_ok", 1) as provider_stub:
+        var guard_3 = CleanupGuard()
+        with spawn_max_local_stub(
+            0, "query_rewrite_ok", 1, guard_3
+        ) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1134,10 +1146,15 @@ def test_status_reports_ready_max_local_provider_truthfully() raises:
 
             provider_stub.wait()
 
+        guard_3.assert_clean()
+
 
 def test_status_bounds_max_local_health_probe_timeout() raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, "health_timeout", 1) as provider_stub:
+        var guard_4 = CleanupGuard()
+        with spawn_max_local_stub(
+            0, "health_timeout", 1, guard_4
+        ) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1179,6 +1196,8 @@ def test_status_bounds_max_local_health_probe_timeout() raises:
                     )
 
             provider_stub.wait()
+
+        guard_4.assert_clean()
 
 
 def test_status_rejects_invalid_max_local_runtime_config() raises:
@@ -1517,7 +1536,10 @@ def test_capabilities_reports_configured_provider_runtime_truthfully() raises:
 
 def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, "query_rewrite_ok", 1) as provider_stub:
+        var guard_5 = CleanupGuard()
+        with spawn_max_local_stub(
+            0, "query_rewrite_ok", 1, guard_5
+        ) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1580,10 +1602,15 @@ def test_capabilities_reports_ready_max_local_provider_truthfully() raises:
 
             provider_stub.wait()
 
+        guard_5.assert_clean()
+
 
 def test_capabilities_bounds_max_local_health_probe_timeout() raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, "health_timeout", 1) as provider_stub:
+        var guard_6 = CleanupGuard()
+        with spawn_max_local_stub(
+            0, "health_timeout", 1, guard_6
+        ) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1633,6 +1660,8 @@ def test_capabilities_bounds_max_local_health_probe_timeout() raises:
                     )
 
             provider_stub.wait()
+
+        guard_6.assert_clean()
 
 
 def test_query_rewrite_falls_back_deterministically_when_provider_is_unavailable() raises:
@@ -1760,7 +1789,10 @@ def test_assisted_semantic_rank_falls_back_as_unsupported_provider_capability() 
 
 def test_query_rewrite_uses_max_local_provider_when_ready() raises:
     with SafeTempDir() as temp_dir:
-        with spawn_max_local_stub(0, "query_rewrite_ok", 2) as provider_stub:
+        var guard_7 = CleanupGuard()
+        with spawn_max_local_stub(
+            0, "query_rewrite_ok", 2, guard_7
+        ) as provider_stub:
             var provider_port = provider_stub.port
             var startup_config_path = (
                 Path(temp_dir) / "explicit-hyf-config.toml"
@@ -1841,6 +1873,8 @@ def test_query_rewrite_uses_max_local_provider_when_ready() raises:
                     )
 
             provider_stub.wait()
+
+        guard_7.assert_clean()
 
 
 def test_query_rewrite_falls_back_on_provider_non_2xx() raises:

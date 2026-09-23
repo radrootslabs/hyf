@@ -14,13 +14,15 @@ from flare.tcp import TcpListener, TcpStream
 
 from parent_lifecycle import (
     CENSUS_MAX_FDS,
-    CleanupLedger,
+    CleanupGuard,
     PipedChildState,
     ProcessStatus,
     child_exit,
+    classify_census_errno,
     classify_wait_errno,
     close_fd,
     descriptor_census,
+    descriptor_census_with_faults,
     dup2_fd,
     finalize_owned_failure,
     fork_owned_or_close,
@@ -31,9 +33,11 @@ from parent_lifecycle import (
     now_ms,
     open_fd_count,
     open_fd_count_checked,
+    open_fd_count_checked_with_faults,
     parse_ready_line,
     parse_ready_or_cleanup,
     pid_not_waitable,
+    pid_running,
     piped_child_state,
     read_all_bounded,
     read_line_bounded,
@@ -185,7 +189,8 @@ struct FramingFailure(Movable):
 
 
 def test_max_local_stub_reads_fragmented_large_body() raises:
-    with spawn_max_local_stub(0, "echo_body_bytes", 1) as stub:
+    var guard_1 = CleanupGuard()
+    with spawn_max_local_stub(0, "echo_body_bytes", 1, guard_1) as stub:
         var body = String("")
         for _ in range(9000):
             body += "x"
@@ -193,10 +198,13 @@ def test_max_local_stub_reads_fragmented_large_body() raises:
         assert_true(response.find('"received_bytes":9000') >= 0)
         stub.wait()
 
+    guard_1.assert_clean()
+
 
 def test_max_local_stub_counts_every_wire_attempt() raises:
     var requests = 3
-    with spawn_max_local_stub(0, "count_requests", requests) as stub:
+    var guard_2 = CleanupGuard()
+    with spawn_max_local_stub(0, "count_requests", requests, guard_2) as stub:
         for index in range(requests):
             var response = _request(
                 stub.port, "POST", "/v1/chat/completions", "{}"
@@ -206,11 +214,14 @@ def test_max_local_stub_counts_every_wire_attempt() raises:
             )
         stub.wait()
 
+    guard_2.assert_clean()
+
 
 def test_max_local_stub_rejects_unknown_path() raises:
     # FX02/FX04: an unexpected route must fail fixture verification, not be
     # answered 404 and then reported as a successful stub run.
-    with spawn_max_local_stub(0, "query_rewrite_ok", 1) as stub:
+    var guard_3 = CleanupGuard()
+    with spawn_max_local_stub(0, "query_rewrite_ok", 1, guard_3) as stub:
         var response = _request(stub.port, "POST", "/not-a-route", "{}")
         assert_true(response.find("404") < 0)
         stub.reap()
@@ -218,17 +229,23 @@ def test_max_local_stub_rejects_unknown_path() raises:
         assert_equal(stub.phase(), "exchange")
         assert_equal(stub.reason(), "unexpected_path")
 
+    guard_3.assert_clean()
+
 
 def test_max_local_stub_binds_and_reports_port() raises:
-    with spawn_max_local_stub(0, "count_requests", 1) as stub:
+    var guard_4 = CleanupGuard()
+    with spawn_max_local_stub(0, "count_requests", 1, guard_4) as stub:
         assert_true(stub.port > 0)
         var response = _request(stub.port, "POST", "/v1/chat/completions", "{}")
         assert_true(response.find('"request_index":1') >= 0)
         stub.wait()
 
+    guard_4.assert_clean()
+
 
 def test_jev_stub_observes_bearer_sentinel_at_intended_origin() raises:
-    with spawn_jev_stub_auto("echo_authorization", 1) as started:
+    var guard_5 = CleanupGuard()
+    with spawn_jev_stub_auto("echo_authorization", 1, guard_5) as started:
         var response = _request(
             started.port,
             "POST",
@@ -239,9 +256,12 @@ def test_jev_stub_observes_bearer_sentinel_at_intended_origin() raises:
         assert_true(response.find("hyf-sentinel-token") >= 0)
         started.stub.wait()
 
+    guard_5.assert_clean()
+
 
 def test_max_local_stub_stalled_child_is_reaped() raises:
-    with spawn_max_local_stub(0, "stall", 1) as stub:
+    var guard_6 = CleanupGuard()
+    with spawn_max_local_stub(0, "stall", 1, guard_6) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -252,8 +272,9 @@ def test_max_local_stub_stalled_child_is_reaped() raises:
         stub.terminate()
         assert_true(pid_not_waitable(stub.pid))
 
+    # ── FX01: explicit ordered scripted exchanges ───────────────────────────────
 
-# ── FX01: explicit ordered scripted exchanges ───────────────────────────────
+    guard_6.assert_clean()
 
 
 def test_max_local_scripted_matches_explicit_exchange() raises:
@@ -267,7 +288,8 @@ def test_max_local_scripted_matches_explicit_exchange() raises:
     script.response_headers = "x-scripted: yes"
     script.delay_ms = 20
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_7 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_7) as stub:
         var response = _request(
             stub.port,
             "POST",
@@ -282,11 +304,14 @@ def test_max_local_scripted_matches_explicit_exchange() raises:
         assert_equal(stub.request_count(), 1)
         assert_equal(stub.connection_count(), 1)
 
+    guard_7.assert_clean()
+
 
 def test_max_local_scripted_rejects_wrong_method() raises:
     var scripts = List[ExchangeScript]()
     scripts.append(_default_script())
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_8 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_8) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -298,11 +323,14 @@ def test_max_local_scripted_rejects_wrong_method() raises:
         assert_equal(stub.phase(), "exchange")
         assert_equal(stub.reason(), "method_mismatch")
 
+    guard_8.assert_clean()
+
 
 def test_max_local_scripted_rejects_wrong_path() raises:
     var scripts = List[ExchangeScript]()
     scripts.append(_default_script())
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_9 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_9) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -314,13 +342,16 @@ def test_max_local_scripted_rejects_wrong_path() raises:
         assert_equal(stub.phase(), "exchange")
         assert_equal(stub.reason(), "path_mismatch")
 
+    guard_9.assert_clean()
+
 
 def test_max_local_scripted_rejects_wrong_selected_header() raises:
     var scripts = List[ExchangeScript]()
     var script = _default_script()
     script.headers = "x-sentinel:expected"
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_10 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_10) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -333,6 +364,8 @@ def test_max_local_scripted_rejects_wrong_selected_header() raises:
         assert_equal(stub.phase(), "exchange")
         assert_equal(stub.reason(), "header_mismatch:x-sentinel")
 
+    guard_10.assert_clean()
+
 
 def test_max_local_scripted_rejects_wrong_body() raises:
     var scripts = List[ExchangeScript]()
@@ -340,7 +373,8 @@ def test_max_local_scripted_rejects_wrong_body() raises:
     script.check_body = True
     script.body = '{"expected":true}'
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_11 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_11) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -352,8 +386,9 @@ def test_max_local_scripted_rejects_wrong_body() raises:
         assert_equal(stub.phase(), "exchange")
         assert_equal(stub.reason(), "body_mismatch")
 
+    # ── FX02: unexpected/extra/missing/unconsumed accounting ────────────────────
 
-# ── FX02: unexpected/extra/missing/unconsumed accounting ────────────────────
+    guard_11.assert_clean()
 
 
 def test_scripted_rejects_extra_pipelined_exchange() raises:
@@ -361,7 +396,8 @@ def test_scripted_rejects_extra_pipelined_exchange() raises:
     var script = _default_script()
     script.close_connection = False
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_12 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_12) as stub:
         var first_frame = (
             "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\n"
             "content-length: 2\r\nconnection: keep-alive\r\n\r\n{}"
@@ -372,17 +408,22 @@ def test_scripted_rejects_extra_pipelined_exchange() raises:
         assert_equal(stub.phase(), "accounting")
         assert_equal(stub.reason(), "extra_exchange_after_completion")
 
+    guard_12.assert_clean()
+
 
 def test_scripted_rejects_missing_exchange() raises:
     var scripts = List[ExchangeScript]()
     scripts.append(_default_script())
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_13 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_13) as stub:
         var client = TcpStream.connect(SocketAddr.localhost(UInt16(stub.port)))
         client.close()
         stub.reap()
         assert_equal(stub.phase(), "accounting")
         assert_equal(stub.reason(), "missing_exchanges")
         assert_equal(stub.request_count(), 0)
+
+    guard_13.assert_clean()
 
 
 def test_scripted_reports_unconsumed_remaining_scripts() raises:
@@ -391,7 +432,8 @@ def test_scripted_reports_unconsumed_remaining_scripts() raises:
     first.close_connection = False
     scripts.append(first^)
     scripts.append(_default_script())
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_14 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_14) as stub:
         var client = TcpStream.connect(SocketAddr.localhost(UInt16(stub.port)))
         _write_all(
             client,
@@ -407,17 +449,20 @@ def test_scripted_reports_unconsumed_remaining_scripts() raises:
         assert_equal(stub.reason(), "missing_exchanges")
         assert_equal(stub.request_count(), 1)
 
+    # ── FX03: strict lexical framing ────────────────────────────────────────────
 
-# ── FX03: strict lexical framing ────────────────────────────────────────────
+    guard_14.assert_clean()
 
 
 def _framing_failure(raw: String) raises -> FramingFailure:
     var scripts = List[ExchangeScript]()
     scripts.append(_default_script())
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard = CleanupGuard()
+    var snapshot = FramingFailure(False, "", "-", "", 0, 0)
+    with spawn_max_local_scripted(0, scripts^, guard) as stub:
         _raw_send_only(stub.port, raw)
         stub.reap()
-        return FramingFailure(
+        snapshot = FramingFailure(
             stub.ok(),
             stub.phase(),
             stub.failure_case(),
@@ -425,6 +470,8 @@ def _framing_failure(raw: String) raises -> FramingFailure:
             stub.request_count(),
             stub.connection_count(),
         )
+    guard.assert_clean()
+    return snapshot^
 
 
 def test_strict_framing_lexical_content_length() raises:
@@ -540,7 +587,8 @@ def test_strict_framing_header_cap_exceeded() raises:
 
 
 def test_jev_echo_authorization_ignores_x_authorization() raises:
-    with spawn_jev_stub_auto("echo_authorization", 1) as started:
+    var guard_16 = CleanupGuard()
+    with spawn_jev_stub_auto("echo_authorization", 1, guard_16) as started:
         var response = _request(
             started.port,
             "POST",
@@ -551,6 +599,8 @@ def test_jev_echo_authorization_ignores_x_authorization() raises:
         assert_true(response.find("401") >= 0)
         assert_true(response.find("spoof") < 0)
         started.stub.wait()
+
+    guard_16.assert_clean()
 
 
 def test_strict_framing_split_utf8_body() raises:
@@ -564,7 +614,8 @@ def test_strict_framing_split_utf8_body() raises:
         payload += "é"
     script.body = payload
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_17 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_17) as stub:
         var client = TcpStream.connect(SocketAddr.localhost(UInt16(stub.port)))
         var head = (
             "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\n"
@@ -586,6 +637,8 @@ def test_strict_framing_split_utf8_body() raises:
         assert_true(response.find("200") >= 0)
         stub.wait()
 
+    guard_17.assert_clean()
+
 
 def test_strict_framing_surplus_retained_for_second_frame() raises:
     var scripts = List[ExchangeScript]()
@@ -598,7 +651,8 @@ def test_strict_framing_surplus_retained_for_second_frame() raises:
         "second", "POST", "/v1/chat/completions", 200, '{"n":2}'
     )
     scripts.append(second^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_18 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_18) as stub:
         var first_frame = (
             "POST /v1/chat/completions HTTP/1.1\r\nhost: 127.0.0.1\r\n"
             "content-length: 2\r\nconnection: keep-alive\r\n\r\n{}"
@@ -611,8 +665,9 @@ def test_strict_framing_surplus_retained_for_second_frame() raises:
         assert_equal(stub.request_count(), 2)
         assert_equal(stub.connection_count(), 1)
 
+    # ── FX04: route/method before auth, exact headers, safe escaping ────────────
 
-# ── FX04: route/method before auth, exact headers, safe escaping ────────────
+    guard_18.assert_clean()
 
 
 def test_jev_scripted_wrong_route_auth_not_bypassed() raises:
@@ -622,7 +677,8 @@ def test_jev_scripted_wrong_route_auth_not_bypassed() raises:
     )
     script.require_bearer = True
     scripts.append(script^)
-    with spawn_jev_scripted_auto(scripts^) as started:
+    var guard_19 = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard_19) as started:
         _raw_send_only(
             started.port,
             (
@@ -635,6 +691,8 @@ def test_jev_scripted_wrong_route_auth_not_bypassed() raises:
         assert_equal(started.stub.phase(), "exchange")
         assert_equal(started.stub.reason(), "path_mismatch")
 
+    guard_19.assert_clean()
+
 
 def test_scripted_rejects_duplicate_authorization() raises:
     var scripts = List[ExchangeScript]()
@@ -643,7 +701,8 @@ def test_scripted_rejects_duplicate_authorization() raises:
     )
     script.require_bearer = True
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_20 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_20) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -655,6 +714,8 @@ def test_scripted_rejects_duplicate_authorization() raises:
         stub.reap()
         assert_equal(stub.phase(), "exchange")
         assert_equal(stub.reason(), "auth_duplicate")
+
+    guard_20.assert_clean()
 
 
 def test_json_escape_control_characters() raises:
@@ -775,7 +836,8 @@ def test_scripted_persistent_counters_and_close_semantics() raises:
     )
     second.response_headers = "x-step: two"
     scripts.append(second^)
-    with spawn_jev_scripted_auto(scripts^) as started:
+    var guard_21 = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard_21) as started:
         var first_frame = (
             "POST /v1/systemone HTTP/1.1\r\nhost: 127.0.0.1\r\n"
             "authorization: Bearer t\r\ncontent-length: 2\r\n"
@@ -791,8 +853,9 @@ def test_scripted_persistent_counters_and_close_semantics() raises:
         assert_equal(started.stub.request_count(), 2)
         assert_equal(started.stub.connection_count(), 1)
 
+    # ── FX06/FX07/FX08: parent lifecycle and cause-specific failures ────────────
 
-# ── FX06/FX07/FX08: parent lifecycle and cause-specific failures ────────────
+    guard_21.assert_clean()
 
 
 def test_startup_failure_distinct_from_exchange_failure() raises:
@@ -803,8 +866,10 @@ def test_startup_failure_distinct_from_exchange_failure() raises:
     var port = Int(blocker.local_addr().port)
     var message = ""
     try:
-        with spawn_max_local_stub(port, "count_requests", 1) as stub:
+        var guard_22 = CleanupGuard()
+        with spawn_max_local_stub(port, "count_requests", 1, guard_22) as stub:
             stub.terminate()
+        guard_22.assert_clean()
     except e:
         message = String(e)
     blocker.close()
@@ -816,21 +881,27 @@ def test_startup_failure_distinct_from_exchange_failure() raises:
 def test_provider_stub_parent_deadline_watchdog() raises:
     # No client connects, so the child blocks in accept until the parent's own
     # finite deadline fires and the owned child is terminated and reaped.
-    with spawn_max_local_stub(0, "count_requests", 1, 800) as stub:
+    var guard_23 = CleanupGuard()
+    with spawn_max_local_stub(0, "count_requests", 1, guard_23, 800) as stub:
         stub.reap()
         assert_true(not stub.ok())
         assert_equal(stub.phase(), "watchdog")
         assert_equal(stub.reason(), "timeout")
         assert_true(pid_not_waitable(stub.pid))
 
+    guard_23.assert_clean()
+
 
 def test_jev_stub_parent_deadline_watchdog() raises:
-    with spawn_jev_stub_auto("ok", 1, 800) as started:
+    var guard_24 = CleanupGuard()
+    with spawn_jev_stub_auto("ok", 1, guard_24, 800) as started:
         started.stub.reap()
         assert_true(not started.stub.ok())
         assert_equal(started.stub.phase(), "watchdog")
         assert_equal(started.stub.reason(), "timeout")
         assert_true(pid_not_waitable(started.stub.pid))
+
+    guard_24.assert_clean()
 
 
 def test_bounded_read_caps_fail_for_intended_cause() raises:
@@ -880,16 +951,20 @@ def test_write_deadline_and_closed_pipe_causes() raises:
 
 
 def test_owned_child_reaped_after_early_terminate() raises:
-    with spawn_max_local_stub(0, "count_requests", 1) as stub:
+    var guard_25 = CleanupGuard()
+    with spawn_max_local_stub(0, "count_requests", 1, guard_25) as stub:
         stub.terminate()
         assert_true(pid_not_waitable(stub.pid))
+
+    guard_25.assert_clean()
 
 
 def test_repeated_failures_leave_no_owned_child() raises:
     for _ in range(3):
         var scripts = List[ExchangeScript]()
         scripts.append(_default_script())
-        with spawn_max_local_scripted(0, scripts^) as stub:
+        var guard_26 = CleanupGuard()
+        with spawn_max_local_scripted(0, scripts^, guard_26) as stub:
             _raw_send_only(
                 stub.port,
                 (
@@ -902,21 +977,26 @@ def test_repeated_failures_leave_no_owned_child() raises:
             assert_equal(stub.reason(), "path_mismatch")
             assert_true(pid_not_waitable(stub.pid))
 
+        guard_26.assert_clean()
+
 
 def test_repeated_teardown_does_not_leak_descriptors() raises:
     var before = open_fd_count()
     assert_true(before > 0)
     for _ in range(5):
-        with spawn_max_local_stub(0, "count_requests", 1) as stub:
+        var guard_27 = CleanupGuard()
+        with spawn_max_local_stub(0, "count_requests", 1, guard_27) as stub:
             stub.terminate()
             assert_true(pid_not_waitable(stub.pid))
+        guard_27.assert_clean()
     var after = open_fd_count()
     assert_true(after > 0)
     assert_true(after <= before)
 
 
 def test_timeout_terminates_and_reaps_stalled_child() raises:
-    with spawn_max_local_stub(0, "stall", 1) as stub:
+    var guard_28 = CleanupGuard()
+    with spawn_max_local_stub(0, "stall", 1, guard_28) as stub:
         _raw_send_only(
             stub.port,
             (
@@ -927,14 +1007,17 @@ def test_timeout_terminates_and_reaps_stalled_child() raises:
         stub.terminate()
         assert_true(pid_not_waitable(stub.pid))
 
+    guard_28.assert_clean()
+
 
 def _owned_report_child(
-    exit_code: Int, report: String
+    mut guard: CleanupGuard, exit_code: Int, report: String
 ) raises -> SpawnedMaxLocalStub:
     """Fork a test-owned child that writes ``report`` to stdout and exits.
 
     Lets LC02 prove real forged/empty/mismatched reports fail for their cause,
-    independent of the fixture serve loop.
+    independent of the fixture serve loop. The caller holds ``guard`` so the
+    cleanup outcome stays observable.
     """
     var pipe = make_pipe()
     var pid = fork_pid()
@@ -947,12 +1030,14 @@ def _owned_report_child(
             _ = write_raw(1, report)
         child_exit(exit_code)
     close_fd(pipe.write_fd)
-    var state = piped_child_state(pid, pipe.read_fd, 2000, 1, CleanupLedger())
+    var state = piped_child_state(
+        pid, pipe.read_fd, 2000, 1, UnsafePointer(to=guard)
+    )
     return SpawnedMaxLocalStub(pid, 0, state^)
 
 
 def _owned_jev_report_child(
-    exit_code: Int, report: String
+    mut guard: CleanupGuard, exit_code: Int, report: String
 ) raises -> SpawnedJevStub:
     """Same controlled report child, reaped through the Jev provider path."""
     var pipe = make_pipe()
@@ -966,7 +1051,9 @@ def _owned_jev_report_child(
             _ = write_raw(1, report)
         child_exit(exit_code)
     close_fd(pipe.write_fd)
-    var state = piped_child_state(pid, pipe.read_fd, 2000, 1, CleanupLedger())
+    var state = piped_child_state(
+        pid, pipe.read_fd, 2000, 1, UnsafePointer(to=guard)
+    )
     return SpawnedJevStub(pid, 0, state^)
 
 
@@ -977,9 +1064,11 @@ def test_scope_cleanup_on_assertion_failure() raises:
     var held_pid = 0
     var caught = False
     try:
-        with spawn_max_local_stub(0, "count_requests", 1) as stub:
+        var guard_29 = CleanupGuard()
+        with spawn_max_local_stub(0, "count_requests", 1, guard_29) as stub:
             held_pid = stub.pid
             assert_true(False)
+        guard_29.assert_clean()
     except:
         caught = True
     assert_true(caught)
@@ -991,34 +1080,42 @@ def test_scope_cleanup_on_generic_error() raises:
     var held_pid = 0
     var message = ""
     try:
-        with spawn_max_local_stub(0, "count_requests", 1) as stub:
+        var guard_30 = CleanupGuard()
+        with spawn_max_local_stub(0, "count_requests", 1, guard_30) as stub:
             held_pid = stub.pid
             raise Error("intentional scope error")
+        guard_30.assert_clean()
     except e:
         message = String(e)
     assert_equal(message, "intentional scope error")
     assert_true(pid_not_waitable(held_pid))
 
 
-def _early_return_owner() raises -> Int:
-    with spawn_max_local_stub(0, "count_requests", 1) as stub:
+def _early_return_owner(mut guard: CleanupGuard) raises -> Int:
+    # The guard is caller-held so the cleanup outcome stays observable even
+    # though this scope exits through a ``return`` before any post-scope line.
+    with spawn_max_local_stub(0, "count_requests", 1, guard) as stub:
         return stub.pid
     return 0
 
 
 def test_scope_cleanup_on_early_return() raises:
-    var held_pid = _early_return_owner()
+    var guard = CleanupGuard()
+    var held_pid = _early_return_owner(guard)
     assert_true(held_pid > 0)
     assert_true(pid_not_waitable(held_pid))
+    guard.assert_clean()
 
 
 def test_jev_scope_cleanup_on_assertion_failure() raises:
     var held_pid = 0
     var caught = False
     try:
-        with spawn_jev_stub_auto("ok", 1) as started:
+        var guard_32 = CleanupGuard()
+        with spawn_jev_stub_auto("ok", 1, guard_32) as started:
             held_pid = started.stub.pid
             assert_true(False)
+        guard_32.assert_clean()
     except:
         caught = True
     assert_true(caught)
@@ -1030,39 +1127,71 @@ def test_jev_scope_cleanup_on_generic_error() raises:
     var held_pid = 0
     var message = ""
     try:
-        with spawn_jev_stub_auto("ok", 1) as started:
+        var guard_33 = CleanupGuard()
+        with spawn_jev_stub_auto("ok", 1, guard_33) as started:
             held_pid = started.stub.pid
             raise Error("intentional jev scope error")
+        guard_33.assert_clean()
     except e:
         message = String(e)
     assert_equal(message, "intentional jev scope error")
     assert_true(pid_not_waitable(held_pid))
 
 
-def _jev_early_return_owner() raises -> Int:
-    with spawn_jev_stub_auto("ok", 1) as started:
+def _jev_early_return_owner(mut guard: CleanupGuard) raises -> Int:
+    # The guard is caller-held so the cleanup outcome stays observable even
+    # though this scope exits through a ``return`` before any post-scope line.
+    with spawn_jev_stub_auto("ok", 1, guard) as started:
         return started.stub.pid
     return 0
 
 
 def test_jev_scope_cleanup_on_early_return() raises:
-    var held_pid = _jev_early_return_owner()
+    var guard = CleanupGuard()
+    var held_pid = _jev_early_return_owner(guard)
     assert_true(held_pid > 0)
+    assert_true(pid_not_waitable(held_pid))
+    guard.assert_clean()
+
+
+def test_jev_early_return_cleanup_failure_is_observable() raises:
+    # RA01: an early return that leaves cleanup unproved must still fail the
+    # owning test through the caller-held guard, for the Jev provider path.
+    var guard = CleanupGuard()
+    var held_pid = 0
+    with spawn_jev_stub_auto("ok", 1, guard) as started:
+        held_pid = started.stub.pid
+        started.stub.inject_cleanup_failure()
+    var failure = ""
+    try:
+        guard.assert_clean()
+    except e:
+        failure = String(e)
+    assert_true(failure.find("cleanup-unproved") >= 0)
+    assert_true(held_pid > 0)
+    # The retained exact-owned child is still recoverable, not a message only.
+    assert_true(guard.retained() >= 1)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
     assert_true(pid_not_waitable(held_pid))
 
 
 def test_jev_startup_failure_is_truthful_and_cause_specific() raises:
     # PC02/LC01: the Jev startup-readiness failure path executes against a real
     # owned child, reports its cause and exposes the finalizer's cleanup truth.
+    # The caller-held guard is the enforcement point: a startup finalization
+    # that could not prove cleanup fails this test instead of being discarded.
     var blocker = TcpListener.bind(SocketAddr.localhost(0))
     var port = Int(blocker.local_addr().port)
     var message = ""
+    var guard = CleanupGuard()
     try:
-        var started = spawn_jev_stub(port, "ok", 1)
+        var started = spawn_jev_stub(port, "ok", 1, guard)
         started.cleanup()
     except e:
         message = String(e)
     blocker.close()
+    guard.assert_clean()
     assert_true(message.find("phase=startup") >= 0)
     assert_true(message.find("reason=serve_failed") >= 0)
     assert_true(message.find("cleanup=") >= 0)
@@ -1075,16 +1204,19 @@ def test_wait_error_taxonomy_distinguishes_causes() raises:
     assert_equal(classify_wait_errno(9999), "wait_error")
     assert_equal(wait_nohang(0).state, "wait_error")
     var live_pid = 0
-    with spawn_max_local_stub(0, "count_requests", 1) as stub:
+    var guard_35 = CleanupGuard()
+    with spawn_max_local_stub(0, "count_requests", 1, guard_35) as stub:
         live_pid = stub.pid
         assert_equal(wait_nohang(live_pid).state, "running")
         stub.terminate()
         assert_equal(wait_nohang(live_pid).state, "gone")
+    guard_35.assert_clean()
     assert_true(pid_not_waitable(live_pid))
 
 
 def test_repeated_reap_and_terminate_are_owned_and_idempotent() raises:
-    with spawn_max_local_stub(0, "count_requests", 1) as stub:
+    var guard_36 = CleanupGuard()
+    with spawn_max_local_stub(0, "count_requests", 1, guard_36) as stub:
         var owned_pid = stub.pid
         stub.terminate()
         stub.terminate()
@@ -1094,19 +1226,25 @@ def test_repeated_reap_and_terminate_are_owned_and_idempotent() raises:
         assert_true(cached.cleanup_proved())
         assert_true(not stub.ok())
 
+    # ── LC02: strict result truth ───────────────────────────────────────────────
 
-# ── LC02: strict result truth ───────────────────────────────────────────────
+    guard_36.assert_clean()
 
 
 def test_result_truth_rejects_empty_exit_zero_report() raises:
-    var stub = _owned_report_child(0, "")
+    var guard_101 = CleanupGuard()
+    var stub = _owned_report_child(guard_101, 0, "")
     stub.reap()
     assert_true(not stub.ok())
     assert_equal(stub.reason(), "missing_report")
 
+    guard_101.assert_clean()
+
 
 def test_result_truth_rejects_forged_success_with_nonzero_exit() raises:
+    var guard_102 = CleanupGuard()
     var stub = _owned_report_child(
+        guard_102,
         7,
         "result ok phase=complete case=- reason=ok requests=1 connections=1\n",
     )
@@ -1114,9 +1252,13 @@ def test_result_truth_rejects_forged_success_with_nonzero_exit() raises:
     assert_true(not stub.ok())
     assert_true(stub.reason().startswith("report_status_mismatch"))
 
+    guard_102.assert_clean()
+
 
 def test_result_truth_accepts_matching_report_and_exit() raises:
+    var guard_103 = CleanupGuard()
     var stub = _owned_report_child(
+        guard_103,
         0,
         "result ok phase=complete case=- reason=ok requests=1 connections=1\n",
     )
@@ -1125,6 +1267,8 @@ def test_result_truth_accepts_matching_report_and_exit() raises:
     assert_equal(stub.phase(), "complete")
     assert_equal(stub.request_count(), 1)
     assert_equal(stub.connection_count(), 1)
+
+    guard_103.assert_clean()
 
 
 def test_parse_report_rejects_malformed_inputs() raises:
@@ -1213,12 +1357,13 @@ def test_coalesced_ready_and_report_lines_retain_surplus() raises:
             " connections=1\n"
         ),
     )
+    var guard = CleanupGuard()
     var state = piped_child_state(
         pid=0,
         report_fd=pipe.read_fd,
         deadline_ms=500,
         expected_requests=1,
-        ledger=CleanupLedger(),
+        guard=UnsafePointer(to=guard),
     )
     var ready = state.read_line(2048, 500)
     var report = state.read_line(2048, 500)
@@ -1226,6 +1371,7 @@ def test_coalesced_ready_and_report_lines_retain_surplus() raises:
     close_fd(pipe.write_fd)
     assert_equal(ready, "ready 4242")
     assert_true(report.startswith("result ok"))
+    guard.assert_clean()
 
 
 # ── LC05: framing and descriptor census ─────────────────────────────────────
@@ -1266,7 +1412,8 @@ def test_header_value_rejects_control_bytes_and_trims_ows() raises:
     )
     script.headers = "x-ows:value"
     scripts.append(script^)
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_37 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_37) as stub:
         var response = _request(
             stub.port,
             "POST",
@@ -1276,6 +1423,8 @@ def test_header_value_rejects_control_bytes_and_trims_ows() raises:
         )
         assert_true(response.find("200") >= 0)
         stub.wait()
+
+    guard_37.assert_clean()
 
 
 def test_descriptor_census_detects_planted_high_fd() raises:
@@ -1333,7 +1482,9 @@ def test_stdio_fork_failure_closes_all_owned_pipes() raises:
 
 
 def test_result_truth_rejects_duplicate_report_line() raises:
+    var guard_104 = CleanupGuard()
     var stub = _owned_report_child(
+        guard_104,
         0,
         (
             "result ok phase=complete case=- reason=ok requests=1"
@@ -1345,33 +1496,38 @@ def test_result_truth_rejects_duplicate_report_line() raises:
     assert_true(not stub.ok())
     assert_equal(stub.reason(), "duplicate_report")
 
+    guard_104.assert_clean()
+
 
 def test_cleanup_failure_is_observable() raises:
-    # LC01/PC02: cleanup failure must be observable and must not claim the
-    # child was collected or discard retryable ownership.
-    var recorded = List[String]()
-    var ledger = CleanupLedger(UnsafePointer(to=recorded))
-    var state = piped_child_state(
-        pid=0,
-        report_fd=-1,
-        deadline_ms=100,
-        expected_requests=1,
-        ledger=ledger,
-    )
+    # RA01/RA02: a cleanup failure must be observable through the required
+    # caller-held guard, must not claim the child was collected, and must retain
+    # retryable ownership rather than only a message.
+    var guard = CleanupGuard()
+    var state = piped_child_state(0, -1, 100, 1, UnsafePointer(to=guard))
     var stub = SpawnedMaxLocalStub(0, 0, state^)
     stub.cleanup()
     assert_true(stub.cleanup_error().find("unreaped") >= 0)
     assert_true(not stub.status().cleanup_proved())
-    assert_equal(len(recorded), 1)
-    assert_true(recorded[0].find("unproved") >= 0)
+    assert_equal(guard.count(), 1)
+    assert_true(guard.first().find("unproved") >= 0)
+    assert_equal(guard.retained(), 1)
     # A second cleanup still retries the same owned identity rather than
     # short-circuiting on a false "reaped" flag.
     stub.cleanup()
-    assert_equal(len(recorded), 2)
+    assert_equal(guard.count(), 2)
+    var failure = ""
+    try:
+        guard.assert_clean()
+    except e:
+        failure = String(e)
+    assert_true(failure.find("cleanup-unproved") >= 0)
 
 
 def test_result_truth_rejects_wrong_request_count() raises:
+    var guard_105 = CleanupGuard()
     var stub = _owned_report_child(
+        guard_105,
         0,
         "result ok phase=complete case=- reason=ok requests=2 connections=1\n",
     )
@@ -1379,15 +1535,21 @@ def test_result_truth_rejects_wrong_request_count() raises:
     assert_true(not stub.ok())
     assert_equal(stub.reason(), "request_count_mismatch")
 
+    guard_105.assert_clean()
+
 
 def test_result_truth_rejects_invalid_connection_count() raises:
+    var guard_106 = CleanupGuard()
     var stub = _owned_report_child(
+        guard_106,
         0,
         "result ok phase=complete case=- reason=ok requests=1 connections=5\n",
     )
     stub.reap()
     assert_true(not stub.ok())
     assert_equal(stub.reason(), "connection_count_invalid")
+
+    guard_106.assert_clean()
 
 
 def test_completion_probe_read_error_is_distinct_from_setup_and_timeout() raises:
@@ -1506,7 +1668,9 @@ def test_malformed_ready_line_terminates_owned_child() raises:
 
 def test_status_observation_preserves_ownership_and_report() raises:
     # LC01/LC02: observing an exited child must not consume the report.
+    var guard_107 = CleanupGuard()
     var stub = _owned_report_child(
+        guard_107,
         0,
         "result ok phase=complete case=- reason=ok requests=1 connections=1\n",
     )
@@ -1524,9 +1688,12 @@ def test_status_observation_preserves_ownership_and_report() raises:
     assert_equal(stub.request_count(), 1)
     assert_true(stub.status().cleanup_proved())
 
+    guard_107.assert_clean()
+
 
 def test_status_observation_then_terminate_is_safe() raises:
-    var stub = _owned_report_child(0, "")
+    var guard_108 = CleanupGuard()
+    var stub = _owned_report_child(guard_108, 0, "")
     sleep_ms(100)
     _ = stub.status()
     var owned_pid = stub.pid
@@ -1536,14 +1703,16 @@ def test_status_observation_then_terminate_is_safe() raises:
     assert_true(pid_not_waitable(owned_pid))
     assert_true(not stub.ok())
 
+    # ── LC05: coalesced header cap accounting ───────────────────────────────────
 
-# ── LC05: coalesced header cap accounting ───────────────────────────────────
+    guard_108.assert_clean()
 
 
 def test_coalesced_large_body_does_not_charge_header_cap() raises:
     var scripts = List[ExchangeScript]()
     scripts.append(_default_script())
-    with spawn_max_local_scripted(0, scripts^) as stub:
+    var guard_38 = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard_38) as stub:
         var header_filler = String("")
         for _ in range(20000):
             header_filler += "a"
@@ -1563,8 +1732,9 @@ def test_coalesced_large_body_does_not_charge_header_cap() raises:
         assert_true(response.find("200") >= 0)
         stub.wait()
 
+    # ── PC01/PC02/PC04: complete report truth and retained ownership ─────────────
 
-# ── PC01/PC02/PC04: complete report truth and retained ownership ─────────────
+    guard_38.assert_clean()
 
 
 comptime VALID_REPORT = (
@@ -1577,30 +1747,37 @@ def _report_controls(
 ) raises:
     """Every report-framing control must fail for its cause on BOTH providers.
     """
-    var stub = _owned_report_child(exit_code, report)
+    var guard_109 = CleanupGuard()
+    var stub = _owned_report_child(guard_109, exit_code, report)
     var owned = stub.pid
     stub.reap()
     assert_true(not stub.ok())
     assert_equal(stub.reason(), expected_reason)
     assert_true(pid_not_waitable(owned))
-    var jev_stub = _owned_jev_report_child(exit_code, report)
+    var guard_110 = CleanupGuard()
+    var jev_stub = _owned_jev_report_child(guard_110, exit_code, report)
     var jev_owned = jev_stub.pid
     jev_stub.reap()
     assert_true(not jev_stub.ok())
     assert_equal(jev_stub.reason(), expected_reason)
     assert_true(pid_not_waitable(jev_owned))
 
+    guard_109.assert_clean()
+    guard_110.assert_clean()
+
 
 def test_report_stream_controls_both_providers() raises:
     # PC01: the complete bounded report stream is validated through EOF; a
     # positive control and the aligned/split/coalesced duplicate, no-LF,
     # malformed and inconsistent-field controls all execute on both providers.
-    var stub = _owned_report_child(0, VALID_REPORT)
+    var guard_111 = CleanupGuard()
+    var stub = _owned_report_child(guard_111, 0, VALID_REPORT)
     stub.reap()
     assert_true(stub.ok())
     assert_equal(stub.phase(), "complete")
     assert_equal(stub.request_count(), 1)
-    var jev_stub = _owned_jev_report_child(0, VALID_REPORT)
+    var guard_112 = CleanupGuard()
+    var jev_stub = _owned_jev_report_child(guard_112, 0, VALID_REPORT)
     jev_stub.reap()
     assert_true(jev_stub.ok())
     assert_equal(jev_stub.request_count(), 1)
@@ -1619,10 +1796,12 @@ def test_report_stream_controls_both_providers() raises:
     split_first += tail
     assert_equal(split_first.byte_length(), 700)
     _report_controls(split_first + VALID_REPORT, 0, "duplicate_report")
-    var split_positive = _owned_report_child(0, split_first)
+    var guard_113 = CleanupGuard()
+    var split_positive = _owned_report_child(guard_113, 0, split_first)
     split_positive.reap()
     assert_true(split_positive.ok())
-    var jev_split = _owned_jev_report_child(0, split_first)
+    var guard_114 = CleanupGuard()
+    var jev_split = _owned_jev_report_child(guard_114, 0, split_first)
     jev_split.reap()
     assert_true(jev_split.ok())
     var unterminated = String(
@@ -1685,29 +1864,45 @@ def test_report_stream_controls_both_providers() raises:
     oversize += tail
     _report_controls(oversize, 0, "ready_output_overflow")
 
+    guard_111.assert_clean()
+    guard_112.assert_clean()
+    guard_113.assert_clean()
+    guard_114.assert_clean()
+
 
 def test_startup_failure_cleanup_ownership_is_truthful() raises:
-    # PC02/LC01: the shared startup-failure finalizer used by both provider
+    # PC02/RA02: the shared startup-failure finalizer used by both provider
     # spawners must not claim an unproved termination as reaped; it records the
-    # exact pid and reap status in the caller-owned ledger.
-    var recorded = List[String]()
-    var ledger = CleanupLedger(UnsafePointer(to=recorded))
-    var state = piped_child_state(0, -1, 100, 1, ledger)
+    # exact pid/reap status in the required guard and retains a usable
+    # ownership handle for recovery.
+    var guard = CleanupGuard()
+    var state = piped_child_state(0, -1, 100, 1, UnsafePointer(to=guard))
     var status = finalize_owned_failure(state, 0, "startup cleanup unproved")
     assert_true(not status.cleanup_proved())
     assert_true(not state.reaped)
     assert_true(state.cleanup_error.startswith("unreaped"))
-    assert_equal(len(recorded), 1)
-    assert_true(recorded[0].find("startup cleanup unproved") >= 0)
-    assert_true(recorded[0].find("pid=0") >= 0)
+    assert_equal(guard.count(), 1)
+    assert_equal(guard.retained(), 1)
+    assert_true(guard.first().find("startup cleanup unproved") >= 0)
+    assert_true(guard.first().find("pid=0") >= 0)
 
-    var stub = _owned_report_child(0, "")
+    var stub = _owned_report_child(guard, 0, VALID_REPORT)
     var owned = stub.pid
     var proved = finalize_owned_failure(stub.state, owned, "startup cleanup")
     assert_true(proved.cleanup_proved())
     assert_true(stub.state.reaped)
     assert_true(pid_not_waitable(owned))
-    assert_equal(len(recorded), 1)
+    assert_equal(guard.count(), 1)
+    # The real child was collected, so only the synthetic entry above remains.
+    assert_true(not guard.is_clean())
+    # The required check reports that unresolved entry truthfully rather than
+    # silently discarding it.
+    var synthetic = ""
+    try:
+        guard.assert_clean()
+    except e:
+        synthetic = String(e)
+    assert_true(synthetic.find("cleanup-unproved") >= 0)
 
 
 def test_descriptor_read_error_is_distinct_from_eof() raises:
@@ -1723,7 +1918,10 @@ def test_descriptor_read_error_is_distinct_from_eof() raises:
     except e:
         line_message = String(e)
     assert_equal(line_message, "read_error")
-    var state = piped_child_state(closed_fd, closed_fd, 200, 1, CleanupLedger())
+    var guard = CleanupGuard()
+    var state = piped_child_state(
+        closed_fd, closed_fd, 200, 1, UnsafePointer(to=guard)
+    )
     var state_message = ""
     try:
         _ = state.read_line(64, 200)
@@ -1731,6 +1929,7 @@ def test_descriptor_read_error_is_distinct_from_eof() raises:
         state_message = String(e)
     assert_equal(state_message, "read_error")
     assert_true(not state.last_terminated)
+    guard.assert_clean()
 
 
 def test_multibyte_surplus_is_not_decoded_prematurely() raises:
@@ -1741,12 +1940,13 @@ def test_multibyte_surplus_is_not_decoded_prematurely() raises:
     var lead = List[UInt8]()
     lead.append(UInt8(0xC3))
     _ = write_raw_bytes(pipe.write_fd, lead)
+    var guard = CleanupGuard()
     var state = piped_child_state(
         pid=0,
         report_fd=pipe.read_fd,
         deadline_ms=500,
         expected_requests=1,
-        ledger=CleanupLedger(),
+        guard=UnsafePointer(to=guard),
     )
     var ready = state.read_line(64, 500)
     assert_equal(ready, "ready 4242")
@@ -1760,66 +1960,213 @@ def test_multibyte_surplus_is_not_decoded_prematurely() raises:
     close_fd(pipe.write_fd)
     assert_equal(letter, "\u00e9")
     assert_true(state.last_terminated)
+    guard.assert_clean()
 
 
 def test_cleanup_failure_preserves_retryable_ownership() raises:
-    # PC02: a controlled wait failure on a real owned child must not mark it
-    # reaped or discard ownership; the retry with the restored exact identity
-    # still collects it, and the failure stays recorded in the caller ledger.
-    var recorded = List[String]()
-    var ledger = CleanupLedger(UnsafePointer(to=recorded))
-    var stub = spawn_max_local_stub(0, "count_requests", 1, 2000, ledger)
+    # RA02: a controlled cleanup failure on a real owned child (the fault seam
+    # reports an unproved cleanup while the real forked child keeps running)
+    # must not mark it reaped or discard ownership; the retry collects the exact
+    # same identity and the earlier entry is resolved, not left as a message.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var stub = spawn_max_local_stub(0, "count_requests", 1, guard, 2000)
     var actual = stub.pid
-    stub.pid = 0
+    stub.state.faults.cleanup_failures = 1
     stub.cleanup()
     assert_true(stub.cleanup_error().find("unreaped") >= 0)
-    assert_equal(len(recorded), 1)
-    stub.pid = actual
+    assert_true(not stub.status().cleanup_proved())
+    assert_equal(guard.count(), 1)
+    assert_equal(guard.retained(), 1)
+    assert_true(pid_running(actual))
     stub.cleanup()
     assert_true(stub.status().cleanup_proved())
     assert_true(pid_not_waitable(actual))
+    guard.assert_clean()
+    assert_true(open_fd_count_checked() <= fd_before)
 
-    var jev_stub = spawn_jev_stub_auto("ok", 1, 2000, ledger)
+    var jev_guard = CleanupGuard()
+    var jev_fd_before = open_fd_count_checked()
+    var jev_stub = spawn_jev_stub_auto("ok", 1, jev_guard, 2000)
     var jev_actual = jev_stub.stub.pid
-    jev_stub.stub.pid = 0
+    jev_stub.stub.state.faults.cleanup_failures = 1
     jev_stub.stub.cleanup()
     assert_true(jev_stub.stub.cleanup_error().find("unreaped") >= 0)
-    assert_equal(len(recorded), 2)
-    jev_stub.stub.pid = jev_actual
+    assert_equal(jev_guard.retained(), 1)
+    assert_true(pid_running(jev_actual))
     jev_stub.stub.cleanup()
     assert_true(jev_stub.stub.status().cleanup_proved())
     assert_true(pid_not_waitable(jev_actual))
+    jev_guard.assert_clean()
+    assert_true(open_fd_count_checked() <= jev_fd_before)
+
+
+def test_cleanup_recovery_through_guard_both_providers() raises:
+    # RA02: a startup/scope cleanup failure must retain a *usable* ownership
+    # handle on the required guard, and recovery must collect the exact real
+    # child rather than only reporting a string.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var stub = spawn_max_local_stub(0, "count_requests", 1, guard, 2000)
+    var actual = stub.pid
+    stub.state.faults.cleanup_failures = 1
+    stub.cleanup()
+    assert_equal(guard.retained(), 1)
+    assert_equal(guard.recover_all(), 0)
+    assert_true(pid_not_waitable(actual))
+    guard.assert_clean()
+    # Recovery closes the retained report descriptor exactly once.
+    assert_true(open_fd_count_checked() <= fd_before)
+
+    var jev_guard = CleanupGuard()
+    var jev_fd_before = open_fd_count_checked()
+    var jev_stub = spawn_jev_stub_auto("ok", 1, jev_guard, 2000)
+    var jev_actual = jev_stub.stub.pid
+    jev_stub.stub.state.faults.cleanup_failures = 1
+    jev_stub.stub.cleanup()
+    assert_equal(jev_guard.retained(), 1)
+    assert_equal(jev_guard.recover_all(), 0)
+    assert_true(pid_not_waitable(jev_actual))
+    jev_guard.assert_clean()
+    assert_true(open_fd_count_checked() <= jev_fd_before)
 
 
 def test_reap_wait_error_retains_ownership_both_providers() raises:
-    # PC02: an unproved/uncertain wait consumed by reap() must not mark the
-    # child collected or discard retryable ownership; a later retry with the
-    # restored exact identity still collects it.
-    var recorded = List[String]()
-    var ledger = CleanupLedger(UnsafePointer(to=recorded))
-    var stub = spawn_max_local_stub(0, "count_requests", 1, 2000, ledger)
+    # RA02: a transient wait error consumed by reap() must stay retryable and
+    # must not become a cached terminal result; the retry reports success.
+    var guard = CleanupGuard()
+    var stub = _owned_report_child(guard, 0, VALID_REPORT)
     var actual = stub.pid
-    stub.pid = 0
+    stub.state.faults.wait_errors = 1
     stub.reap()
     assert_true(not stub.ok())
+    assert_equal(stub.reason(), "wait_error")
     assert_true(not stub.status().cleanup_proved())
-    assert_equal(len(recorded), 1)
-    stub.pid = actual
-    stub.cleanup()
+    assert_equal(guard.retained(), 1)
+    # The transient error must not be cached as a terminal observation.
+    assert_true(stub.status().state != "wait_error")
+    # A retry must observe the real child and still decode its valid report.
+    stub.reap()
+    assert_true(stub.ok())
+    assert_equal(stub.phase(), "complete")
+    assert_equal(stub.request_count(), 1)
     assert_true(stub.status().cleanup_proved())
     assert_true(pid_not_waitable(actual))
+    guard.assert_clean()
+    # A repeated reap is idempotent and does not re-wait or re-read.
+    stub.reap()
+    assert_true(stub.ok())
+    assert_equal(stub.request_count(), 1)
 
-    var jev_stub = spawn_jev_stub_auto("ok", 1, 2000, ledger)
-    var jev_actual = jev_stub.stub.pid
-    jev_stub.stub.pid = 0
-    jev_stub.stub.reap()
-    assert_true(not jev_stub.stub.ok())
-    assert_true(not jev_stub.stub.status().cleanup_proved())
-    assert_equal(len(recorded), 2)
-    jev_stub.stub.pid = jev_actual
-    jev_stub.stub.cleanup()
-    assert_true(jev_stub.stub.status().cleanup_proved())
+    var jev_guard = CleanupGuard()
+    var jev_stub = _owned_jev_report_child(jev_guard, 0, VALID_REPORT)
+    var jev_actual = jev_stub.pid
+    jev_stub.state.faults.wait_errors = 1
+    jev_stub.reap()
+    assert_true(not jev_stub.ok())
+    assert_equal(jev_stub.reason(), "wait_error")
+    assert_equal(jev_guard.retained(), 1)
+    jev_stub.reap()
+    assert_true(jev_stub.ok())
+    assert_equal(jev_stub.request_count(), 1)
     assert_true(pid_not_waitable(jev_actual))
+    jev_guard.assert_clean()
+
+
+def test_unexpected_nonterminal_status_fails_closed_both_providers() raises:
+    # RA02: an unexpected nonterminal wait status must fail closed and keep the
+    # exact ownership instead of falling through to a report success.
+    var guard = CleanupGuard()
+    var stub = _owned_report_child(guard, 0, VALID_REPORT)
+    var actual = stub.pid
+    stub.state.faults.nonterminal = 1
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.reason(), "unexpected_status")
+    assert_true(not stub.status().cleanup_proved())
+    assert_equal(guard.retained(), 1)
+    # Recovery still collects the exact owned child.
+    guard.recover_all()
+    guard.assert_clean()
+    assert_true(pid_not_waitable(actual))
+
+    var jev_guard = CleanupGuard()
+    var jev_stub = _owned_jev_report_child(jev_guard, 0, VALID_REPORT)
+    var jev_actual = jev_stub.pid
+    jev_stub.state.faults.nonterminal = 1
+    jev_stub.reap()
+    assert_true(not jev_stub.ok())
+    assert_equal(jev_stub.reason(), "unexpected_status")
+    jev_guard.recover_all()
+    jev_guard.assert_clean()
+    assert_true(pid_not_waitable(jev_actual))
+
+
+def test_cleanup_failure_fails_normal_scope_exit_both_providers() raises:
+    # RA01: an ordinary supported provider scope that exits normally must not
+    # silently discard a cleanup failure. The exact-owned child is retained for
+    # recovery, and the required guard check fails the owning test.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var held_pid = 0
+    with spawn_max_local_stub(0, "count_requests", 1, guard) as stub:
+        held_pid = stub.pid
+        stub.inject_cleanup_failure()
+    assert_true(pid_running(held_pid))
+    var failure = ""
+    try:
+        guard.assert_clean()
+    except e:
+        failure = String(e)
+    assert_true(failure.find("cleanup-unproved") >= 0)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
+    assert_true(pid_not_waitable(held_pid))
+    assert_true(open_fd_count_checked() <= fd_before)
+
+    var jev_guard = CleanupGuard()
+    var jev_fd_before = open_fd_count_checked()
+    var jev_pid = 0
+    with spawn_jev_stub_auto("ok", 1, jev_guard) as started:
+        jev_pid = started.stub.pid
+        started.stub.inject_cleanup_failure()
+    var jev_failure = ""
+    try:
+        jev_guard.assert_clean()
+    except e:
+        jev_failure = String(e)
+    assert_true(jev_failure.find("cleanup-unproved") >= 0)
+    assert_equal(jev_guard.recover_all(), 0)
+    jev_guard.assert_clean()
+    assert_true(pid_not_waitable(jev_pid))
+    assert_true(open_fd_count_checked() <= jev_fd_before)
+
+
+def test_cleanup_failure_separately_exposed_with_body_cause() raises:
+    # RA01: on the exception path the body/assertion cause must be preserved
+    # exactly while the cleanup failure is separately exposed by the guard.
+    var guard = CleanupGuard()
+    var body_message = ""
+    var held_pid = 0
+    try:
+        with spawn_max_local_stub(0, "count_requests", 1, guard) as stub:
+            held_pid = stub.pid
+            stub.inject_cleanup_failure()
+            raise Error("intentional scope error")
+    except e:
+        body_message = String(e)
+    # Body cause preserved, not replaced by the cleanup failure.
+    assert_equal(body_message, "intentional scope error")
+    assert_equal(guard.retained(), 1)
+    var failure = ""
+    try:
+        guard.assert_clean()
+    except e:
+        failure = String(e)
+    assert_true(failure.find("cleanup-unproved") >= 0)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
+    assert_true(pid_not_waitable(held_pid))
 
 
 def test_provider_reap_descriptor_read_error_both_paths() raises:
@@ -1833,12 +2180,16 @@ def test_provider_reap_descriptor_read_error_both_paths() raises:
     var pid = fork_pid()
     if pid == 0:
         child_exit(0)
-    var state = piped_child_state(pid, closed_fd, 2000, 1, CleanupLedger())
+    var guard = CleanupGuard()
+    var state = piped_child_state(
+        pid, closed_fd, 2000, 1, UnsafePointer(to=guard)
+    )
     var stub = SpawnedMaxLocalStub(pid, 0, state^)
     stub.reap()
     assert_true(not stub.ok())
     assert_equal(stub.reason(), "read_error")
     assert_true(pid_not_waitable(pid))
+    guard.assert_clean()
 
     var jev_pipe = make_pipe()
     var jev_closed_fd = jev_pipe.read_fd
@@ -1847,31 +2198,201 @@ def test_provider_reap_descriptor_read_error_both_paths() raises:
     var jev_pid = fork_pid()
     if jev_pid == 0:
         child_exit(0)
+    var jev_guard = CleanupGuard()
     var jev_state = piped_child_state(
-        jev_pid, jev_closed_fd, 2000, 1, CleanupLedger()
+        jev_pid, jev_closed_fd, 2000, 1, UnsafePointer(to=jev_guard)
     )
     var jev_stub = SpawnedJevStub(jev_pid, 0, jev_state^)
     jev_stub.reap()
     assert_true(not jev_stub.ok())
     assert_equal(jev_stub.reason(), "read_error")
     assert_true(pid_not_waitable(jev_pid))
+    jev_guard.assert_clean()
 
 
 def test_cleanup_failure_survives_scope_exit() raises:
-    # PC02: cleanup failure must remain observable after the owning handle is
-    # destroyed at scope exit, for BOTH provider handles.
-    var recorded = List[String]()
-    var ledger = CleanupLedger(UnsafePointer(to=recorded))
-    var state = piped_child_state(0, -1, 100, 1, ledger)
+    # RA01/PC02: cleanup failure must remain observable after the owning handle
+    # is destroyed at scope exit, for BOTH provider handles, because the guard
+    # is owned by the calling test rather than the handle.
+    var guard = CleanupGuard()
+    var state = piped_child_state(0, -1, 100, 1, UnsafePointer(to=guard))
     with SpawnedMaxLocalStub(0, 0, state^) as holder:
         _ = holder
-    assert_equal(len(recorded), 1)
-    assert_true(recorded[0].find("unproved") >= 0)
-    var jev_state = piped_child_state(0, -1, 100, 1, ledger)
+    assert_equal(guard.count(), 1)
+    assert_true(guard.first().find("unproved") >= 0)
+    var jev_state = piped_child_state(0, -1, 100, 1, UnsafePointer(to=guard))
     with SpawnedJevStub(0, 0, jev_state^) as jev_holder:
         _ = jev_holder
-    assert_equal(len(recorded), 2)
-    assert_true(recorded[1].find("unproved") >= 0)
+    assert_equal(guard.count(), 2)
+    assert_true(guard.first().find("unproved") >= 0)
+    var failure = ""
+    try:
+        guard.assert_clean()
+    except e:
+        failure = String(e)
+    assert_true(failure.find("cleanup-unproved") >= 0)
+
+
+@fieldwise_init
+struct ForkedReportChild(Movable):
+    """A real owned child whose bounded report emission is controlled by delay.
+    """
+
+    var pid: Int
+    var read_fd: Int
+
+
+def _fork_budget_child(
+    delay_ms: Int, report: String
+) raises -> ForkedReportChild:
+    """Fork a real owned child that writes ``report`` after ``delay_ms``."""
+    var pipe = make_pipe()
+    var pid = fork_pid()
+    if pid == 0:
+        close_fd(pipe.read_fd)
+        sleep_ms(delay_ms)
+        if report != "":
+            _ = write_raw(pipe.write_fd, report)
+        close_fd(pipe.write_fd)
+        child_exit(0)
+    close_fd(pipe.write_fd)
+    return ForkedReportChild(pid, pipe.read_fd)
+
+
+def test_report_after_work_budget_is_rejected_both_providers() raises:
+    # RA03: the period-9 counterexample. The child emits a *valid* report after
+    # 200 ms while the declared budget is 100 ms and the parent observes it at
+    # 300 ms; the late report must be rejected and the exact-owned child
+    # collected within the bounded cleanup allowance, never accepted with a
+    # fresh success interval.
+    for provider in range(2):
+        var guard = CleanupGuard()
+        var probe = _fork_budget_child(200, VALID_REPORT)
+        var start = now_ms()
+        var state = piped_child_state(
+            probe.pid, probe.read_fd, 100, 1, UnsafePointer(to=guard)
+        )
+        # The parent consumes its declared budget without observing the child,
+        # exactly as in the period-9 counterexample.
+        sleep_ms(300)
+        if provider == 0:
+            var stub = SpawnedMaxLocalStub(probe.pid, 0, state^)
+            stub.reap()
+            assert_true(not stub.ok())
+            assert_equal(stub.reason(), "work_budget_expired")
+            assert_true(stub.status().cleanup_proved())
+        else:
+            var stub = SpawnedJevStub(probe.pid, 0, state^)
+            stub.reap()
+            assert_true(not stub.ok())
+            assert_equal(stub.reason(), "work_budget_expired")
+            assert_true(stub.status().cleanup_proved())
+        var elapsed = now_ms() - start
+        # Only the bounded cleanup allowance is added after the budget expired.
+        assert_true(elapsed <= 100 + 2000 + 500)
+        assert_true(pid_not_waitable(probe.pid))
+        guard.assert_clean()
+
+
+def test_report_within_work_budget_succeeds_both_providers() raises:
+    # RA03 positive control: the same budgeted path accepts a report that is
+    # emitted and observed inside the declared budget.
+    for provider in range(2):
+        var guard = CleanupGuard()
+        var probe = _fork_budget_child(20, VALID_REPORT)
+        var state = piped_child_state(
+            probe.pid, probe.read_fd, 4000, 1, UnsafePointer(to=guard)
+        )
+        if provider == 0:
+            var stub = SpawnedMaxLocalStub(probe.pid, 0, state^)
+            stub.reap()
+            assert_true(stub.ok())
+            assert_equal(stub.phase(), "complete")
+            assert_equal(stub.request_count(), 1)
+        else:
+            var stub = SpawnedJevStub(probe.pid, 0, state^)
+            stub.reap()
+            assert_true(stub.ok())
+            assert_equal(stub.phase(), "complete")
+            assert_equal(stub.request_count(), 1)
+        assert_true(pid_not_waitable(probe.pid))
+        guard.assert_clean()
+
+
+def test_report_drain_deadline_is_bounded() raises:
+    # RA03: the report EOF-drain stage honours a finite deadline instead of a
+    # fresh unbounded interval; a report descriptor that never reaches EOF must
+    # fail with the drain deadline cause, never hang or succeed.
+    var pipe = make_pipe()
+    _ = write_raw(
+        pipe.write_fd,
+        "result ok phase=complete case=- reason=ok requests=1 connections=1\n",
+    )
+    var guard = CleanupGuard()
+    var state = piped_child_state(
+        0, pipe.read_fd, 500, 1, UnsafePointer(to=guard)
+    )
+    var line = state.read_line(STRICT_MAX_REPORT_BYTES, 500)
+    assert_true(state.last_terminated)
+    assert_true(line.startswith("result ok"))
+    var reason = ""
+    try:
+        _ = state.drain_surplus(STRICT_MAX_REPORT_BYTES, 60)
+    except e:
+        reason = String(e)
+    state.close_reader()
+    close_fd(pipe.write_fd)
+    assert_equal(reason, "read_deadline_expired")
+    guard.assert_clean()
+
+
+def test_work_budget_delay_rejects_before_report_both_providers() raises:
+    # RA03: time consumed inside the wait phase counts against the same finite
+    # budget, so an exhausted budget rejects even when a valid report is already
+    # buffered on the owned descriptor.
+    for provider in range(2):
+        var guard = CleanupGuard()
+        var probe = _fork_budget_child(0, VALID_REPORT)
+        var state = piped_child_state(
+            probe.pid, probe.read_fd, 400, 1, UnsafePointer(to=guard)
+        )
+        state.faults.wait_delay_ms = 900
+        if provider == 0:
+            var stub = SpawnedMaxLocalStub(probe.pid, 0, state^)
+            stub.reap()
+            assert_true(not stub.ok())
+            assert_equal(stub.reason(), "work_budget_expired")
+            assert_true(stub.status().cleanup_proved())
+        else:
+            var stub = SpawnedJevStub(probe.pid, 0, state^)
+            stub.reap()
+            assert_true(not stub.ok())
+            assert_equal(stub.reason(), "work_budget_expired")
+            assert_true(stub.status().cleanup_proved())
+        assert_true(pid_not_waitable(probe.pid))
+        guard.assert_clean()
+
+
+def test_descriptor_census_error_classes() raises:
+    # RA04: EBADF is a closed slot, EINTR is a bounded retry, and any other
+    # lookup error makes the census unavailable instead of silently lowering
+    # the count. The seam changes no host limit.
+    assert_equal(classify_census_errno(9), "closed")
+    assert_equal(classify_census_errno(4), "retry")
+    assert_equal(classify_census_errno(5), "unavailable")
+    var before = open_fd_count_checked()
+    assert_true(before > 0)
+    # EBADF at an open slot is a closed slot: the count is simply lower.
+    assert_equal(descriptor_census_with_faults(3, 0, 9), 2)
+    # Any other lookup error makes the whole census unavailable.
+    assert_equal(descriptor_census_with_faults(3, 0, 5), -1)
+    var unavailable = ""
+    try:
+        _ = open_fd_count_checked_with_faults(3, 0, 5)
+    except e:
+        unavailable = String(e)
+    assert_equal(unavailable, "descriptor_census_unavailable")
+    assert_equal(open_fd_count_checked(), before)
 
 
 def test_descriptor_census_unavailable_propagates() raises:

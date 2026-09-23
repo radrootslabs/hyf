@@ -15,6 +15,7 @@ from std.collections import List
 from std.ffi import CStringSlice, c_int, external_call
 
 from parent_lifecycle import (
+    IO_DEADLINE_EXPIRED,
     LIFECYCLE_POLL_SLICE_MS,
     POLLERR,
     POLLHUP,
@@ -83,13 +84,21 @@ struct DrainOutcome(Movable):
 
 
 def drain_ready(
-    fd: Int, mut out: List[UInt8], cap: Int, revents: Int
+    fd: Int, mut out: List[UInt8], cap: Int, revents: Int, deadline_ms: Int
 ) -> DrainOutcome:
-    """Read one ready descriptor into a capped buffer; preserve the cause."""
+    """Read one ready descriptor into a capped buffer; preserve the cause.
+
+    The read's EINTR retry is bounded by the caller's remaining
+    ``deadline_ms``, so a retried read returns to the deadline owner instead of
+    spinning, and an expired retry is a distinct ``read_deadline_expired``
+    cause rather than a clean EOF.
+    """
     if (revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) == 0:
         return DrainOutcome(False, "")
     var buf = InlineArray[Byte, 4096](fill=0)
-    var n = read_fd(fd, buf.unsafe_ptr(), 4096)
+    var n = read_fd(fd, buf.unsafe_ptr(), 4096, deadline_ms)
+    if n == IO_DEADLINE_EXPIRED:
+        return DrainOutcome(True, "read_deadline_expired")
     if n < 0:
         return DrainOutcome(True, "read_error")
     if n == 0:
@@ -115,19 +124,85 @@ def run_stdio_entrypoint(
     )
 
 
+def _stdio_phase_summary(
+    phase: String,
+    request_sent: Bool,
+    stdout_eof: Bool,
+    stderr_eof: Bool,
+    output_bytes: Int,
+    output_valid: Bool,
+    work_ms: Int,
+    cleanup_ms: Int,
+) -> String:
+    """Bounded phase/time evidence for a stdio failure (ADR-0018 RA03).
+
+    Work and cleanup time are recorded separately so an expired work budget can
+    never be confused with the bounded cleanup allowance, and the phase fields
+    prove which stage the child actually reached.
+    """
+    return (
+        "stdio-entrypoint phase="
+        + phase
+        + " request_sent="
+        + ("true" if request_sent else "false")
+        + " stdout_eof="
+        + ("true" if stdout_eof else "false")
+        + " stderr_eof="
+        + ("true" if stderr_eof else "false")
+        + " output_bytes="
+        + String(output_bytes)
+        + " output_valid="
+        + ("true" if output_valid else "false")
+        + " work_ms="
+        + String(work_ms)
+        + " cleanup_ms="
+        + String(cleanup_ms)
+    )
+
+
+def _output_is_valid_json(bytes: List[UInt8]) -> Bool:
+    """True when the captured stdout is nonempty and parses as JSON."""
+    if len(bytes) == 0:
+        return False
+    try:
+        _ = loads(bytes_to_string(bytes))
+        return True
+    except:
+        return False
+
+
 def _terminate_and_raise(
     pid: Int,
     stdin_fd: Int,
     stdout_fd: Int,
     stderr_fd: Int,
     reason: String,
+    phase: String,
+    request_sent: Bool,
+    stdout_eof: Bool,
+    stderr_eof: Bool,
+    output_bytes: Int,
+    output_valid: Bool,
+    work_ms: Int,
 ) raises:
+    var cleanup_start = now_ms()
     var st = terminate_owned(pid, TERMINATION_GRACE_MS)
+    var cleanup_ms = now_ms() - cleanup_start
     close_fd(stdin_fd)
     close_fd(stdout_fd)
     close_fd(stderr_fd)
     raise Error(
-        "stdio-entrypoint "
+        _stdio_phase_summary(
+            phase,
+            request_sent,
+            stdout_eof,
+            stderr_eof,
+            output_bytes,
+            output_valid,
+            work_ms,
+            cleanup_ms,
+        )
+        + " reason="
         + reason
         + " (child "
         + st.describe()
@@ -145,6 +220,28 @@ def run_stdio_entrypoint_with_2_args(
     )
 
 
+def run_stdio_binary_with_deadline(
+    binary: String,
+    request_json: String,
+    arg0: String,
+    arg1: String,
+    deadline_ms: Int,
+) raises -> Value:
+    """Run an already-built test child directly with the same guarantees.
+
+    ADR-0018 RA03 phase isolation: this launch seam performs no compilation, so
+    a late-exit control can prove the child actually reached valid output,
+    closed output and the wait phase before its late exit was rejected. The
+    ordinary compile/run helper keeps its declared total budget.
+    """
+    var args = List[String]()
+    if arg0 != "":
+        args.append(arg0)
+    if arg1 != "":
+        args.append(arg1)
+    return _run_stdio_launch(binary, args^, request_json, deadline_ms)
+
+
 def run_stdio_entrypoint_with_deadline(
     entrypoint: String,
     request_json: String,
@@ -152,34 +249,39 @@ def run_stdio_entrypoint_with_deadline(
     arg1: String,
     deadline_ms: Int,
 ) raises -> Value:
+    var args = List[String]()
+    args.append("run")
+    args.append("-I")
+    args.append("src")
+    args.append(entrypoint)
+    if arg0 != "":
+        args.append(arg0)
+    if arg1 != "":
+        args.append(arg1)
+    return _run_stdio_launch("mojo", args^, request_json, deadline_ms)
+
+
+def _run_stdio_launch(
+    command: String,
+    var args: List[String],
+    request_json: String,
+    deadline_ms: Int,
+) raises -> Value:
     # Build argv before owning any descriptors so no exception window can leak
     # pipes between creation and the fork; fork failure alone is handled by the
-    # rollback helper.
-    var command = String("mojo")
-    var include_flag = String("-I")
-    var include_path = String("src")
-    var entrypoint_path = String(entrypoint)
-    var process_arg0 = String(arg0)
-    var process_arg1 = String(arg1)
-    var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](length=8, fill={})
-    argv[0] = rebind[CStringSlice[ImmutAnyOrigin]](command.as_c_string_slice())
-    argv[1] = rebind[CStringSlice[ImmutAnyOrigin]]("run".as_c_string_slice())
-    argv[2] = rebind[CStringSlice[ImmutAnyOrigin]](
-        include_flag.as_c_string_slice()
+    # rollback helper. ``parts`` owns the C-string text for the whole call, so
+    # every argv entry points at a live buffer until after the fork/exec.
+    var parts = List[String]()
+    parts.append(command)
+    for index in range(len(args)):
+        parts.append(args[index])
+    var argv = List[Optional[CStringSlice[ImmutAnyOrigin]]](
+        length=len(parts) + 1, fill={}
     )
-    argv[3] = rebind[CStringSlice[ImmutAnyOrigin]](
-        include_path.as_c_string_slice()
-    )
-    argv[4] = rebind[CStringSlice[ImmutAnyOrigin]](
-        entrypoint_path.as_c_string_slice()
-    )
-    if process_arg0 != "":
-        argv[5] = rebind[CStringSlice[ImmutAnyOrigin]](
-            process_arg0.as_c_string_slice()
-        )
-    if process_arg1 != "":
-        argv[6] = rebind[CStringSlice[ImmutAnyOrigin]](
-            process_arg1.as_c_string_slice()
+    var elements = parts.unsafe_ptr()
+    for index in range(len(parts)):
+        argv[index] = rebind[CStringSlice[ImmutAnyOrigin]](
+            elements[index].as_c_string_slice()
         )
 
     var pipes = make_three_pipes()
@@ -189,7 +291,7 @@ def run_stdio_entrypoint_with_deadline(
     var stdout_write_fd = pipes.stdout_pipe.write_fd
     var stderr_read_fd = pipes.stderr_pipe.read_fd
     var stderr_write_fd = pipes.stderr_pipe.write_fd
-    var command_ptr = command.as_c_string_slice().unsafe_ptr()
+    var command_ptr = elements[0].as_c_string_slice().unsafe_ptr()
     var argv_ptr = argv.unsafe_ptr()
 
     var pid = fork_owned_or_close3(pipes)
@@ -262,7 +364,12 @@ def run_stdio_entrypoint_with_deadline(
                 write_reason = "write_pipe_closed"
                 stdin_done = True
             elif (pr.r0 & POLLOUT) != 0:
-                var cw = write_fd_chunk(stdin_write_fd, request, sent)
+                var cw = write_fd_chunk(
+                    stdin_write_fd,
+                    request,
+                    sent,
+                    budget - (now_ms() - start),
+                )
                 if cw.reason != "":
                     write_reason = cw.reason
                     stdin_done = True
@@ -274,7 +381,11 @@ def run_stdio_entrypoint_with_deadline(
                         stdin_write_fd = -1
         if not stdout_eof:
             var d = drain_ready(
-                stdout_read_fd, stdout, STDIO_MAX_STDOUT_BYTES, pr.r1
+                stdout_read_fd,
+                stdout,
+                STDIO_MAX_STDOUT_BYTES,
+                pr.r1,
+                budget - (now_ms() - start),
             )
             stdout_eof = d.eof
             if d.reason != "":
@@ -282,14 +393,21 @@ def run_stdio_entrypoint_with_deadline(
                 break
         if not stderr_eof:
             var d = drain_ready(
-                stderr_read_fd, stderr_bytes, STDIO_MAX_STDERR_BYTES, pr.r2
+                stderr_read_fd,
+                stderr_bytes,
+                STDIO_MAX_STDERR_BYTES,
+                pr.r2,
+                budget - (now_ms() - start),
             )
             stderr_eof = d.eof
             if d.reason != "":
                 read_reason = "stderr_" + d.reason
                 break
 
-    if write_reason == "" and sent < request.byte_length():
+    var request_sent = sent >= request.byte_length()
+    var work_ms = now_ms() - start
+    var output_len = len(stdout)
+    if write_reason == "" and not request_sent:
         # The loop only ends with stdin finished; guard any path that would
         # otherwise leave intended request bytes unwritten.
         write_reason = "write_incomplete"
@@ -301,18 +419,50 @@ def run_stdio_entrypoint_with_deadline(
             stdout_read_fd,
             stderr_read_fd,
             "write_" + write_reason,
+            "write",
+            request_sent,
+            stdout_eof,
+            stderr_eof,
+            output_len,
+            _output_is_valid_json(stdout),
+            work_ms,
         )
     if read_reason != "":
         _terminate_and_raise(
-            pid, -1, stdout_read_fd, stderr_read_fd, read_reason
+            pid,
+            -1,
+            stdout_read_fd,
+            stderr_read_fd,
+            read_reason,
+            "read",
+            request_sent,
+            stdout_eof,
+            stderr_eof,
+            output_len,
+            _output_is_valid_json(stdout),
+            work_ms,
         )
 
     var remaining = budget - (now_ms() - start)
     if remaining < 1:
         remaining = 1
     var st = wait_bounded(pid, remaining)
+    work_ms = now_ms() - start
     if not st.cleanup_proved():
-        _terminate_and_raise(pid, -1, stdout_read_fd, stderr_read_fd, "timeout")
+        _terminate_and_raise(
+            pid,
+            -1,
+            stdout_read_fd,
+            stderr_read_fd,
+            "timeout",
+            "wait",
+            request_sent,
+            stdout_eof,
+            stderr_eof,
+            output_len,
+            _output_is_valid_json(stdout),
+            work_ms,
+        )
     close_fd(stdout_read_fd)
     close_fd(stderr_read_fd)
 
@@ -321,7 +471,7 @@ def run_stdio_entrypoint_with_deadline(
 
     if st.exited and st.exit_code == 127:
         raise Error(
-            "stdio-entrypoint exec_failed (stdout="
+            "stdio-entrypoint phase=exit exec_failed (stdout="
             + output
             + " stderr="
             + diagnostics
@@ -329,7 +479,7 @@ def run_stdio_entrypoint_with_deadline(
         )
     if not st.exited or st.exit_code != 0:
         raise Error(
-            "stdio-entrypoint child_failed ("
+            "stdio-entrypoint phase=exit child_failed ("
             + st.describe()
             + " stderr="
             + diagnostics

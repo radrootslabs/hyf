@@ -14,7 +14,7 @@ from flare.utils import usleep
 from parent_lifecycle import (
     FIXTURE_DEFAULT_DEADLINE_MS,
     TERMINATION_GRACE_MS,
-    CleanupLedger,
+    CleanupGuard,
     PipedChildState,
     PipeFds,
     ProcessStatus,
@@ -24,13 +24,10 @@ from parent_lifecycle import (
     finalize_owned_failure,
     fork_owned_or_close,
     make_pipe,
-    now_ms,
     parse_ready_or_cleanup,
     piped_child_state,
     set_alarm,
-    terminate_owned,
-    wait_bounded,
-    wait_nohang,
+    sleep_ms,
     write_raw,
 )
 from strict_fixture import (
@@ -284,21 +281,26 @@ struct SpawnedJevStub(Movable):
         """Fast, non-raising owned cleanup for assertion/error/early return.
 
         Ownership is released only once the child is provably collected. An
-        uncertain wait keeps the handle retryable and records the failure in
-        the caller-owned ledger so it stays observable after scope exit
-        instead of being silently marked complete.
+        uncertain wait keeps the handle retryable, records the failure in the
+        required caller-held guard and retains the exact pid/report descriptor
+        for recovery, instead of being silently marked complete. Never raises,
+        so a body/assertion cause is preserved at scope exit.
         """
         if self.state.reaped:
             return
-        var status = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+        var report_fd = self.state.report_fd
+        var status = self.state.terminate_once(self.pid, TERMINATION_GRACE_MS)
         self.state.status = status.copy()
         if status.cleanup_proved():
             self.state.reaped = True
             self.state.close_reader()
+            self.state.guard[].resolve_pid(self.pid)
             return
-        self.state.cleanup_error = "unreaped:" + status.describe()
-        self.state.ledger.record(
-            "owned-child cleanup unproved " + status.describe()
+        self.state.record_unproved(
+            self.pid,
+            report_fd,
+            "owned-child cleanup unproved",
+            "unreaped:" + status.describe(),
         )
 
     def ok(self) -> Bool:
@@ -337,43 +339,79 @@ struct SpawnedJevStub(Movable):
         )
 
     def status(mut self) -> ProcessStatus:
-        """Observe child status without losing ownership or report truth."""
+        """Observe child status without losing ownership or report truth.
+
+        A terminal observation is cached so a later ``reap`` never performs a
+        new wait on a stale/reused identity. A transient ``wait_error`` or any
+        other nonterminal result is returned but deliberately *not* cached, so
+        it stays retryable and cannot overwrite a valid terminal result.
+        """
         if self.state.reaped:
             return self.state.status.copy()
         if self.state.observed_valid:
             return self.state.observed.copy()
-        var st = wait_nohang(self.pid)
-        if st.state == "running" or st.state == "interrupted":
-            return st^
-        self.state.observed = st.copy()
-        self.state.observed_valid = True
+        var st = self.state.wait_once(self.pid)
+        if st.state == "reaped" or st.state == "gone":
+            self.state.observed = st.copy()
+            self.state.observed_valid = True
         return st^
 
     def reap(mut self):
-        """Strictly reap the owned child and decode its bounded report."""
+        """Reap the owned child within one declared finite work budget.
+
+        Never raises (so ``__exit__`` cannot mask a body error). Startup, wait,
+        report line and EOF drain share ``deadline_ms`` measured from spawn: an
+        expired budget fails with ``work_budget_expired`` and only the bounded
+        cleanup allowance, and no fresh successful interval is granted.
+        """
         if self.state.reaped:
             return
-        var remaining = self.state.deadline_ms - (
-            now_ms() - self.state.spawn_ms
-        )
-        if remaining < 1:
-            remaining = 1
-        var status = wait_bounded(self.pid, remaining)
+        if self.state.faults.wait_delay_ms > 0:
+            sleep_ms(self.state.faults.wait_delay_ms)
+            self.state.faults.wait_delay_ms = 0
+        var remaining = self.state.work_remaining_ms()
+        if remaining <= 0:
+            self.state.store(
+                False, "watchdog", "-", "work_budget_expired", 0, 0
+            )
+            var expired = self.state.terminate_once(
+                self.pid, TERMINATION_GRACE_MS
+            )
+            self.state.status = expired.copy()
+            if expired.cleanup_proved():
+                self.state.reaped = True
+                self.state.close_reader()
+                self.state.guard[].resolve_pid(self.pid)
+            else:
+                self.state.reason = "work_budget_expired_unreaped"
+                self.state.record_unproved(
+                    self.pid,
+                    self.state.report_fd,
+                    "owned-child cleanup unproved",
+                    "unreaped:" + expired.describe(),
+                )
+            return
+        var status = ProcessStatus("pending", False, -1, 0, 0, "")
         if self.state.observed_valid:
             status = self.state.observed.copy()
+        else:
+            status = self.state.wait_until(self.pid, remaining)
         self.state.status = status.copy()
         if status.state == "running" or status.state == "interrupted":
-            var term = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+            var term = self.state.terminate_once(self.pid, TERMINATION_GRACE_MS)
             self.state.status = term.copy()
             self.state.store(False, "watchdog", "-", "timeout", 0, 0)
             if term.cleanup_proved():
                 self.state.reaped = True
                 self.state.close_reader()
+                self.state.guard[].resolve_pid(self.pid)
             else:
-                self.state.cleanup_error = "unreaped:" + term.describe()
                 self.state.reason = "timeout_unreaped"
-                self.state.ledger.record(
-                    "owned-child cleanup unproved " + term.describe()
+                self.state.record_unproved(
+                    self.pid,
+                    self.state.report_fd,
+                    "owned-child cleanup unproved",
+                    "unreaped:" + term.describe(),
                 )
             return
         if status.state == "gone":
@@ -382,32 +420,56 @@ struct SpawnedJevStub(Movable):
             self.state.store(False, "watchdog", "-", "gone", 0, 0)
             self.state.reaped = True
             self.state.close_reader()
+            self.state.guard[].resolve_pid(self.pid)
             return
         if status.state == "wait_error":
             # Identity/ownership is unproved: retain it for a retry and record
             # the uncertainty instead of claiming the child was collected.
             self.state.store(False, "watchdog", "-", "wait_error", 0, 0)
-            self.state.cleanup_error = "wait_error:" + status.error
-            self.state.ledger.record(
-                "owned-child wait unproved " + status.describe()
+            self.state.record_unproved(
+                self.pid,
+                self.state.report_fd,
+                "owned-child wait unproved",
+                "wait_error:" + status.error,
+            )
+            return
+        if status.state != "reaped":
+            # Unexpected nonterminal/unknown taxonomy: fail closed and keep the
+            # exact ownership so a later retry can still collect it.
+            self.state.store(False, "watchdog", "-", "unexpected_status", 0, 0)
+            self.state.record_unproved(
+                self.pid,
+                self.state.report_fd,
+                "owned-child unexpected status",
+                "unexpected:" + status.describe(),
             )
             return
         var report_text = ""
         var report_error = ""
-        try:
-            report_text = self.state.read_line(STRICT_MAX_REPORT_BYTES, 1000)
-            if self.state.last_terminated:
-                var surplus = self.state.drain_surplus(
-                    STRICT_MAX_REPORT_BYTES, 1000
+        var report_remaining = self.state.work_remaining_ms()
+        if report_remaining <= 0:
+            report_error = "report_budget_expired"
+        else:
+            try:
+                report_text = self.state.read_line(
+                    STRICT_MAX_REPORT_BYTES, report_remaining
                 )
-                if surplus > 0:
-                    report_error = "duplicate_report"
-            elif report_text.byte_length() > 0:
-                # Bytes at EOF without a terminating newline are a truncated
-                # report, never a complete one.
-                report_error = "unterminated_report"
-        except e:
-            report_error = String(e)
+                if self.state.last_terminated:
+                    var drain_remaining = self.state.work_remaining_ms()
+                    if drain_remaining <= 0:
+                        report_error = "drain_deadline_expired"
+                    else:
+                        var surplus = self.state.drain_surplus(
+                            STRICT_MAX_REPORT_BYTES, drain_remaining
+                        )
+                        if surplus > 0:
+                            report_error = "duplicate_report"
+                elif report_text.byte_length() > 0:
+                    # Bytes at EOF without a terminating newline are a
+                    # truncated report, never a complete one.
+                    report_error = "unterminated_report"
+            except e:
+                report_error = String(e)
         self.state.close_reader()
         if report_text == "" and report_error == "":
             if status.exited and status.exit_code == 0:
@@ -431,15 +493,18 @@ struct SpawnedJevStub(Movable):
                     0,
                 )
             self.state.reaped = True
+            self.state.guard[].resolve_pid(self.pid)
             return
         if report_error != "":
             self.state.store(False, "parse", "-", report_error, -1, -1)
             self.state.reaped = True
+            self.state.guard[].resolve_pid(self.pid)
             return
         var parsed = parse_report(report_text)
         if parsed.phase == "parse":
             self.state.store(False, "parse", "-", parsed.reason, -1, -1)
             self.state.reaped = True
+            self.state.guard[].resolve_pid(self.pid)
             return
         self.state.store(
             parsed.ok,
@@ -467,6 +532,7 @@ struct SpawnedJevStub(Movable):
             self.state.phase = "accounting"
             self.state.reason = "connection_count_invalid"
         self.state.reaped = True
+        self.state.guard[].resolve_pid(self.pid)
 
     def wait(mut self) raises:
         self.reap()
@@ -476,15 +542,19 @@ struct SpawnedJevStub(Movable):
     def terminate(mut self) raises:
         if self.state.reaped:
             return
-        var status = terminate_owned(self.pid, TERMINATION_GRACE_MS)
+        var report_fd = self.state.report_fd
+        var status = self.state.terminate_once(self.pid, TERMINATION_GRACE_MS)
         self.state.status = status.copy()
         if status.cleanup_proved():
             self.state.reaped = True
             self.state.close_reader()
+            self.state.guard[].resolve_pid(self.pid)
             return
-        self.state.cleanup_error = "unreaped:" + status.describe()
-        self.state.ledger.record(
-            "owned-child cleanup unproved " + status.describe()
+        self.state.record_unproved(
+            self.pid,
+            report_fd,
+            "owned-child cleanup unproved",
+            "unreaped:" + status.describe(),
         )
         raise Error("lifecycle: owned child not reaped: " + status.describe())
 
@@ -537,6 +607,27 @@ struct SpawnedJevStubView(Movable):
     def terminate(mut self) raises:
         self.target[].terminate()
 
+    def inject_cleanup_failure(mut self):
+        """Test-only bounded fault: force one unproved cleanup attempt.
+
+        The exact-owned child keeps running, so the follow-up retry exercises
+        the real recoverable ownership path rather than a synthetic identity.
+        """
+        self.target[].state.faults.cleanup_failures += 1
+
+    def inject_wait_error(mut self):
+        """Test-only bounded fault: force one transient wait error."""
+        self.target[].state.faults.wait_errors += 1
+
+    def inject_nonterminal_status(mut self):
+        """Test-only bounded fault: force one unexpected nonterminal status."""
+        self.target[].state.faults.nonterminal += 1
+
+    def inject_wait_delay_ms(mut self, ms: Int):
+        """Test-only bounded fault: consume work-budget time in the wait phase.
+        """
+        self.target[].state.faults.wait_delay_ms = ms
+
 
 @fieldwise_init
 struct SpawnedJevStubAuto(Movable):
@@ -574,10 +665,10 @@ def reserve_jev_port() raises -> Int:
 def spawn_jev_stub_auto(
     mode: String,
     requests: Int,
+    mut guard: CleanupGuard,
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
-    ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedJevStubAuto:
-    var stub = _spawn_jev_stub(0, mode, requests, deadline_ms, ledger)
+    var stub = _spawn_jev_stub(0, mode, requests, deadline_ms, guard)
     return SpawnedJevStubAuto(port=stub.port, stub=stub^)
 
 
@@ -585,10 +676,10 @@ def spawn_jev_stub(
     port: Int,
     mode: String,
     requests: Int,
+    mut guard: CleanupGuard,
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
-    ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedJevStub:
-    return _spawn_jev_stub(port, mode, requests, deadline_ms, ledger)
+    return _spawn_jev_stub(port, mode, requests, deadline_ms, guard)
 
 
 def serve_jev_scripted(
@@ -602,10 +693,10 @@ def serve_jev_scripted(
 
 def spawn_jev_scripted_auto(
     var scripts: List[ExchangeScript],
+    mut guard: CleanupGuard,
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
-    ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedJevStubAuto:
-    return _spawn_jev_scripted(0, scripts^, deadline_ms, ledger)
+    return _spawn_jev_scripted(0, scripts^, deadline_ms, guard)
 
 
 def _spawn_child_or_cleanup(
@@ -614,11 +705,11 @@ def _spawn_child_or_cleanup(
     mode: String,
     deadline_ms: Int,
     requests: Int,
-    ledger: CleanupLedger,
+    guard: UnsafePointer[CleanupGuard, MutAnyOrigin],
 ) raises -> SpawnedJevStub:
     """Build the owned state, read exact readiness, or clean up and raise."""
     var state = piped_child_state(
-        pid, pipe.read_fd, deadline_ms, requests, ledger
+        pid, pipe.read_fd, deadline_ms, requests, guard
     )
     var ready_line = ""
     try:
@@ -662,7 +753,7 @@ def _spawn_jev_scripted(
     port: Int,
     var scripts: List[ExchangeScript],
     deadline_ms: Int,
-    ledger: CleanupLedger = CleanupLedger(),
+    mut guard: CleanupGuard,
 ) raises -> SpawnedJevStubAuto:
     var total = len(scripts)
     var pipe = make_pipe()
@@ -675,17 +766,17 @@ def _spawn_jev_scripted(
         _ = set_alarm(STUB_ALARM_SECONDS)
         try:
             var report = serve_jev_scripted(port, scripts^)
-            write_raw(1, report_line(report) + "\n")
+            _ = write_raw(1, report_line(report) + "\n")
             child_exit(0 if report.ok else 125)
         except:
             var failed = ServeReport(
                 False, "startup", "scripted", "serve_failed", 0, 0
             )
-            write_raw(1, report_line(failed) + "\n")
+            _ = write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
     var stub = _spawn_child_or_cleanup(
-        pipe, pid, "scripted", deadline_ms, total, ledger
+        pipe, pid, "scripted", deadline_ms, total, UnsafePointer(to=guard)
     )
     return SpawnedJevStubAuto(port=stub.port, stub=stub^)
 
@@ -695,7 +786,7 @@ def _spawn_jev_stub(
     mode: String,
     requests: Int,
     deadline_ms: Int,
-    ledger: CleanupLedger = CleanupLedger(),
+    mut guard: CleanupGuard,
 ) raises -> SpawnedJevStub:
     var pipe = make_pipe()
     var pid = fork_owned_or_close(pipe.copy())
@@ -707,15 +798,15 @@ def _spawn_jev_stub(
         _ = set_alarm(STUB_ALARM_SECONDS)
         try:
             var report = serve_jev(port, mode, requests)
-            write_raw(1, report_line(report) + "\n")
+            _ = write_raw(1, report_line(report) + "\n")
             child_exit(0 if report.ok else 125)
         except:
             var failed = ServeReport(
                 False, "startup", mode, "serve_failed", 0, 0
             )
-            write_raw(1, report_line(failed) + "\n")
+            _ = write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
     return _spawn_child_or_cleanup(
-        pipe, pid, mode, deadline_ms, requests, ledger
+        pipe, pid, mode, deadline_ms, requests, UnsafePointer(to=guard)
     )

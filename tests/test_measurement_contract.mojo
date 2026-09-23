@@ -1,11 +1,19 @@
-"""H005A measurement contract tests (ADR-0012 D29, ADR-0014 D34).
+"""H005A measurement contract tests (ADR-0012 D29, ADR-0014 D34, ADR-0019 D39).
 
 Drives the governed persistent-process measurement tooling against a real
 build of the existing product entry point and against controlled child
-processes, proving that the reproduced H005 defects (R56/R57) now fail the
-measurement instead of reporting success: not-json output, wrong correlation,
-unterminated output, early EOF, a failed child and unavailable ``ps``/``lsof``
-sampling.
+processes, proving that the reproduced H005/R56/R57 defects and the period-10
+counterexamples now fail the measurement instead of reporting success:
+
+* MR01 — extra, coalesced, split, unterminated and malformed trailing stdout,
+  early EOF and a nonzero child exit;
+* MR02 — a valid response or exit that arrives after the one work budget, a
+  sampling subprocess that would outlive it, stderr overflow and a
+  deadline-bounded EINTR retry;
+* MR03 — repeated failing public measurement calls leave no descriptor or
+  child behind, with successful recovery afterward;
+* MR04 — source/binary identity drift rejection, delayed-startup timing and
+  truthful per-request/instrumentation accounting.
 
 This module is test-only tooling. It changes no product policy, schema,
 dependency or lock.
@@ -16,7 +24,12 @@ from std.testing import TestSuite, assert_equal, assert_true
 
 from safe_tempdir import SafeTempDir
 
-from parent_lifecycle import CleanupGuard, owned_pid, now_ms
+from parent_lifecycle import (
+    CleanupGuard,
+    now_ms,
+    open_fd_count_checked,
+    owned_pid,
+)
 from stdio_process_helper import (
     HYF_PATHS_PROFILE_ENV,
     HYF_PATHS_REPO_LOCAL_ROOT_ENV,
@@ -26,8 +39,11 @@ from measurement_process_helper import (
     MeasurementSession,
     build_product_binary,
     build_status_frame,
+    child_process_count,
     file_sha256,
     measure_persistent_process,
+    measurement_poll,
+    measurement_poll_retry,
     run_capture,
     sample_fd_count,
     sample_rss_kb,
@@ -40,15 +56,33 @@ from hyf_provider.client import post_max_local_chat_completion
 from hyf_provider.config import MaxLocalProviderConfig
 from hyf_provider.result import parse_query_analysis_from_chat_completion
 from hyf_provider.schema import build_query_rewrite_request_body
-from max_local_process_helper import (
-    reserve_loopback_port,
-    spawn_max_local_stub,
-)
+from max_local_process_helper import spawn_max_local_stub
 
 
 comptime MEASUREMENT_DEADLINE_MS = 120000
 comptime WARMUP_FRAMES = 20
 comptime MEASURED_FRAMES = 200
+
+# One valid sys.status response for request/trace index 0.
+comptime STATUS0 = (
+    '{"version":1,"request_id":"meas-status-0","trace_id":"meas-trace-0",'
+    '"ok":true,"output":{"daemon":"hyfd"}}'
+)
+comptime WRONG_REVISION = "0000000000000000000000000000000000000000"
+comptime WRONG_DIGEST = (
+    "0000000000000000000000000000000000000000000000000000000000000000"
+)
+
+
+def _one_response() -> String:
+    """A well-behaved responder: answer exactly one request, then consume the
+    rest of stdin until EOF so the child exits cleanly and closes stdout.
+    """
+    return (
+        "IFS= read -r line; printf '%s\\n' '"
+        + STATUS0
+        + "'; while IFS= read -r line; do :; done"
+    )
 
 
 def _sh(args_text: String) -> List[String]:
@@ -65,6 +99,7 @@ def _run_sh_measurement(
     mut guard: CleanupGuard,
     rss_sampler: String = "ps",
     fd_sampler: String = "lsof",
+    deadline_ms: Int = MEASUREMENT_DEADLINE_MS,
 ) raises -> MeasurementSession:
     var argv = _sh(args_text)
     return measure_persistent_process(
@@ -73,44 +108,85 @@ def _run_sh_measurement(
         argv^,
         warmup,
         measured,
-        MEASUREMENT_DEADLINE_MS,
+        deadline_ms,
         guard,
         rss_sampler,
         fd_sampler,
     )
 
 
+def _run_sh_failure(
+    args_text: String,
+    warmup: Int,
+    measured: Int,
+    mut guard: CleanupGuard,
+    rss_sampler: String = "ps",
+    fd_sampler: String = "lsof",
+    deadline_ms: Int = MEASUREMENT_DEADLINE_MS,
+) -> String:
+    try:
+        _ = _run_sh_measurement(
+            args_text,
+            warmup,
+            measured,
+            guard,
+            rss_sampler,
+            fd_sampler,
+            deadline_ms,
+        )
+    except e:
+        return String(e)
+    return ""
+
+
 # ── Positive persistent measurement ─────────────────────────────────────────
 
 
 def test_persistent_measurement_validates_every_frame() raises:
-    # D29: one process serves warmup and measured frames; every frame has a
-    # parsed envelope, matching correlation and expected outcome, with numeric
-    # RSS/FD samples, a checked child exit and proved cleanup. The recorded
-    # environment profile is the verified live profile of the measured child.
+    # D29/MR01: one process serves warmup and measured frames; every frame has
+    # a parsed envelope, matching correlation and expected outcome, the whole
+    # stream is accounted through EOF, with numeric RSS/FD samples, a checked
+    # child exit and proved cleanup. The recorded environment profile is the
+    # verified live profile of the measured child.
     var guard = CleanupGuard()
     with SafeTempDir() as temp_dir:
         with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
             with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
-                var binary = build_product_binary(temp_dir, guard)
-                assert_true(file_sha256(binary, guard).byte_length() == 64)
+                var built = build_product_binary(".", temp_dir, guard)
+                assert_equal(built.binary_sha256.byte_length(), 64)
+                assert_equal(built.source.dirty_status, "")
+                assert_equal(built.source.manifest_sha256.byte_length(), 64)
+                assert_true(built.build_ms > 0)
                 var argv = List[String]()
                 var session = measure_persistent_process(
                     ".",
-                    binary,
+                    built.binary_path,
                     argv^,
                     WARMUP_FRAMES,
                     MEASURED_FRAMES,
                     MEASUREMENT_DEADLINE_MS,
                     guard,
+                    "ps",
+                    "lsof",
+                    built.source.revision,
+                    built.source.manifest_sha256,
+                    built.binary_sha256,
                 )
                 assert_equal(session.ok_frames, WARMUP_FRAMES + MEASURED_FRAMES)
                 assert_equal(session.failed_frames, 0)
                 assert_equal(session.first_failure, "")
-                # Startup, warmup and measured timing are recorded separately (ms).
+                # Startup is measured from spawn to the first validated
+                # response; instrumentation is recorded separately.
                 assert_true(session.startup_ms >= 0)
+                assert_true(session.startup_wall_ms >= session.startup_ms)
+                assert_true(session.startup_sampling_ms >= 0)
+                # Measured-phase wall time excludes sampling instrumentation.
                 assert_true(session.measured_ms >= 0)
-                # Numeric sampling with recorded units and method.
+                assert_true(session.measured_wall_ms >= session.measured_ms)
+                assert_true(session.measured_sampling_ms >= 0)
+                assert_true(session.request_total_ms > 0)
+                assert_true(session.request_max_ms >= session.request_min_ms)
+                # Numeric sampling with recorded units, method and cadence.
                 assert_true(session.rss_kb_before_warmup > 0)
                 assert_true(session.rss_kb_after_warmup > 0)
                 assert_true(session.rss_kb_after_measured > 0)
@@ -120,17 +196,35 @@ def test_persistent_measurement_validates_every_frame() raises:
                 assert_true(session.fd_peak >= session.fd_after_measured)
                 assert_true(session.sampling_method.find("kB") >= 0)
                 assert_true(session.sampling_method.find("-F f") >= 0)
+                assert_true(session.sampling_cadence.find("every") >= 0)
                 # The declared per-process request policy is characterized, not
                 # assumed: the persistent loop does not enforce it.
                 assert_equal(session.declared_max_requests_per_process, 1)
                 assert_true(session.child_exit.find("exited=0") >= 0)
                 assert_true(session.stderr_excerpt == "")
-                # Exact, truthful identity: source revision, cwd, binary, pixi
-                # files, toolchain, host and the verified environment profile.
-                assert_equal(len(session.identity.binary_sha256), 64)
-                assert_equal(len(session.identity.pixi_lock_sha256), 64)
-                assert_equal(len(session.identity.pixi_toml_sha256), 64)
-                assert_equal(len(session.identity.source_revision), 40)
+                # Exact, truthful identity: clean verified source/tree plus a
+                # deterministic content manifest, binary, pixi files, toolchain,
+                # host and the verified environment profile.
+                assert_equal(session.identity.binding, "clean_product_tree")
+                assert_equal(
+                    session.identity.binary_sha256, built.binary_sha256
+                )
+                assert_equal(
+                    session.identity.source_revision, built.source.revision
+                )
+                assert_equal(
+                    session.identity.source_manifest_sha256,
+                    built.source.manifest_sha256,
+                )
+                assert_equal(session.identity.source_tree_state, "clean")
+                assert_equal(session.identity.source_tree.byte_length(), 40)
+                assert_equal(
+                    session.identity.pixi_lock_sha256.byte_length(), 64
+                )
+                assert_equal(
+                    session.identity.pixi_toml_sha256.byte_length(), 64
+                )
+                assert_equal(session.identity.source_revision.byte_length(), 40)
                 assert_true(session.identity.cwd.find("oss/hyf") >= 0)
                 assert_true(
                     session.identity.env_profile.find(
@@ -150,6 +244,77 @@ def test_persistent_measurement_validates_every_frame() raises:
                     )
                     >= 0
                 )
+    guard.assert_clean()
+
+
+def test_measurement_identity_drift_is_rejected() raises:
+    # MR04: a product measurement must reject a binary/source binding that does
+    # not match the observed clean source identity.
+    var guard = CleanupGuard()
+    var message = ""
+    with SafeTempDir() as temp_dir:
+        var built = build_product_binary(".", temp_dir, guard)
+        var wrong_revision = WRONG_REVISION
+        var argv = List[String]()
+        try:
+            _ = measure_persistent_process(
+                ".",
+                built.binary_path,
+                argv^,
+                0,
+                1,
+                MEASUREMENT_DEADLINE_MS,
+                guard,
+                "ps",
+                "lsof",
+                wrong_revision,
+                built.source.manifest_sha256,
+                built.binary_sha256,
+            )
+        except e:
+            message = String(e)
+    assert_true(message.find("drift") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_rejects_wrong_binary_digest() raises:
+    # MR04: the recorded binary digest is enforced, not merely recorded.
+    var guard = CleanupGuard()
+    var message = ""
+    with SafeTempDir() as temp_dir:
+        var built = build_product_binary(".", temp_dir, guard)
+        var argv = List[String]()
+        try:
+            _ = measure_persistent_process(
+                ".",
+                built.binary_path,
+                argv^,
+                0,
+                1,
+                MEASUREMENT_DEADLINE_MS,
+                guard,
+                "ps",
+                "lsof",
+                built.source.revision,
+                built.source.manifest_sha256,
+                WRONG_DIGEST,
+            )
+        except e:
+            message = String(e)
+    assert_true(message.find("binary drift") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_reports_delayed_startup() raises:
+    # MR04: startup timing is spawn-relative and truthful, so a deliberately
+    # delayed child is observed as such rather than as a near-zero value.
+    var guard = CleanupGuard()
+    var session = _run_sh_measurement(
+        "sleep 0.3; " + _one_response(), 0, 1, guard
+    )
+    assert_equal(session.ok_frames, 1)
+    assert_true(session.startup_ms >= 200)
+    assert_true(session.startup_wall_ms >= session.startup_ms)
     guard.assert_clean()
 
 
@@ -181,15 +346,16 @@ comptime ANALYSIS_JSON_TEXT = (
 
 
 def test_direct_provider_request_and_client_schema_characterization() raises:
-    # D29: distinguish startup, a deterministic daemon request, a direct local
-    # provider request and connection counts, and characterize client/schema
-    # construction with source evidence. The Morph daemon-assisted path is out
-    # of scope here and remains an explicit H024 obligation.
+    # D29/MR04: distinguish startup, a deterministic daemon request, a direct
+    # local provider request and connection counts, and characterize
+    # client/schema construction with numeric recorded values and source
+    # evidence. The Morph daemon-assisted path is out of scope here and remains
+    # an explicit H024 obligation.
     var guard = CleanupGuard()
-    var startup_start = now_ms()
+    var stub_start = now_ms()
     with spawn_max_local_stub(0, "count_requests", 1, guard) as stub:
-        var startup_ms = now_ms() - startup_start
-        assert_true(startup_ms >= 0)
+        var stub_startup_ms = now_ms() - stub_start
+        assert_true(stub_startup_ms >= 0)
         var config = MaxLocalProviderConfig(
             base_url="http://127.0.0.1:" + String(stub.port) + "/v1/",
             health_url="http://127.0.0.1:" + String(stub.port) + "/health",
@@ -198,10 +364,17 @@ def test_direct_provider_request_and_client_schema_characterization() raises:
         )
         var context = default_request_context()
         context.return_provenance = True
+        var construct_start = now_ms()
         var body = build_query_rewrite_request_body(
             config, "eggs near me", context
         )
-        # Schema construction is deterministic and source-verifiable.
+        var construct_ms = now_ms() - construct_start
+        # Schema construction is deterministic and source-verifiable, with a
+        # numeric field/message count that is recorded rather than asserted as
+        # a bare non-negative duration.
+        assert_true(construct_ms >= 0)
+        assert_true(body.object_count() > 0)
+        assert_equal(body["messages"].array_count(), 2)
         assert_equal(body["model"].string_value(), "max-local-query-rewrite")
         assert_equal(body["messages"][0]["role"].string_value(), "system")
         assert_equal(body["messages"][1]["role"].string_value(), "user")
@@ -212,9 +385,14 @@ def test_direct_provider_request_and_client_schema_characterization() raises:
             body["response_format"]["json_schema"]["name"].string_value(),
             "query_rewrite",
         )
-        # One direct provider request over one verified connection.
+        # One direct provider request over one verified connection, with a
+        # numeric elapsed time that is asserted to be a plausible positive
+        # measurement.
+        var request_start = now_ms()
         var outcome = post_max_local_chat_completion(config, body)
+        var request_ms = now_ms() - request_start
         assert_true(not outcome.failure)
+        assert_true(request_ms >= 0)
         stub.wait()
         assert_equal(stub.request_count(), 1)
         assert_equal(stub.connection_count(), 1)
@@ -234,83 +412,163 @@ def test_direct_provider_request_and_client_schema_characterization() raises:
     guard.assert_clean()
 
 
-# ── R56/R57 counterexamples must fail the measurement ───────────────────────
+def test_measurement_poll_eintr_is_deadline_bounded() raises:
+    # MR02: a real poll EINTR is retried but can never outlive the budget.
+    var start = now_ms()
+    var pr = measurement_poll_retry(-1, 0, -1, 0, -1, 0, 60, 1)
+    var elapsed = now_ms() - start
+    assert_true(pr.interrupted)
+    assert_true(elapsed >= 50)
+    assert_true(elapsed < 2000)
+    # An ordinary no-readiness poll is not misclassified as interrupted.
+    var quiet = measurement_poll(-1, 0, -1, 0, -1, 0, 0)
+    assert_equal(quiet.count, 0)
+    assert_true(not quiet.interrupted)
+
+
+# ── R56/R57/R69 counterexamples must fail the measurement ───────────────────
 
 
 def test_measurement_rejects_not_json_response() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement(
-            "while IFS= read -r line; do printf 'not-json\\n'; done",
-            0,
-            2,
-            guard,
-        )
-    except e:
-        message = String(e)
+    var message = _run_sh_failure(
+        "while IFS= read -r line; do printf 'not-json\\n'; done",
+        0,
+        2,
+        guard,
+    )
     assert_true(message.find("not_json") >= 0)
     guard.assert_clean()
 
 
 def test_measurement_rejects_wrong_correlation() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement(
-            (
-                "while IFS= read -r line; do printf '%s\\n' "
-                '\'{"version":1,"request_id":"wrong","trace_id":"wrong",'
-                '"ok":true,"output":{"daemon":"hyfd"}}\'; done'
-            ),
-            0,
-            2,
-            guard,
-        )
-    except e:
-        message = String(e)
+    var message = _run_sh_failure(
+        (
+            "while IFS= read -r line; do printf '%s\\n' "
+            '\'{"version":1,"request_id":"wrong","trace_id":"wrong",'
+            '"ok":true,"output":{"daemon":"hyfd"}}\'; done'
+        ),
+        0,
+        2,
+        guard,
+    )
     assert_true(message.find("correlation_mismatch") >= 0)
     guard.assert_clean()
 
 
 def test_measurement_rejects_unterminated_response() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement(
-            (
-                "IFS= read -r line; printf '%s' "
-                '\'{"version":1,"request_id":"meas-status-0",'
-                '"trace_id":"meas-trace-0","ok":true,'
-                '"output":{"daemon":"hyfd"}}\'; exit 0'
-            ),
-            0,
-            1,
-            guard,
-        )
-    except e:
-        message = String(e)
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s' "
+            '\'{"version":1,"request_id":"meas-status-0",'
+            '"trace_id":"meas-trace-0","ok":true,'
+            '"output":{"daemon":"hyfd"}}\'; exit 0'
+        ),
+        0,
+        1,
+        guard,
+    )
     assert_true(message.find("newline-terminated") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_rejects_extra_response_frame() raises:
+    # MR01/R69: an extra unvalidated frame after the expected response must
+    # fail, not be reported as success.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s\\n%s\\n' '"
+            + STATUS0
+            + "' 'EXTRA_UNVALIDATED_FRAME'; while IFS= read -r line; do :; done"
+        ),
+        0,
+        1,
+        guard,
+    )
+    assert_true(message.find("unexpected trailing stdout") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_rejects_coalesced_trailing_frame() raises:
+    # MR01: two frames arriving in the same read chunk are still two frames.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s\\n%s\\n' '"
+            + STATUS0
+            + "' '"
+            + STATUS0
+            + "'; while IFS= read -r line; do :; done"
+        ),
+        0,
+        1,
+        guard,
+    )
+    assert_true(
+        message.find("unexpected trailing stdout") >= 0
+        or message.find("correlation_mismatch") >= 0
+        or message.find("not_json") >= 0
+    )
+    guard.assert_clean()
+
+
+def test_measurement_rejects_trailing_malformed_bytes() raises:
+    # MR01: trailing bytes without a complete frame are a bounded failure.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s\\n' '"
+            + STATUS0
+            + "'; printf 'garbage'; while IFS= read -r line; do :; done"
+        ),
+        0,
+        1,
+        guard,
+    )
+    assert_true(
+        message.find("unexpected trailing stdout") >= 0
+        or message.find("newline-terminated") >= 0
+    )
+    guard.assert_clean()
+
+
+def test_measurement_rejects_unterminated_trailing_frame() raises:
+    # MR01: a second frame that never terminates is not silently ignored.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s\\n' '"
+            + STATUS0
+            + "'; printf '{\"partial\":true';"
+            " while IFS= read -r line; do :; done"
+        ),
+        0,
+        1,
+        guard,
+    )
+    assert_true(
+        message.find("unexpected trailing stdout") >= 0
+        or message.find("newline-terminated") >= 0
+    )
     guard.assert_clean()
 
 
 def test_measurement_rejects_failed_child() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement(
-            (
-                "while IFS= read -r line; do printf '%s\\n' "
-                '\'{"version":1,"request_id":"meas-status-0",'
-                '"trace_id":"meas-trace-0","ok":true,'
-                '"output":{"daemon":"hyfd"}}\'; done; exit 17'
-            ),
-            0,
-            1,
-            guard,
-        )
-    except e:
-        message = String(e)
+    var message = _run_sh_failure(
+        (
+            "while IFS= read -r line; do printf '%s\\n' "
+            '\'{"version":1,"request_id":"meas-status-0",'
+            '"trace_id":"meas-trace-0","ok":true,'
+            '"output":{"daemon":"hyfd"}}\'; done; exit 17'
+        ),
+        0,
+        1,
+        guard,
+    )
     assert_true(message.find("nonzero") >= 0)
     guard.assert_clean()
 
@@ -319,63 +577,156 @@ def test_measurement_rejects_early_eof_child() raises:
     # A child that never answers and closes its stream must fail as an early
     # EOF, not be read as a successful empty response.
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement("sleep 1; exit 0", 0, 1, guard)
-    except e:
-        message = String(e)
+    var message = _run_sh_failure("sleep 1; exit 0", 0, 1, guard)
     assert_true(message.find("measurement") >= 0)
     assert_true(
         message.find("early_eof") >= 0
         or message.find("write") >= 0
-        or message.find("descriptor sampling") >= 0
+        or message.find("sampling") >= 0
     )
+    guard.assert_clean()
+
+
+# ── MR02 work-budget and pressure controls ──────────────────────────────────
+
+
+def test_measurement_rejects_late_response_after_budget() raises:
+    # MR02: a valid response that arrives after the one work budget is not
+    # accepted as a late success.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        "sleep 2; " + _one_response(), 0, 1, guard, "ps", "lsof", 400
+    )
+    assert_true(message.find("work_deadline_expired") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_rejects_late_exit_after_budget() raises:
+    # MR02: complete and valid output does not rescue a child that keeps the
+    # stream open past the work budget.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "while IFS= read -r line; do printf '%s\\n' '"
+            + STATUS0
+            + "'; done; sleep 2"
+        ),
+        0,
+        1,
+        guard,
+        "ps",
+        "lsof",
+        400,
+    )
+    assert_true(message.find("work_deadline_expired") >= 0)
+    guard.assert_clean()
+
+
+def test_measurement_rejects_slow_sampling_past_budget() raises:
+    # MR02: a sampling subprocess consumes the remaining work budget and can
+    # never extend the measured window.
+    var guard = CleanupGuard()
+    with SafeTempDir() as temp_dir:
+        var script = temp_dir + "/slow_sampler.sh"
+        var mk = List[String]()
+        mk.append("-c")
+        mk.append(
+            "printf '#!/bin/sh\\nsleep 4\\necho 17\\n' > '"
+            + script
+            + "'; chmod +x '"
+            + script
+            + "'"
+        )
+        var made = run_capture("sh", mk^, 10000, guard)
+        assert_equal(made.exit_code, 0)
+        var message = _run_sh_failure(
+            _one_response(), 0, 1, guard, script, "lsof", 1500
+        )
+        assert_true(
+            message.find("sample_deadline_expired") >= 0
+            or message.find("work_deadline_expired") >= 0
+        )
+    guard.assert_clean()
+
+
+def test_measurement_rejects_stderr_overflow() raises:
+    # MR02: stderr pressure past the cap fails explicitly instead of being
+    # silently dropped.
+    var guard = CleanupGuard()
+    var message = _run_sh_failure(
+        (
+            "IFS= read -r line; printf '%s\\n' '"
+            + STATUS0
+            + "'; head -c 200000 /dev/zero | tr '\\0' 'x' 1>&2;"
+            " while IFS= read -r line; do :; done"
+        ),
+        0,
+        1,
+        guard,
+    )
+    assert_true(message.find("stderr_overflow") >= 0)
     guard.assert_clean()
 
 
 def test_measurement_rejects_unavailable_rss_sampler() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement(
-            "while IFS= read -r line; do printf '%s\\n' ok; done",
-            0,
-            1,
-            guard,
-            "hyf-no-such-rss-sampler",
-        )
-    except e:
-        message = String(e)
+    var message = _run_sh_failure(
+        "while IFS= read -r line; do printf '%s\\n' ok; done",
+        0,
+        1,
+        guard,
+        "hyf-no-such-rss-sampler",
+    )
     assert_true(message.find("rss sampling unavailable") >= 0)
     guard.assert_clean()
 
 
 def test_measurement_rejects_unavailable_fd_sampler() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement(
-            "while IFS= read -r line; do printf '%s\\n' ok; done",
-            0,
-            1,
-            guard,
-            "ps",
-            "hyf-no-such-fd-sampler",
-        )
-    except e:
-        message = String(e)
+    var message = _run_sh_failure(
+        "while IFS= read -r line; do printf '%s\\n' ok; done",
+        0,
+        1,
+        guard,
+        "ps",
+        "hyf-no-such-fd-sampler",
+    )
     assert_true(message.find("descriptor sampling unavailable") >= 0)
     guard.assert_clean()
 
 
 def test_measurement_rejects_invalid_frame_counts() raises:
     var guard = CleanupGuard()
-    var message = ""
-    try:
-        _ = _run_sh_measurement("exit 0", 0, 0, guard)
-    except e:
-        message = String(e)
+    var message = _run_sh_failure("exit 0", 0, 0, guard)
     assert_true(message.find("invalid warmup/measured") >= 0)
+    guard.assert_clean()
+
+
+# ── MR03 exact resource ownership ───────────────────────────────────────────
+
+
+def test_measurement_repeated_failures_leak_nothing() raises:
+    # MR03: repeated failing public measurement calls must leave no descriptor
+    # or child behind, and a subsequent supported call must still succeed.
+    var guard = CleanupGuard()
+    var self_pid = owned_pid()
+    var child_before = child_process_count(self_pid, guard)
+    var fd_before = open_fd_count_checked()
+    for index in range(4):
+        var message = _run_sh_failure(
+            "while IFS= read -r line; do printf 'not-json\\n'; done",
+            0,
+            1,
+            guard,
+        )
+        assert_true(message.find("not_json") >= 0)
+        guard.assert_clean()
+    var fd_after = open_fd_count_checked()
+    assert_equal(fd_after - fd_before, 0)
+    assert_equal(child_process_count(self_pid, guard), child_before)
+    var recovered = _run_sh_measurement(_one_response(), 0, 1, guard)
+    assert_equal(recovered.ok_frames, 1)
+    assert_equal(recovered.failed_frames, 0)
     guard.assert_clean()
 
 

@@ -105,6 +105,25 @@ def test_run_stdio_entrypoint_reaps_stalled_child_under_deadline() raises:
         message = String(e)
     assert_true(message.find("stdio-entrypoint") >= 0)
     assert_true(message.find("signal=") >= 0 or message.find("exited=") >= 0)
+    assert_true(message.find("cleanup_error=") >= 0)
+
+
+def test_run_stdio_entrypoint_rejects_unread_request() raises:
+    # PC03: an incomplete request write is a cause-specific failure even though
+    # the child emits valid JSON and exits zero, and the failure still exposes
+    # the owned child's cleanup truth.
+    var request = String("")
+    for _ in range(150000):
+        request += "r"
+    var message = ""
+    try:
+        _ = run_stdio_entrypoint_with_deadline(
+            "tests/stdio_no_read_entrypoint.mojo", request, "", "", 10000
+        )
+    except e:
+        message = String(e)
+    assert_true(message.find("write_") >= 0)
+    assert_true(message.find("cleanup_error=") >= 0)
 
 
 def test_run_stdio_entrypoint_classifies_loader_failure() raises:

@@ -17,6 +17,7 @@ from flare.utils import usleep
 from parent_lifecycle import (
     FIXTURE_DEFAULT_DEADLINE_MS,
     TERMINATION_GRACE_MS,
+    CleanupLedger,
     PipedChildState,
     ProcessStatus,
     child_exit,
@@ -24,7 +25,9 @@ from parent_lifecycle import (
     dup2_fd,
     fork_owned_or_close,
     make_pipe,
+    now_ms,
     parse_ready_or_cleanup,
+    piped_child_state,
     set_alarm,
     terminate_owned,
     wait_bounded,
@@ -369,15 +372,25 @@ struct SpawnedMaxLocalStub(Movable):
         self.cleanup()
 
     def cleanup(mut self):
-        """Fast, non-raising owned cleanup for assertion/error/early return."""
+        """Fast, non-raising owned cleanup for assertion/error/early return.
+
+        Ownership is released only once the child is provably collected. An
+        uncertain wait keeps the handle retryable and records the failure in
+        the caller-owned ledger so it stays observable after scope exit
+        instead of being silently marked complete.
+        """
         if self.state.reaped:
             return
         var status = terminate_owned(self.pid, TERMINATION_GRACE_MS)
         self.state.status = status.copy()
-        self.state.reaped = True
-        self.state.close_reader()
-        if not status.cleanup_proved():
-            self.state.cleanup_error = "unreaped:" + status.describe()
+        if status.cleanup_proved():
+            self.state.reaped = True
+            self.state.close_reader()
+            return
+        self.state.cleanup_error = "unreaped:" + status.describe()
+        self.state.ledger.record(
+            "owned-child cleanup unproved " + status.describe()
+        )
 
     def ok(self) -> Bool:
         return self.state.ok
@@ -442,7 +455,12 @@ struct SpawnedMaxLocalStub(Movable):
         """
         if self.state.reaped:
             return
-        var status = wait_bounded(self.pid, self.state.deadline_ms)
+        var remaining = self.state.deadline_ms - (
+            now_ms() - self.state.spawn_ms
+        )
+        if remaining < 1:
+            remaining = 1
+        var status = wait_bounded(self.pid, remaining)
         if self.state.observed_valid:
             status = self.state.observed.copy()
         self.state.status = status.copy()
@@ -464,13 +482,23 @@ struct SpawnedMaxLocalStub(Movable):
             self.state.close_reader()
             return
         var report_text = ""
-        var read_error = ""
+        var report_error = ""
         try:
             report_text = self.state.read_line(STRICT_MAX_REPORT_BYTES, 1000)
+            if self.state.last_terminated:
+                var surplus = self.state.drain_surplus(
+                    STRICT_MAX_REPORT_BYTES, 1000
+                )
+                if surplus > 0:
+                    report_error = "duplicate_report"
+            elif report_text.byte_length() > 0:
+                # Bytes at EOF without a terminating newline are a truncated
+                # report, never a complete one.
+                report_error = "unterminated_report"
         except e:
-            read_error = String(e)
+            report_error = String(e)
         self.state.close_reader()
-        if report_text == "":
+        if report_text == "" and report_error == "":
             if status.exited and status.exit_code == 0:
                 self.state.store(False, "startup", "-", "missing_report", 0, 0)
             elif status.exited:
@@ -491,15 +519,15 @@ struct SpawnedMaxLocalStub(Movable):
                     0,
                     0,
                 )
-            if read_error != "":
-                self.state.cleanup_error = "report_read:" + read_error
+            self.state.reaped = True
+            return
+        if report_error != "":
+            self.state.store(False, "parse", "-", report_error, -1, -1)
             self.state.reaped = True
             return
         var parsed = parse_report(report_text)
         if parsed.phase == "parse":
             self.state.store(False, "parse", "-", parsed.reason, -1, -1)
-            if read_error != "":
-                self.state.cleanup_error = "report_read:" + read_error
             self.state.reaped = True
             return
         self.state.store(
@@ -510,13 +538,7 @@ struct SpawnedMaxLocalStub(Movable):
             parsed.requests,
             parsed.connections,
         )
-        if self.state.pending != "":
-            # A second report line after the first is a duplicate/malformed
-            # report, never a success.
-            self.state.ok = False
-            self.state.phase = "parse"
-            self.state.reason = "duplicate_report"
-        elif not report_status_matches_exit(
+        if not report_status_matches_exit(
             status.exited, status.exit_code, parsed.ok
         ):
             self.state.ok = False
@@ -545,12 +567,15 @@ struct SpawnedMaxLocalStub(Movable):
             return
         var status = terminate_owned(self.pid, TERMINATION_GRACE_MS)
         self.state.status = status.copy()
-        self.state.reaped = True
-        self.state.close_reader()
-        if not status.cleanup_proved():
-            raise Error(
-                "lifecycle: owned child not reaped: " + status.describe()
-            )
+        if status.cleanup_proved():
+            self.state.reaped = True
+            self.state.close_reader()
+            return
+        self.state.cleanup_error = "unreaped:" + status.describe()
+        self.state.ledger.record(
+            "owned-child cleanup unproved " + status.describe()
+        )
+        raise Error("lifecycle: owned child not reaped: " + status.describe())
 
 
 struct SpawnedMaxLocalView(Movable):
@@ -640,18 +665,22 @@ def spawn_max_local_stub(
     mode: String,
     requests: Int,
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
+    ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedMaxLocalStub:
     var scripts = List[ExchangeScript]()
-    return _spawn_max_local(port, scripts^, mode, requests, False, deadline_ms)
+    return _spawn_max_local(
+        port, scripts^, mode, requests, False, deadline_ms, ledger
+    )
 
 
 def spawn_max_local_scripted(
     port: Int,
     var scripts: List[ExchangeScript],
     deadline_ms: Int = FIXTURE_DEFAULT_DEADLINE_MS,
+    ledger: CleanupLedger = CleanupLedger(),
 ) raises -> SpawnedMaxLocalStub:
     return _spawn_max_local(
-        port, scripts^, "scripted", len(scripts), True, deadline_ms
+        port, scripts^, "scripted", len(scripts), True, deadline_ms, ledger
     )
 
 
@@ -662,6 +691,7 @@ def _spawn_max_local(
     requests: Int,
     scripted: Bool,
     deadline_ms: Int,
+    ledger: CleanupLedger,
 ) raises -> SpawnedMaxLocalStub:
     var pipe = make_pipe()
     var pid = fork_owned_or_close(pipe.copy())
@@ -684,25 +714,8 @@ def _spawn_max_local(
             write_raw(1, report_line(failed) + "\n")
             child_exit(125)
     close_fd(pipe.write_fd)
-    var state = PipedChildState(
-        pid=pid,
-        report_fd=pipe.read_fd,
-        pending="",
-        eof=False,
-        closed=False,
-        deadline_ms=deadline_ms,
-        expected_requests=requests,
-        reaped=False,
-        ok=False,
-        phase="pending",
-        case_label="-",
-        reason="not_reaped",
-        requests=0,
-        connections=0,
-        cleanup_error="",
-        status=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed_valid=False,
+    var state = piped_child_state(
+        pid, pipe.read_fd, deadline_ms, requests, ledger
     )
     var ready_line = ""
     try:

@@ -13,6 +13,8 @@ from flare.net.socket import RawSocket
 from flare.tcp import TcpListener, TcpStream
 
 from parent_lifecycle import (
+    CENSUS_MAX_FDS,
+    CleanupLedger,
     PipedChildState,
     ProcessStatus,
     child_exit,
@@ -25,17 +27,20 @@ from parent_lifecycle import (
     fork_pid,
     make_pipe,
     make_three_pipes,
+    now_ms,
     open_fd_count,
     open_fd_count_checked,
     parse_ready_line,
     parse_ready_or_cleanup,
     pid_not_waitable,
+    piped_child_state,
     read_all_bounded,
     read_line_bounded,
     sleep_ms,
     wait_nohang,
     write_fd_bounded,
     write_raw,
+    write_raw_bytes,
 )
 from strict_fixture import (
     ConnectionReader,
@@ -55,6 +60,7 @@ from max_local_process_helper import (
     spawn_max_local_stub,
 )
 from jev_provider_helper import (
+    SpawnedJevStub,
     spawn_jev_scripted_auto,
     spawn_jev_stub_auto,
 )
@@ -938,27 +944,27 @@ def _owned_report_child(
             _ = write_raw(1, report)
         child_exit(exit_code)
     close_fd(pipe.write_fd)
-    var state = PipedChildState(
-        pid=pid,
-        report_fd=pipe.read_fd,
-        pending="",
-        eof=False,
-        closed=False,
-        deadline_ms=2000,
-        expected_requests=1,
-        reaped=False,
-        ok=False,
-        phase="pending",
-        case_label="-",
-        reason="not_reaped",
-        requests=0,
-        connections=0,
-        cleanup_error="",
-        status=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed_valid=False,
-    )
+    var state = piped_child_state(pid, pipe.read_fd, 2000, 1, CleanupLedger())
     return SpawnedMaxLocalStub(pid, 0, state^)
+
+
+def _owned_jev_report_child(
+    exit_code: Int, report: String
+) raises -> SpawnedJevStub:
+    """Same controlled report child, reaped through the Jev provider path."""
+    var pipe = make_pipe()
+    var pid = fork_pid()
+    if pid == 0:
+        if dup2_fd(pipe.write_fd, 1) < 0:
+            child_exit(126)
+        close_fd(pipe.read_fd)
+        close_fd(pipe.write_fd)
+        if report != "":
+            _ = write_raw(1, report)
+        child_exit(exit_code)
+    close_fd(pipe.write_fd)
+    var state = piped_child_state(pid, pipe.read_fd, 2000, 1, CleanupLedger())
+    return SpawnedJevStub(pid, state^)
 
 
 # ── LC01: automatic scope ownership ─────────────────────────────────────────
@@ -1161,25 +1167,12 @@ def test_coalesced_ready_and_report_lines_retain_surplus() raises:
             " connections=1\n"
         ),
     )
-    var state = PipedChildState(
+    var state = piped_child_state(
         pid=0,
         report_fd=pipe.read_fd,
-        pending="",
-        eof=False,
-        closed=False,
         deadline_ms=500,
         expected_requests=1,
-        reaped=False,
-        ok=False,
-        phase="pending",
-        case_label="-",
-        reason="not_reaped",
-        requests=0,
-        connections=0,
-        cleanup_error="",
-        status=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed_valid=False,
+        ledger=CleanupLedger(),
     )
     var ready = state.read_line(2048, 500)
     var report = state.read_line(2048, 500)
@@ -1308,31 +1301,27 @@ def test_result_truth_rejects_duplicate_report_line() raises:
 
 
 def test_cleanup_failure_is_observable() raises:
-    # LC01/D36: cleanup failure must be observable, never silently swallowed.
-    var state = PipedChildState(
+    # LC01/PC02: cleanup failure must be observable and must not claim the
+    # child was collected or discard retryable ownership.
+    var recorded = List[String]()
+    var ledger = CleanupLedger(UnsafePointer(to=recorded))
+    var state = piped_child_state(
         pid=0,
         report_fd=-1,
-        pending="",
-        eof=False,
-        closed=False,
         deadline_ms=100,
         expected_requests=1,
-        reaped=False,
-        ok=False,
-        phase="pending",
-        case_label="-",
-        reason="not_reaped",
-        requests=0,
-        connections=0,
-        cleanup_error="",
-        status=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
-        observed_valid=False,
+        ledger=ledger,
     )
     var stub = SpawnedMaxLocalStub(0, 0, state^)
     stub.cleanup()
     assert_true(stub.cleanup_error().find("unreaped") >= 0)
     assert_true(not stub.status().cleanup_proved())
+    assert_equal(len(recorded), 1)
+    assert_true(recorded[0].find("unproved") >= 0)
+    # A second cleanup still retries the same owned identity rather than
+    # short-circuiting on a false "reaped" flag.
+    stub.cleanup()
+    assert_equal(len(recorded), 2)
 
 
 def test_result_truth_rejects_wrong_request_count() raises:
@@ -1355,21 +1344,57 @@ def test_result_truth_rejects_invalid_connection_count() raises:
     assert_equal(stub.reason(), "connection_count_invalid")
 
 
-def test_completion_probe_error_is_not_success() raises:
-    # LC05: a non-timeout completion-probe I/O/setup error must not be read as
-    # a successful completion.
-    var pipe = make_pipe()
-    var sock = RawSocket(c_int(pipe.read_fd), c_int(2), c_int(1), True)
+def test_completion_probe_read_error_is_distinct_from_setup_and_timeout() raises:
+    # LC05/PC04: a real socket read error after a successful timeout setup must
+    # propagate as the exact read cause, not be read as success, a setup
+    # failure or a timeout.
+    #
+    # 1. Successful setup on a real (unconnected) socket, then a real read
+    #    error (ENOTCONN): the probe must raise and never return success.
+    var sock = RawSocket(c_int(2), c_int(1))
     var stream = TcpStream(sock^, SocketAddr.localhost(UInt16(1)))
-    var reader = ConnectionReader(stream^)
-    var raised = False
+    var setup_ok = False
     try:
-        _ = reader.probe_completion(20)
+        stream.set_recv_timeout(20)
+        setup_ok = True
     except e:
-        raised = True
         _ = String(e)
+    assert_true(setup_ok)
+    var reader = ConnectionReader(stream^)
+    var read_message = ""
+    var read_result = ""
+    try:
+        read_result = reader.probe_completion(20)
+    except e:
+        read_message = String(e)
+    assert_true(read_result == "")
+    assert_true(read_message.find("recv") >= 0)
+    assert_true(read_message.find("timeout") < 0)
+
+    # 2. A non-socket descriptor fails at setup, a distinct cause.
+    var pipe = make_pipe()
+    var pipe_sock = RawSocket(c_int(pipe.read_fd), c_int(2), c_int(1), True)
+    var pipe_stream = TcpStream(pipe_sock^, SocketAddr.localhost(UInt16(1)))
+    var pipe_reader = ConnectionReader(pipe_stream^)
+    var setup_failure = ""
+    try:
+        _ = pipe_reader.probe_completion(20)
+    except e:
+        setup_failure = String(e)
     close_fd(pipe.write_fd)
-    assert_true(raised)
+    assert_true(setup_failure != "")
+    assert_true(setup_failure.find("setsockopt") >= 0)
+
+    # 3. A quiet connected socket times out, which is the probe's success path
+    #    and stays distinct from the read error above.
+    var listener = TcpListener.bind(SocketAddr.localhost(0))
+    var port = Int(listener.local_addr().port)
+    var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
+    var server = listener.accept()
+    var server_reader = ConnectionReader(server^)
+    var quiet = server_reader.probe_completion(20)
+    client.close()
+    assert_equal(quiet, "")
 
 
 def test_descriptor_census_detects_planted_socket() raises:
@@ -1491,6 +1516,191 @@ def test_coalesced_large_body_does_not_charge_header_cap() raises:
         var response = _raw_exchange(stub.port, raw)
         assert_true(response.find("200") >= 0)
         stub.wait()
+
+
+# ── PC01/PC02/PC04: complete report truth and retained ownership ─────────────
+
+
+comptime VALID_REPORT = (
+    "result ok phase=complete case=- reason=ok requests=1 connections=1\n"
+)
+
+
+def _report_controls(
+    report: String, exit_code: Int, expected_reason: String
+) raises:
+    """Every report-framing control must fail for its cause on BOTH providers.
+    """
+    var stub = _owned_report_child(exit_code, report)
+    var owned = stub.pid
+    stub.reap()
+    assert_true(not stub.ok())
+    assert_equal(stub.reason(), expected_reason)
+    assert_true(pid_not_waitable(owned))
+    var jev_stub = _owned_jev_report_child(exit_code, report)
+    var jev_owned = jev_stub.pid
+    jev_stub.reap()
+    assert_true(not jev_stub.ok())
+    assert_equal(jev_stub.reason(), expected_reason)
+    assert_true(pid_not_waitable(jev_owned))
+
+
+def test_report_stream_controls_both_providers() raises:
+    # PC01: the complete bounded report stream is validated through EOF; a
+    # positive control and the aligned/split/coalesced duplicate, no-LF,
+    # malformed and inconsistent-field controls all execute on both providers.
+    var stub = _owned_report_child(0, VALID_REPORT)
+    stub.reap()
+    assert_true(stub.ok())
+    assert_equal(stub.phase(), "complete")
+    assert_equal(stub.request_count(), 1)
+    var jev_stub = _owned_jev_report_child(0, VALID_REPORT)
+    jev_stub.reap()
+    assert_true(jev_stub.ok())
+    assert_equal(jev_stub.request_count(), 1)
+
+    var first = "result ok phase=complete case="
+    var tail = " reason=ok requests=1 connections=1\n"
+    while first.byte_length() + tail.byte_length() < 512:
+        first += "x"
+    first += tail
+    assert_equal(first.byte_length(), 512)
+    _report_controls(first + VALID_REPORT, 0, "duplicate_report")
+    _report_controls(VALID_REPORT + VALID_REPORT, 0, "duplicate_report")
+    var unterminated = String(
+        VALID_REPORT[byte = 0 : VALID_REPORT.byte_length() - 1]
+    )
+    _report_controls(unterminated, 0, "unterminated_report")
+    _report_controls(
+        (
+            "result ok phase=read case=- reason=io_error requests=1"
+            " connections=1\n"
+        ),
+        0,
+        "inconsistent_status",
+    )
+    _report_controls(
+        "result ok phase= case=- reason=ok requests=1 connections=1\n",
+        0,
+        "empty_field",
+    )
+    _report_controls(
+        "result ok phase=complete case=- reason=ok requests=1\n",
+        0,
+        "missing_field",
+    )
+
+
+def test_descriptor_read_error_is_distinct_from_eof() raises:
+    # PC01/PC03: an unavailable descriptor is a bounded read error, never an
+    # EOF/empty success, for both the shared reader and the owned-child state.
+    var pipe = make_pipe()
+    var closed_fd = pipe.read_fd
+    close_fd(pipe.read_fd)
+    close_fd(pipe.write_fd)
+    var line_message = ""
+    try:
+        _ = read_line_bounded(closed_fd, 64, 200)
+    except e:
+        line_message = String(e)
+    assert_equal(line_message, "read_error")
+    var state = piped_child_state(closed_fd, closed_fd, 200, 1, CleanupLedger())
+    var state_message = ""
+    try:
+        _ = state.read_line(64, 200)
+    except e:
+        state_message = String(e)
+    assert_equal(state_message, "read_error")
+    assert_true(not state.last_terminated)
+
+
+def test_multibyte_surplus_is_not_decoded_prematurely() raises:
+    # PC01/LC03: a chunk that splits a multi-byte character after a newline must
+    # be retained as bytes instead of raising a premature UTF-8 decode error.
+    var pipe = make_pipe()
+    _ = write_raw(pipe.write_fd, "ready 4242\n")
+    var lead = List[UInt8]()
+    lead.append(UInt8(0xC3))
+    _ = write_raw_bytes(pipe.write_fd, lead)
+    var state = piped_child_state(
+        pid=0,
+        report_fd=pipe.read_fd,
+        deadline_ms=500,
+        expected_requests=1,
+        ledger=CleanupLedger(),
+    )
+    var ready = state.read_line(64, 500)
+    assert_equal(ready, "ready 4242")
+    assert_true(state.last_terminated)
+    var trail = List[UInt8]()
+    trail.append(UInt8(0xA9))
+    trail.append(UInt8(10))
+    _ = write_raw_bytes(pipe.write_fd, trail)
+    var letter = state.read_line(64, 500)
+    state.close_reader()
+    close_fd(pipe.write_fd)
+    assert_equal(letter, "\u00e9")
+    assert_true(state.last_terminated)
+
+
+def test_cleanup_failure_preserves_retryable_ownership() raises:
+    # PC02: a controlled wait failure on a real owned child must not mark it
+    # reaped or discard ownership; the retry with the restored exact identity
+    # still collects it, and the failure stays recorded in the caller ledger.
+    var recorded = List[String]()
+    var ledger = CleanupLedger(UnsafePointer(to=recorded))
+    var stub = spawn_max_local_stub(0, "count_requests", 1, 2000, ledger)
+    var actual = stub.pid
+    stub.pid = 0
+    stub.cleanup()
+    assert_true(stub.cleanup_error().find("unreaped") >= 0)
+    assert_equal(len(recorded), 1)
+    stub.pid = actual
+    stub.cleanup()
+    assert_true(stub.status().cleanup_proved())
+    assert_true(pid_not_waitable(actual))
+
+    var jev_stub = spawn_jev_stub_auto("ok", 1, 2000, ledger)
+    var jev_actual = jev_stub.stub.pid
+    jev_stub.stub.pid = 0
+    jev_stub.stub.cleanup()
+    assert_true(jev_stub.stub.cleanup_error().find("unreaped") >= 0)
+    assert_equal(len(recorded), 2)
+    jev_stub.stub.pid = jev_actual
+    jev_stub.stub.cleanup()
+    assert_true(jev_stub.stub.status().cleanup_proved())
+    assert_true(pid_not_waitable(jev_actual))
+
+
+def test_cleanup_failure_survives_scope_exit() raises:
+    # PC02: cleanup failure must remain observable after the owning handle is
+    # destroyed at scope exit, not merely stored in an inaccessible object.
+    var recorded = List[String]()
+    var ledger = CleanupLedger(UnsafePointer(to=recorded))
+    var state = piped_child_state(0, -1, 100, 1, ledger)
+    with SpawnedMaxLocalStub(0, 0, state^) as holder:
+        _ = holder
+    assert_equal(len(recorded), 1)
+    assert_true(recorded[0].find("unproved") >= 0)
+
+
+def test_descriptor_census_unavailable_propagates() raises:
+    # PC04: an unavailable or incomplete-range census must fail explicitly
+    # through the checked caller rather than look like a small passing count.
+    assert_equal(descriptor_census(0), -1)
+    var zero_reason = ""
+    try:
+        _ = open_fd_count_checked(0)
+    except e:
+        zero_reason = String(e)
+    assert_equal(zero_reason, "descriptor_census_unavailable")
+    var ceiling_reason = ""
+    try:
+        _ = open_fd_count_checked(CENSUS_MAX_FDS + 1)
+    except e:
+        ceiling_reason = String(e)
+    assert_equal(ceiling_reason, "descriptor_census_unavailable")
+    assert_true(open_fd_count_checked() > 0)
 
 
 def main() raises:

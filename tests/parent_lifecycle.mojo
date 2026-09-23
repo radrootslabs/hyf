@@ -53,7 +53,7 @@ comptime SIGKILL: Int = 9
 comptime SIGTERM: Int = 15
 comptime SIG_IGN: Int = 1
 comptime F_GETFD: Int = 1
-comptime CENSUS_MAX_FDS: Int = 65536
+comptime CENSUS_MAX_FDS: Int = 1048576
 
 comptime FIXTURE_DEFAULT_DEADLINE_MS: Int = 20000
 comptime TERMINATION_GRACE_MS: Int = 2000
@@ -209,6 +209,12 @@ def sleep_ms(ms: Int):
 
 
 def poll_fd(fd: Int, events: Int, timeout_ms: Int) -> Int:
+    """Poll one descriptor.
+
+    Returns the ``revents`` mask, ``0`` on timeout and ``-1`` on a real
+    ``poll(2)`` error so callers can distinguish a read-phase error from an
+    ordinary timeout instead of collapsing both to ``0``.
+    """
     var cell = InlineArray[Int32, 2](fill=0)
     cell[0] = Int32(fd)
     cell[1] = Int32(events)
@@ -217,7 +223,9 @@ def poll_fd(fd: Int, events: Int, timeout_ms: Int) -> Int:
             cell.unsafe_ptr(), c_uint(1), c_int(timeout_ms)
         )
     )
-    if n <= 0:
+    if n < 0:
+        return -1
+    if n == 0:
         return 0
     return (Int(cell[1]) >> 16) & 0xFFFF
 
@@ -290,6 +298,13 @@ def write_raw(fd: Int, text: String) -> Int:
     return n
 
 
+def write_raw_bytes(fd: Int, bytes: List[UInt8]) -> Int:
+    """Best-effort blocking write of raw bytes (test-only split controls)."""
+    if len(bytes) == 0:
+        return 0
+    return _write_fd(fd, bytes.unsafe_ptr(), len(bytes))
+
+
 comptime WRITE_CHUNK_BYTES: Int = 512
 
 
@@ -308,6 +323,8 @@ def write_fd_bounded(fd: Int, data: String, deadline_ms: Int) -> String:
         if now_ms() - start >= deadline_ms:
             return "write_deadline_expired"
         var ev = poll_fd(fd, POLLOUT, LIFECYCLE_POLL_SLICE_MS)
+        if ev < 0:
+            return "write_poll_error"
         if ev == 0:
             continue
         if (ev & (POLLERR | POLLHUP | POLLNVAL)) != 0:
@@ -428,11 +445,15 @@ struct BoundedLineReader(Movable):
             if now_ms() - start >= deadline_ms:
                 raise Error("read_deadline_expired")
             var ev = poll_fd(self.fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            if ev < 0:
+                raise Error("read_error")
             if ev == 0:
                 continue
             var buf = InlineArray[Byte, 512](fill=0)
             var n = read_fd(self.fd, buf.unsafe_ptr(), 512)
-            if n <= 0:
+            if n < 0:
+                raise Error("read_error")
+            if n == 0:
                 self._eof = True
                 continue
             for index in range(n):
@@ -462,10 +483,14 @@ def read_all_bounded(
         if now_ms() - start >= deadline_ms:
             raise Error("read_deadline_expired")
         var ev = poll_fd(fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+        if ev < 0:
+            raise Error("read_error")
         if ev == 0:
             continue
         var n = read_fd(fd, buf.unsafe_ptr(), 4096)
-        if n <= 0:
+        if n < 0:
+            raise Error("read_error")
+        if n == 0:
             break
         if len(out) + n > max_bytes:
             raise Error("stdout_overflow")
@@ -478,6 +503,48 @@ def bytes_to_string(bytes: List[UInt8]) raises -> String:
     if len(bytes) == 0:
         return ""
     return String(from_utf8=Span(ptr=bytes.unsafe_ptr(), length=len(bytes)))
+
+
+def _utf8_line(bytes: List[UInt8]) raises -> String:
+    """Decode a complete line as UTF-8, or fail with a bounded cause."""
+    try:
+        return bytes_to_string(bytes)
+    except:
+        raise Error("invalid_utf8")
+
+
+struct CleanupLedger(Copyable, Movable):
+    """Caller-owned record of owned-child cleanup failures.
+
+    The ledger is deliberately *not* owned by the handle: an unproved cleanup
+    stays observable after the owning ``with`` block ends and the handle is
+    destroyed, because the calling test keeps the ``List`` and can assert it
+    is empty. A default-constructed ``CleanupLedger`` is inert.
+    """
+
+    var errors: Optional[UnsafePointer[List[String], MutAnyOrigin]]
+
+    def __init__(out self):
+        self.errors = None
+
+    def __init__(out self, errors: UnsafePointer[List[String], MutAnyOrigin]):
+        self.errors = errors
+
+    def record(self, text: String):
+        if self.errors:
+            self.errors.value()[].append(text)
+
+    def count(self) -> Int:
+        if self.errors:
+            return len(self.errors.value()[])
+        return -1
+
+    def last(self) -> String:
+        if self.errors:
+            var recorded = self.errors.value()[]
+            if len(recorded) > 0:
+                return String(recorded[len(recorded) - 1])
+        return ""
 
 
 # ── Child lifecycle ─────────────────────────────────────────────────────────
@@ -621,14 +688,16 @@ def pid_not_waitable(pid: Int) -> Bool:
 struct PipedChildState(Movable):
     """Single mutable lifecycle record shared by every copy of one handle.
 
-    Holds no ``List``: in-place container mutation through a shared reference
-    is avoided so the record stays safe to share across handle copies. The
-    retained line surplus is an immutable ``String`` reassigned in place.
+    Retained read surplus is an undecoded byte buffer, so a chunk that splits a
+    multi-byte character is preserved without raising on an incomplete UTF-8
+    fragment. ``last_terminated`` records whether the most recent line ended
+    with a newline, so a truncated report can never be read as complete.
+    ``ledger`` is the caller-owned record of cleanup failures.
     """
 
     var pid: Int
     var report_fd: Int
-    var pending: String
+    var pending: List[UInt8]
     var eof: Bool
     var closed: Bool
     var deadline_ms: Int
@@ -644,6 +713,9 @@ struct PipedChildState(Movable):
     var status: ProcessStatus
     var observed: ProcessStatus
     var observed_valid: Bool
+    var last_terminated: Bool
+    var spawn_ms: Int
+    var ledger: CleanupLedger
 
     def store(
         mut self,
@@ -667,66 +739,125 @@ struct PipedChildState(Movable):
             self.closed = True
 
     def read_line(mut self, max_bytes: Int, deadline_ms: Int) raises -> String:
-        """Bounded line read that retains surplus after each newline.
+        """Bounded line read that retains surplus as undecoded bytes.
 
         The byte cap is enforced inside every read chunk (including a newline
-        in the same chunk), and bytes after the returned newline are retained
-        for the next consumer. Raises ``ready_output_overflow`` past the cap
-        and ``read_deadline_expired`` when the deadline elapses first.
+        in the same chunk) and bytes after the returned newline stay buffered
+        for the next consumer. ``last_terminated`` reports whether the returned
+        line ended with a newline. Raises ``ready_output_overflow`` past the cap,
+        ``read_deadline_expired`` on the read deadline, ``read_error`` for a
+        real read/poll failure (never conflated with EOF) and ``invalid_utf8``
+        for a line that is not valid UTF-8.
         """
-        var out = List[UInt8]()
+        var line = List[UInt8]()
         var start = now_ms()
+        self.last_terminated = False
         while True:
-            var nl = self.pending.find("\n")
-            if nl >= 0:
-                var line = String(self.pending[byte=0:nl])
-                var rest = String(self.pending[byte = nl + 1 :])
-                if rest.byte_length() > max_bytes:
-                    raise Error("ready_output_overflow")
+            var found = -1
+            for index in range(len(self.pending)):
+                if Int(self.pending[index]) == 10:
+                    found = index
+                    break
+            if found >= 0:
+                for index in range(found):
+                    line.append(self.pending[index])
+                var rest = List[UInt8]()
+                for index in range(found + 1, len(self.pending)):
+                    rest.append(self.pending[index])
                 self.pending = rest^
-                if line.byte_length() > max_bytes:
+                if len(line) > max_bytes or len(self.pending) > max_bytes:
                     raise Error("ready_output_overflow")
-                return line^
-            for byte in self.pending.as_bytes():
-                out.append(UInt8(Int(byte)))
-            self.pending = ""
-            if len(out) > max_bytes:
+                self.last_terminated = True
+                return _utf8_line(line^)
+            for index in range(len(self.pending)):
+                line.append(self.pending[index])
+            self.pending = List[UInt8]()
+            if len(line) > max_bytes:
                 raise Error("ready_output_overflow")
             if self.eof:
-                return bytes_to_string(out)
+                return _utf8_line(line^)
             if now_ms() - start >= deadline_ms:
                 raise Error("read_deadline_expired")
             var ev = poll_fd(self.report_fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            if ev < 0:
+                raise Error("read_error")
             if ev == 0:
                 continue
             var buf = InlineArray[Byte, 512](fill=0)
             var n = read_fd(self.report_fd, buf.unsafe_ptr(), 512)
-            if n <= 0:
+            if n < 0:
+                raise Error("read_error")
+            if n == 0:
                 self.eof = True
                 continue
-            var newline_at = -1
             for index in range(n):
-                if Int(buf[index]) == 10:
-                    newline_at = index
-                    break
-            if newline_at < 0:
-                for index in range(n):
-                    out.append(UInt8(Int(buf[index])))
-                if len(out) > max_bytes:
-                    raise Error("ready_output_overflow")
+                self.pending.append(UInt8(Int(buf[index])))
+
+    def drain_surplus(mut self, max_bytes: Int, deadline_ms: Int) raises -> Int:
+        """Consume every byte after the last returned line, through EOF.
+
+        A real report is exactly one newline-terminated line, so any surplus
+        byte is a duplicate or trailing report regardless of chunk alignment.
+        A read/poll failure is a distinct cause and never a clean end of
+        stream.
+        """
+        var total = len(self.pending)
+        self.pending = List[UInt8]()
+        if total > max_bytes:
+            raise Error("ready_output_overflow")
+        var start = now_ms()
+        while not self.eof:
+            if now_ms() - start >= deadline_ms:
+                raise Error("read_deadline_expired")
+            var ev = poll_fd(self.report_fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            if ev < 0:
+                raise Error("read_error")
+            if ev == 0:
                 continue
-            for index in range(newline_at):
-                out.append(UInt8(Int(buf[index])))
-            if len(out) > max_bytes:
+            var buf = InlineArray[Byte, 1024](fill=0)
+            var n = read_fd(self.report_fd, buf.unsafe_ptr(), 1024)
+            if n < 0:
+                raise Error("read_error")
+            if n == 0:
+                self.eof = True
+                continue
+            total += n
+            if total > max_bytes:
                 raise Error("ready_output_overflow")
-            var rest = List[UInt8]()
-            for index in range(newline_at + 1, n):
-                rest.append(UInt8(Int(buf[index])))
-            var surplus = bytes_to_string(rest)
-            if surplus.byte_length() > max_bytes:
-                raise Error("ready_output_overflow")
-            self.pending = surplus^
-            return bytes_to_string(out)
+        return total
+
+
+def piped_child_state(
+    pid: Int,
+    report_fd: Int,
+    deadline_ms: Int,
+    expected_requests: Int,
+    ledger: CleanupLedger,
+) -> PipedChildState:
+    """Build one owned-child lifecycle record with explicit ownership truth."""
+    return PipedChildState(
+        pid=pid,
+        report_fd=report_fd,
+        pending=List[UInt8](),
+        eof=False,
+        closed=False,
+        deadline_ms=deadline_ms,
+        expected_requests=expected_requests,
+        reaped=False,
+        ok=False,
+        phase="pending",
+        case_label="-",
+        reason="not_reaped",
+        requests=0,
+        connections=0,
+        cleanup_error="",
+        status=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed=ProcessStatus("pending", False, -1, 0, 0, ""),
+        observed_valid=False,
+        last_terminated=False,
+        spawn_ms=now_ms(),
+        ledger=ledger.copy(),
+    )
 
 
 def parse_ready_line(line: String, max_bytes: Int) raises -> Int:
@@ -791,29 +922,55 @@ def descriptor_census(limit: Int) -> Int:
         return -1
     var count = 0
     for fd in range(0, limit):
-        if Int(external_call["fcntl", c_int](c_int(fd), c_int(F_GETFD))) >= 0:
-            count += 1
+        while True:
+            var rc = Int(
+                external_call["fcntl", c_int](c_int(fd), c_int(F_GETFD))
+            )
+            if rc >= 0:
+                count += 1
+                break
+            if get_errno() == ErrNo.EINTR:
+                continue
+            break
     if count == 0:
         return -1
     return count
 
 
 def fd_scan_limit() -> Int:
+    """Return the OS descriptor-table size, or -1 when unavailable.
+
+    The raw size is returned; callers decide whether complete coverage inside
+    the admitted range is possible rather than silently truncating the scan.
+    """
     var n = Int(external_call["getdtablesize", c_int]())
     if n <= 0:
         return -1
-    if n > CENSUS_MAX_FDS:
-        n = CENSUS_MAX_FDS
     return n
 
 
 def open_fd_count() -> Int:
     """Numeric open-descriptor census for this process (-1 if unavailable)."""
-    return descriptor_census(fd_scan_limit())
+    var limit = fd_scan_limit()
+    if limit <= 0 or limit > CENSUS_MAX_FDS:
+        return -1
+    return descriptor_census(limit)
 
 
-def open_fd_count_checked() raises -> Int:
-    var count = open_fd_count()
+def open_fd_count_checked(limit: Int = -1) raises -> Int:
+    """Checked census that fails explicitly when coverage cannot be complete.
+
+    ``limit`` defaults to the OS descriptor-table size. A nonpositive,
+    oversized or otherwise unavailable census raises
+    ``descriptor_census_unavailable`` rather than returning a partial count
+    that a caller could read as a pass.
+    """
+    var effective = limit
+    if effective < 0:
+        effective = fd_scan_limit()
+    if effective <= 0 or effective > CENSUS_MAX_FDS:
+        raise Error("descriptor_census_unavailable")
+    var count = descriptor_census(effective)
     if count < 0:
         raise Error("descriptor_census_unavailable")
     return count

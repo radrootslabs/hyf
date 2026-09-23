@@ -427,20 +427,27 @@ struct ConnectionReader(Movable):
         """Bounded completion handshake after the final expected exchange.
 
         Any already-buffered or subsequently received bytes mean the client
-        sent an extra exchange. A bounded timeout with no bytes is success; any
-        other I/O/setup error propagates (it is never a successful completion)
-        and is recorded by the serve loop as a bounded io_error.
+        sent an extra exchange. A bounded timeout with no bytes is success; a
+        real read error is propagated as the exact read cause (never read as
+        success or as a timeout) and is recorded by the serve loop as a
+        bounded io_error. The Mojo error model cannot discriminate these
+        struct payloads by handler type, so the timeout is identified from the
+        rendered cause.
         """
         if len(self._buffer) > 0:
             return "extra_exchange_after_completion"
         self._stream.set_recv_timeout(grace_ms)
+        var outcome = ""
         try:
             var n = self._read_more()
             if n > 0:
-                return "extra_exchange_after_completion"
-        except Timeout:
-            return ""
-        return ""
+                outcome = "extra_exchange_after_completion"
+        except e:
+            var text = String(e)
+            if text.startswith("Timeout"):
+                return ""
+            raise Error("probe_completion_read_error:" + text)
+        return outcome^
 
 
 # ── Scripted exchanges (FX01/FX02/FX04/FX05) ────────────────────────────────
@@ -812,6 +819,8 @@ def parse_report(line: String) -> ServeReport:
             return _report_failure("malformed_field")
         var key = String(field[byte=0:eq])
         var value = String(field[byte = eq + 1 :])
+        if value.byte_length() == 0:
+            return _report_failure("empty_field")
         if key == "phase":
             if have_phase:
                 return _report_failure("duplicate_field")
@@ -851,6 +860,10 @@ def parse_report(line: String) -> ServeReport:
         and have_connections
     ):
         return _report_failure("missing_field")
+    if status == "ok" and (phase != "complete" or reason != "ok"):
+        # A claimed success must carry the emitted success phase/reason; any
+        # other pairing is an inconsistent report, never a success.
+        return _report_failure("inconsistent_status")
     return ServeReport(
         status == "ok", phase, case_label, reason, requests, connections
     )

@@ -256,6 +256,10 @@ def run_stdio_entrypoint_with_deadline(
             continue
         if not stdin_done:
             if (pr.r0 & (POLLERR | POLLHUP | POLLNVAL)) != 0:
+                # An early peer close or error is a cause-specific failure even
+                # when the child later exits 0 with valid stdout: the intended
+                # request bytes were not delivered.
+                write_reason = "write_pipe_closed"
                 stdin_done = True
             elif (pr.r0 & POLLOUT) != 0:
                 var cw = write_fd_chunk(stdin_write_fd, request, sent)
@@ -285,6 +289,10 @@ def run_stdio_entrypoint_with_deadline(
                 read_reason = "stderr_" + d.reason
                 break
 
+    if write_reason == "" and sent < request.byte_length():
+        # The loop only ends with stdin finished; guard any path that would
+        # otherwise leave intended request bytes unwritten.
+        write_reason = "write_incomplete"
     close_fd(stdin_write_fd)
     if write_reason != "":
         _terminate_and_raise(
@@ -299,8 +307,11 @@ def run_stdio_entrypoint_with_deadline(
             pid, -1, stdout_read_fd, stderr_read_fd, read_reason
         )
 
-    var st = wait_bounded(pid, TERMINATION_GRACE_MS)
-    if not st.reaped():
+    var remaining = budget - (now_ms() - start)
+    if remaining < 1:
+        remaining = 1
+    var st = wait_bounded(pid, remaining)
+    if not st.cleanup_proved():
         _terminate_and_raise(pid, -1, stdout_read_fd, stderr_read_fd, "timeout")
     close_fd(stdout_read_fd)
     close_fd(stderr_read_fd)

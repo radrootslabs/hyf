@@ -20,6 +20,7 @@ Explicit failure policy (R56/R57):
   child is always terminated and reaped through the shared ownership guard.
 """
 
+import std.os
 from std.collections import List
 from std.ffi import CStringSlice, c_int, external_call
 
@@ -85,6 +86,7 @@ def run_capture(
     var args: List[String],
     deadline_ms: Int,
     mut guard: CleanupGuard,
+    cwd: String = "",
 ) raises -> CommandOutput:
     """Run one bounded child command and capture its stdout/stderr.
 
@@ -115,6 +117,8 @@ def run_capture(
     var stderr_write_fd = pipes.stderr_pipe.write_fd
     var command_ptr = elements[0].as_c_string_slice().unsafe_ptr()
     var argv_ptr = argv.unsafe_ptr()
+    var cwd_local = String(cwd)
+    var cwd_ptr = cwd_local.as_c_string_slice().unsafe_ptr()
 
     var pid = fork_owned_or_close3(pipes)
     if pid == 0:
@@ -130,6 +134,9 @@ def run_capture(
         close_fd(stdout_write_fd)
         close_fd(stderr_read_fd)
         close_fd(stderr_write_fd)
+        if cwd != "":
+            if Int(external_call["chdir", c_int](cwd_ptr)) != 0:
+                child_exit(126)
         _ = set_alarm(MEASUREMENT_CHILD_ALARM_SECONDS)
         _ = external_call["execvp", c_int](command_ptr, argv_ptr)
         child_exit(127)
@@ -321,6 +328,8 @@ struct MeasurementIdentity(Movable):
     """Exact source/binary/toolchain/host identity and launch profile."""
 
     var source_root: String
+    var source_revision: String
+    var cwd: String
     var binary_path: String
     var binary_sha256: String
     var pixi_toml_sha256: String
@@ -332,7 +341,11 @@ struct MeasurementIdentity(Movable):
 
     def describe(self) -> String:
         return (
-            "binary_sha256="
+            "source_revision="
+            + self.source_revision
+            + " cwd="
+            + self.cwd
+            + " binary_sha256="
             + self.binary_sha256
             + " pixi_toml_sha256="
             + self.pixi_toml_sha256
@@ -376,15 +389,59 @@ def build_product_binary(
     return output^
 
 
+def source_revision(
+    source_root: String, mut guard: CleanupGuard
+) raises -> String:
+    """Exact capsule source revision; a measurement must not guess it."""
+    var args = List[String]()
+    args.append("rev-parse")
+    args.append("HEAD")
+    var out = run_capture(
+        "git", args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard, source_root
+    )
+    var text = String(out.stdout.strip())
+    if out.exit_code != 0 or text.byte_length() != 40:
+        raise Error(
+            "measurement: source revision unavailable in " + source_root
+        )
+    return text^
+
+
+def working_directory(mut guard: CleanupGuard) raises -> String:
+    var args = List[String]()
+    var out = run_capture_simple("pwd", args^, guard)
+    if out.exit_code != 0:
+        raise Error("measurement: working directory unavailable")
+    return String(out.stdout.strip())
+
+
+def verified_environment_profile() -> String:
+    """The environment actually inherited by the measured child, read back.
+
+    Recorded from the live process environment rather than asserted, so the
+    reproduced profile is truthful: the measured child inherits exactly these
+    values through ``execvp``.
+    """
+    var profile = std.os.getenv("HYF_PATHS_PROFILE")
+    var root = std.os.getenv("HYF_PATHS_REPO_LOCAL_ROOT")
+    return (
+        "HYF_PATHS_PROFILE="
+        + (profile if profile != "" else "<unset>")
+        + " HYF_PATHS_REPO_LOCAL_ROOT="
+        + (root if root != "" else "<unset>")
+    )
+
+
 def measurement_identity(
     source_root: String,
     binary_path: String,
     argv_profile: String,
-    env_profile: String,
     mut guard: CleanupGuard,
 ) raises -> MeasurementIdentity:
     return MeasurementIdentity(
         source_root=source_root,
+        source_revision=source_revision(source_root, guard),
+        cwd=working_directory(guard),
         binary_path=binary_path,
         binary_sha256=file_sha256(binary_path, guard),
         pixi_toml_sha256=file_sha256(source_root + "/pixi.toml", guard),
@@ -392,7 +449,7 @@ def measurement_identity(
         toolchain_version=toolchain_version(guard),
         host_platform=host_platform(guard),
         argv_profile=argv_profile,
-        env_profile=env_profile,
+        env_profile=verified_environment_profile(),
     )
 
 
@@ -748,7 +805,7 @@ def sample_fd_count(
     args.append("-F")
     args.append("f")
     var out = run_capture(command, args^, MEASUREMENT_SAMPLE_DEADLINE_MS, guard)
-    if out.exit_code != 0 and out.stdout.strip().byte_length() == 0:
+    if out.exit_code != 0:
         raise Error(
             "measurement: descriptor sampling unavailable ("
             + command
@@ -862,8 +919,9 @@ def measure_persistent_process(
     """
     if warmup_frames < 0 or measured_frames < 1:
         raise Error("measurement: invalid warmup/measured frame counts")
+    _ = env_profile
     var identity = measurement_identity(
-        source_root, binary_path, argv_profile, env_profile, guard
+        source_root, binary_path, argv_profile, guard
     )
     var process = spawn_measurement_process(
         identity.binary_path, argv^, deadline_ms, guard

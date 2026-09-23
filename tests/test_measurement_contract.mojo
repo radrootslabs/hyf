@@ -88,59 +88,72 @@ def _run_sh_measurement(
 def test_persistent_measurement_validates_every_frame() raises:
     # D29: one process serves warmup and measured frames; every frame has a
     # parsed envelope, matching correlation and expected outcome, with numeric
-    # RSS/FD samples, a checked child exit and proved cleanup.
+    # RSS/FD samples, a checked child exit and proved cleanup. The recorded
+    # environment profile is the verified live profile of the measured child.
     var guard = CleanupGuard()
     with SafeTempDir() as temp_dir:
-        var binary = build_product_binary(temp_dir, guard)
-        assert_true(file_sha256(binary, guard).byte_length() == 64)
-        var argv = List[String]()
-        var session = measure_persistent_process(
-            ".",
-            binary,
-            "argv=[<hyfd>]",
-            "env=HYF_PATHS_PROFILE=repo_local HYF_PATHS_REPO_LOCAL_ROOT=<temp>",
-            argv^,
-            WARMUP_FRAMES,
-            MEASURED_FRAMES,
-            MEASUREMENT_DEADLINE_MS,
-            guard,
-        )
-        assert_equal(session.ok_frames, WARMUP_FRAMES + MEASURED_FRAMES)
-        assert_equal(session.failed_frames, 0)
-        assert_equal(session.first_failure, "")
-        # Startup, warmup and measured timing are recorded separately (ms).
-        assert_true(session.startup_ms >= 0)
-        assert_true(session.measured_ms >= 0)
-        # Numeric sampling with recorded units and method.
-        assert_true(session.rss_kb_before_warmup > 0)
-        assert_true(session.rss_kb_after_warmup > 0)
-        assert_true(session.rss_kb_after_measured > 0)
-        assert_true(session.rss_kb_peak >= session.rss_kb_after_warmup)
-        assert_true(session.fd_before_warmup > 0)
-        assert_true(session.fd_after_measured > 0)
-        assert_true(session.fd_peak >= session.fd_after_measured)
-        assert_true(session.sampling_method.find("kB") >= 0)
-        assert_true(session.sampling_method.find("-F f") >= 0)
-        # The declared per-process request policy is characterized, not assumed:
-        # it is a declared limit that the persistent loop does not enforce.
-        assert_equal(session.declared_max_requests_per_process, 1)
-        assert_true(session.child_exit.find("exited=0") >= 0)
-        assert_true(session.stderr_excerpt == "")
-        # Identity is exact and reproducible.
-        assert_equal(len(session.identity.binary_sha256), 64)
-        assert_equal(len(session.identity.pixi_lock_sha256), 64)
-        assert_equal(len(session.identity.pixi_toml_sha256), 64)
-        assert_true(session.identity.toolchain_version != "")
-        assert_true(
-            session.identity.host_platform.find("Darwin") >= 0
-            or session.identity.host_platform.find("Linux") >= 0
-        )
-        assert_true(
-            session.summary().find(
-                "frames=" + String(WARMUP_FRAMES + MEASURED_FRAMES)
-            )
-            >= 0
-        )
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var binary = build_product_binary(temp_dir, guard)
+                assert_true(file_sha256(binary, guard).byte_length() == 64)
+                var argv = List[String]()
+                var session = measure_persistent_process(
+                    ".",
+                    binary,
+                    "argv=[<hyfd>]",
+                    "env=verified at run time",
+                    argv^,
+                    WARMUP_FRAMES,
+                    MEASURED_FRAMES,
+                    MEASUREMENT_DEADLINE_MS,
+                    guard,
+                )
+                assert_equal(session.ok_frames, WARMUP_FRAMES + MEASURED_FRAMES)
+                assert_equal(session.failed_frames, 0)
+                assert_equal(session.first_failure, "")
+                # Startup, warmup and measured timing are recorded separately (ms).
+                assert_true(session.startup_ms >= 0)
+                assert_true(session.measured_ms >= 0)
+                # Numeric sampling with recorded units and method.
+                assert_true(session.rss_kb_before_warmup > 0)
+                assert_true(session.rss_kb_after_warmup > 0)
+                assert_true(session.rss_kb_after_measured > 0)
+                assert_true(session.rss_kb_peak >= session.rss_kb_after_warmup)
+                assert_true(session.fd_before_warmup > 0)
+                assert_true(session.fd_after_measured > 0)
+                assert_true(session.fd_peak >= session.fd_after_measured)
+                assert_true(session.sampling_method.find("kB") >= 0)
+                assert_true(session.sampling_method.find("-F f") >= 0)
+                # The declared per-process request policy is characterized, not
+                # assumed: the persistent loop does not enforce it.
+                assert_equal(session.declared_max_requests_per_process, 1)
+                assert_true(session.child_exit.find("exited=0") >= 0)
+                assert_true(session.stderr_excerpt == "")
+                # Exact, truthful identity: source revision, cwd, binary, pixi
+                # files, toolchain, host and the verified environment profile.
+                assert_equal(len(session.identity.binary_sha256), 64)
+                assert_equal(len(session.identity.pixi_lock_sha256), 64)
+                assert_equal(len(session.identity.pixi_toml_sha256), 64)
+                assert_equal(len(session.identity.source_revision), 40)
+                assert_true(session.identity.cwd.find("oss/hyf") >= 0)
+                assert_true(
+                    session.identity.env_profile.find(
+                        "HYF_PATHS_PROFILE=repo_local"
+                    )
+                    >= 0
+                )
+                assert_true(session.identity.env_profile.find(temp_dir) >= 0)
+                assert_true(session.identity.toolchain_version != "")
+                assert_true(
+                    session.identity.host_platform.find("Darwin") >= 0
+                    or session.identity.host_platform.find("Linux") >= 0
+                )
+                assert_true(
+                    session.summary().find(
+                        "frames=" + String(WARMUP_FRAMES + MEASURED_FRAMES)
+                    )
+                    >= 0
+                )
     guard.assert_clean()
 
 

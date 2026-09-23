@@ -12,6 +12,11 @@ from std.collections import List
 from safe_tempdir import SafeTempDir
 
 from parent_lifecycle import CleanupGuard
+from stdio_process_helper import (
+    HYF_PATHS_PROFILE_ENV,
+    HYF_PATHS_REPO_LOCAL_ROOT_ENV,
+    ScopedEnvVar,
+)
 from measurement_process_helper import (
     build_product_binary,
     measure_persistent_process,
@@ -26,22 +31,27 @@ comptime MEASURED_FRAMES = 1000
 def main() raises:
     var guard = CleanupGuard()
     with SafeTempDir() as temp_dir:
-        var binary = build_product_binary(temp_dir, guard)
-        var argv = List[String]()
-        var measured = measure_persistent_process(
-            ".",
-            binary,
-            "argv=[<hyfd>]",
-            "env=HYF_PATHS_PROFILE=repo_local HYF_PATHS_REPO_LOCAL_ROOT=<temp>",
-            argv^,
-            WARMUP_FRAMES,
-            MEASURED_FRAMES,
-            MEASUREMENT_DEADLINE_MS,
-            guard,
-        )
-        print("h005a.identity", measured.identity.describe())
-        print("h005a.measurement", measured.summary())
-        print("h005a.sampling_method", measured.sampling_method)
-        print("h005a.stderr_bytes", measured.stderr_excerpt.byte_length())
+        with ScopedEnvVar(HYF_PATHS_PROFILE_ENV, "repo_local"):
+            with ScopedEnvVar(HYF_PATHS_REPO_LOCAL_ROOT_ENV, temp_dir):
+                var binary = build_product_binary(temp_dir, guard)
+                var argv = List[String]()
+                var measured = measure_persistent_process(
+                    ".",
+                    binary,
+                    "argv=[<hyfd>]",
+                    "env=verified at run time",
+                    argv^,
+                    WARMUP_FRAMES,
+                    MEASURED_FRAMES,
+                    MEASUREMENT_DEADLINE_MS,
+                    guard,
+                )
+                print("h005a.identity", measured.identity.describe())
+                print("h005a.measurement", measured.summary())
+                print("h005a.sampling_method", measured.sampling_method)
+                print(
+                    "h005a.stderr_bytes",
+                    measured.stderr_excerpt.byte_length(),
+                )
     guard.assert_clean()
     print("h005a_measurement: ok")

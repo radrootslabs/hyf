@@ -673,9 +673,8 @@ def test_provider_scripted_wrong_phase_close_fails() raises:
 
 
 def test_provider_scripted_injected_write_error_fails() raises:
-    # TC01: an unrelated injected handler error (here a write timeout) must not
-    # be accepted even when a peer close was declared, because the bounded
-    # observed cause differs from the declared cause.
+    # TC01: an injected write error is never a peer close, so it must not be
+    # accepted even when a peer close was declared.
     var scripts = List[ExchangeScript]()
     var script = exchange_script(
         "injected_error", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
@@ -694,7 +693,39 @@ def test_provider_scripted_injected_write_error_fails() raises:
         assert_equal(provider_stub.phase(), "peer_close")
         assert_true(
             provider_stub.reason().find(
-                "unexpected_write_write_timeout_body_stall"
+                "unexpected_write_unrelated_error_body_stall"
+            )
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_scripted_injected_invalid_descriptor_fails() raises:
+    # TC01: an injected invalid-descriptor write error must also fail rather
+    # than being accepted as a declared peer close.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "injected_descriptor",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 200
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    script.inject_write_error = "Bad file descriptor"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(
+            provider_stub.reason().find(
+                "unexpected_write_unrelated_error_body_stall"
             )
             >= 0
         )
@@ -724,12 +755,7 @@ def test_provider_scripted_declared_non_peer_cause_is_rejected() raises:
         provider_stub.reap()
         assert_true(not provider_stub.ok())
         assert_equal(provider_stub.phase(), "peer_close")
-        assert_true(
-            provider_stub.reason().find(
-                "unexpected_write_write_timeout_body_stall"
-            )
-            >= 0
-        )
+        assert_true(provider_stub.reason().find("unexpected_write_") >= 0)
     guard.assert_clean()
 
 

@@ -630,6 +630,11 @@ def classify_write_error_cause(text: String) -> String:
     error (an injected handler failure, a write timeout, an invalid descriptor)
     is surfaced as a bounded fixture failure rather than tolerated.
     """
+    if text.find("injected_error") >= 0:
+        # The bounded test-only write-error seam is never a real peer close, so
+        # an injected error can never be accepted by declaring a peer-close
+        # cause (ADR-0020 TC01).
+        return "unrelated_error"
     if text.find("ConnectionReset") >= 0:
         return "peer_reset"
     if text.find("BrokenPipe") >= 0:
@@ -743,7 +748,10 @@ def serve_scripts(
                             phase = "body_stall"
                             usleep(script.stall_after_head_ms * 1000)
                             if script.inject_write_error != "":
-                                raise Error(script.inject_write_error)
+                                raise Error(
+                                    "injected_error: "
+                                    + script.inject_write_error
+                                )
                             reader.write_all(String(rendered[byte=head_end:]))
                         else:
                             phase = "head_write"
@@ -751,7 +759,9 @@ def serve_scripts(
                     else:
                         phase = "delayed_write"
                         if script.inject_write_error != "":
-                            raise Error(script.inject_write_error)
+                            raise Error(
+                                "injected_error: " + script.inject_write_error
+                            )
                         reader.write_all(
                             render_response(
                                 script,

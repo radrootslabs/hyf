@@ -518,11 +518,7 @@ def test_measurement_rejects_coalesced_trailing_frame() raises:
         1,
         guard,
     )
-    assert_true(
-        message.find("unexpected trailing stdout") >= 0
-        or message.find("correlation_mismatch") >= 0
-        or message.find("not_json") >= 0
-    )
+    assert_true(message.find("unexpected trailing stdout") >= 0)
     guard.assert_clean()
 
 
@@ -539,10 +535,7 @@ def test_measurement_rejects_trailing_malformed_bytes() raises:
         1,
         guard,
     )
-    assert_true(
-        message.find("unexpected trailing stdout") >= 0
-        or message.find("newline-terminated") >= 0
-    )
+    assert_true(message.find("unexpected trailing stdout") >= 0)
     guard.assert_clean()
 
 
@@ -560,10 +553,7 @@ def test_measurement_rejects_unterminated_trailing_frame() raises:
         1,
         guard,
     )
-    assert_true(
-        message.find("unexpected trailing stdout") >= 0
-        or message.find("newline-terminated") >= 0
-    )
+    assert_true(message.find("unexpected trailing stdout") >= 0)
     guard.assert_clean()
 
 
@@ -589,12 +579,7 @@ def test_measurement_rejects_early_eof_child() raises:
     # EOF, not be read as a successful empty response.
     var guard = CleanupGuard()
     var message = _run_sh_failure("sleep 1; exit 0", 0, 1, guard)
-    assert_true(message.find("measurement") >= 0)
-    assert_true(
-        message.find("early_eof") >= 0
-        or message.find("write") >= 0
-        or message.find("sampling") >= 0
-    )
+    assert_true(message.find("early_eof") >= 0)
     guard.assert_clean()
 
 

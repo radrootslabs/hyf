@@ -654,6 +654,32 @@ def is_peer_close_cause(cause: String) -> Bool:
     return cause == "peer_reset" or cause == "broken_pipe"
 
 
+def is_expected_close_phase(phase: String) -> Bool:
+    """True only for a write step the fixture can actually be performing.
+
+    EC01: an expected-close declaration must name an observed phase, so an
+    unknown or empty phase is an invalid declaration and cannot be satisfied by
+    any real write step.
+    """
+    return (
+        phase == "delayed_write"
+        or phase == "head_write"
+        or phase == "body_stall"
+    )
+
+
+def is_valid_close_declaration(script: ExchangeScript) -> Bool:
+    """True when an expected-close declaration names a real cause and phase.
+
+    EC01: an invalid cause/phase declaration is rejected before any response
+    work, so a script can never succeed merely because response writing
+    happened to raise an unrelated error.
+    """
+    return is_peer_close_cause(
+        script.expected_close_cause
+    ) and is_expected_close_phase(script.expected_close_phase)
+
+
 def serve_scripts(
     listener: TcpListener, var scripts: List[ExchangeScript], label: String
 ) raises -> ServeReport:
@@ -667,11 +693,13 @@ def serve_scripts(
     var request_count = 0
     var connection_count = 0
     var total = len(scripts)
+    var accepted_closes = List[String]()
     try:
         while request_count < total:
             var stream = listener.accept()
             connection_count += 1
             var reader = ConnectionReader(stream^)
+            var close_connection = False
             while request_count < total:
                 var framed = reader.read()
                 if not framed.ok:
@@ -702,6 +730,19 @@ def serve_scripts(
                         "exchange",
                         script.case_label,
                         verify,
+                        request_count,
+                        connection_count,
+                    )
+                # EC01: reject an invalid expected-close declaration before any
+                # response work, even when the write would have succeeded.
+                if script.expect_peer_close and not is_valid_close_declaration(
+                    script
+                ):
+                    return ServeReport(
+                        False,
+                        "declaration",
+                        script.case_label,
+                        "invalid_expected_close_declaration",
                         request_count,
                         connection_count,
                     )
@@ -787,27 +828,43 @@ def serve_scripts(
                         and observed == script.expected_close_cause
                         and phase == script.expected_close_phase
                     ):
-                        return ServeReport(
-                            True,
-                            "complete",
+                        # EC01: a permitted close consumes this exchange only.
+                        # The connection is finished, so the sequence continues
+                        # on a fresh connection and the exact request-count
+                        # accounting still requires every remaining script.
+                        accepted_closes.append(
                             script.case_label
                             + "_peer_close_"
                             + observed
                             + "_"
-                            + phase,
-                            "ok",
+                            + phase
+                        )
+                        close_connection = True
+                    else:
+                        return ServeReport(
+                            False,
+                            "peer_close",
+                            script.case_label,
+                            "unexpected_write_" + observed + "_" + phase,
                             request_count,
                             connection_count,
                         )
-                    return ServeReport(
-                        False,
-                        "peer_close",
-                        script.case_label,
-                        "unexpected_write_" + observed + "_" + phase,
-                        request_count,
-                        connection_count,
-                    )
-                if script.close_connection:
+                else:
+                    # EC01: the script declared an expected peer close, but the
+                    # response write succeeded, so the declared event never
+                    # happened. A successful write is not permission to accept
+                    # a declared close that was never observed.
+                    if script.expect_peer_close:
+                        return ServeReport(
+                            False,
+                            "peer_close",
+                            script.case_label,
+                            "missing_expected_close_"
+                            + script.expected_close_phase,
+                            request_count,
+                            connection_count,
+                        )
+                if script.close_connection or close_connection:
                     break
         if request_count < total:
             return ServeReport(
@@ -818,8 +875,15 @@ def serve_scripts(
                 request_count,
                 connection_count,
             )
+        var case_label = label
+        if len(accepted_closes) > 0:
+            case_label = ""
+            for index in range(len(accepted_closes)):
+                if index > 0:
+                    case_label += ";"
+                case_label += accepted_closes[index]
         return ServeReport(
-            True, "complete", label, "ok", request_count, connection_count
+            True, "complete", case_label, "ok", request_count, connection_count
         )
     except:
         return ServeReport(

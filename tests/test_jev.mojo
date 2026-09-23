@@ -465,6 +465,10 @@ from strict_fixture import ExchangeScript, exchange_script
 from bounded_call_helper import run_bounded_call
 from parent_lifecycle import now_ms
 
+# H007 BC02: a distinct correlation value per bounded-call invocation.
+comptime JEV_CORRELATION_BODY_STALL = 201
+comptime JEV_CORRELATION_DELAYED_SUCCESS = 202
+
 
 def _raw_jev_request_text(path: String) -> String:
     return (
@@ -483,6 +487,23 @@ def _raw_jev_send_then_close(port: Int, path: String) raises:
     client.close()
 
 
+def _raw_jev_send_and_read(port: Int, path: String) raises -> String:
+    """Owned raw client that sends one scripted request and reads the reply."""
+    var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
+    client.write_all(Span[UInt8, _](_raw_jev_request_text(path).as_bytes()))
+    var response = String("")
+    var buffer = InlineArray[Byte, 1024](fill=0)
+    while True:
+        var n = client.read(buffer.unsafe_ptr(), 1024)
+        if n <= 0:
+            break
+        response += String(
+            unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n))
+        )
+    client.close()
+    return response^
+
+
 def test_jev_headers_then_stall_is_bounded() raises:
     # H007/TC01-TC02: the Jev client call against a headers-then-stall peer runs
     # under the exact-owned parent-bounded mechanism. Characterized current gap:
@@ -497,13 +518,16 @@ def test_jev_headers_then_stall_is_bounded() raises:
     script.stall_after_head_ms = 1200
     scripts.append(script^)
     with spawn_jev_scripted_auto(scripts^, guard) as started:
-        var report = run_bounded_call("jev", started.port, 300, 5000, guard)
-        assert_true(report.completed)
+        var report = run_bounded_call(
+            "jev", started.port, 300, 5000, guard, JEV_CORRELATION_BODY_STALL
+        )
+        assert_true(report.ok())
         assert_true(not report.stopped)
         assert_true(report.cleanup_proved)
+        assert_equal(report.status, 200)
+        assert_true(report.latency_ms < 0)
         assert_true(report.elapsed_ms >= 1200)
         assert_true(report.elapsed_ms < 5000)
-        assert_true(report.report.find("ok jev") >= 0)
         started.stub.wait()
     guard.assert_clean()
 
@@ -520,10 +544,17 @@ def test_jev_strict_delayed_success_under_bounded_harness() raises:
     script.delay_ms = 300
     scripts.append(script^)
     with spawn_jev_scripted_auto(scripts^, guard) as started:
-        var report = run_bounded_call("jev", started.port, 5000, 5000, guard)
-        assert_true(report.completed)
+        var report = run_bounded_call(
+            "jev",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_DELAYED_SUCCESS,
+        )
+        assert_true(report.ok())
         assert_true(not report.stopped)
-        assert_true(report.report.find("ok jev 200") >= 0)
+        assert_equal(report.status, 200)
         started.stub.wait()
         assert_true(started.stub.ok())
     guard.assert_clean()
@@ -568,6 +599,68 @@ def test_jev_scripted_unexpected_peer_close_fails() raises:
         assert_equal(started.stub.phase(), "peer_close")
         assert_true(started.stub.reason().find("unexpected_write_") >= 0)
         assert_true(started.stub.reason().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def test_jev_scripted_missing_expected_close_fails() raises:
+    # EC01: the Jev serve path must reject a declared expected close that never
+    # happened, even though the response write succeeded.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_missing_expected_close",
+        "POST",
+        "/v1/systemone",
+        200,
+        '{"ok":true}',
+    )
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "delayed_write"
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _ = _raw_jev_send_and_read(started.port, "/v1/systemone")
+        started.stub.reap()
+        assert_true(not started.stub.ok())
+        assert_equal(started.stub.phase(), "peer_close")
+        assert_true(
+            started.stub.reason().find("missing_expected_close_delayed_write")
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_jev_permitted_close_continues_script_sequence() raises:
+    # EC01: on the Jev serve path a permitted peer close consumes that exchange
+    # only; the remaining scripted exchange is still served and counted.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var closing = exchange_script(
+        "jev_permitted_then_next", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    closing.stall_after_head_ms = 300
+    closing.expect_peer_close = True
+    closing.expected_close_cause = "broken_pipe"
+    closing.expected_close_phase = "body_stall"
+    scripts.append(closing^)
+    scripts.append(
+        exchange_script(
+            "jev_after_permitted_close",
+            "POST",
+            "/v1/systemone",
+            200,
+            '{"ok":true}',
+        )
+    )
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _raw_jev_send_then_close(started.port, "/v1/systemone")
+        var second = _raw_jev_send_and_read(started.port, "/v1/systemone")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+        assert_equal(started.stub.request_count(), 2)
+        assert_equal(started.stub.connection_count(), 2)
+        assert_true(started.stub.failure_case().find("_peer_close_") >= 0)
+        assert_true(second.find("ok") >= 0)
     guard.assert_clean()
 
 

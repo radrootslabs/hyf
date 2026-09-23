@@ -27,14 +27,36 @@ from hyf_runtime.config import (
     HyfServiceRuntimeConfig,
     default_loaded_runtime_config,
 )
-from parent_lifecycle import CleanupGuard, now_ms
+from parent_lifecycle import CleanupGuard, now_ms, open_fd_count_checked
 from max_local_process_helper import (
     reserve_loopback_port,
     spawn_max_local_scripted,
     spawn_max_local_stub,
 )
-from bounded_call_helper import BoundedCallReport, run_bounded_call
+from bounded_call_helper import (
+    BoundedCallReport,
+    parse_bounded_report,
+    run_bounded_call,
+)
 from strict_fixture import ExchangeScript, exchange_script
+
+# H007 BC02: each bounded-call invocation carries its own correlation value, so
+# a report produced for one call can never be accepted for another.
+comptime BOUNDED_CORRELATION_REFUSAL = 101
+comptime BOUNDED_CORRELATION_BODY_STALL = 102
+comptime BOUNDED_CORRELATION_DELAYED_HEAD = 103
+comptime BOUNDED_CORRELATION_DELAYED_SUCCESS = 104
+comptime BOUNDED_CORRELATION_RAW_HEAD_BODY = 105
+comptime BOUNDED_CORRELATION_BOUNDED_STALL = 106
+comptime BOUNDED_CORRELATION_NEVER_RETURN = 107
+comptime BOUNDED_CORRELATION_RETAINED_CLEANUP = 108
+comptime BOUNDED_CORRELATION_REUSED_DESCRIPTOR = 109
+comptime BOUNDED_CORRELATION_MUTANT_EXIT7 = 111
+comptime BOUNDED_CORRELATION_MUTANT_UNTERMINATED = 112
+comptime BOUNDED_CORRELATION_MUTANT_DUPLICATE = 113
+comptime BOUNDED_CORRELATION_MUTANT_DELAYED = 114
+comptime BOUNDED_CORRELATION_MUTANT_HUGE = 115
+comptime BOUNDED_CORRELATION_WAIT_ERROR = 116
 
 from flare.net import SocketAddr
 from flare.tcp import TcpStream
@@ -394,25 +416,28 @@ def _bounded_timeout_provider_config(
 
 
 def test_provider_refused_connection_is_bounded_and_specific() raises:
-    # H007: a refused connection is a bounded, cause-specific transport failure,
-    # not a hang. It is explicitly characterized as a refusal, not as a real
-    # connect-timeout scenario, and no provider client policy is changed here.
+    # H007/BC01: a refused connection is a bounded, cause-specific transport
+    # failure, not a hang. The risky product call runs under the parent-enforced
+    # finite deadline through the shared bounded-call consumer, and it is
+    # explicitly characterized as a refusal, not as a real connect-timeout
+    # scenario. No provider client policy is changed here.
     var guard = CleanupGuard()
     var dead_port = reserve_loopback_port()
-    var config = _bounded_timeout_provider_config(dead_port, 300)
-    var context = default_request_context()
-    var body = build_query_rewrite_request_body(config, "eggs near me", context)
-    var start = now_ms()
-    var outcome = post_max_local_chat_completion(config, body)
-    var elapsed = now_ms() - start
-    assert_true(outcome.failure)
-    assert_true(not outcome.response)
-    assert_equal(outcome.failure.value().kind, "transport")
+    var report = run_bounded_call(
+        "max_local", dead_port, 300, 5000, guard, BOUNDED_CORRELATION_REFUSAL
+    )
+    assert_true(report.completed)
+    assert_true(not report.stopped)
+    assert_true(report.problem == "")
+    assert_true(report.domain_failure())
+    assert_equal(report.outcome, "fail")
+    assert_equal(report.cause, "transport")
     # Current characterized gap: a fast refused connection is not distinguished
     # from an unknown transport error, because the elapsed time is below the
     # declared request budget.
-    assert_equal(outcome.failure.value().reason, "unknown_transport")
-    assert_true(elapsed < 5000)
+    assert_equal(report.reason, "unknown_transport")
+    assert_true(report.cleanup_proved)
+    assert_true(report.elapsed_ms < 5000)
     guard.assert_clean()
 
 
@@ -434,21 +459,18 @@ def test_provider_headers_then_stall_is_bounded_and_specific() raises:
     var guard_2 = CleanupGuard()
     var timeout_ms = 300
     with spawn_max_local_scripted(0, scripts^, guard_2) as provider_stub:
-        var config = _bounded_timeout_provider_config(
-            provider_stub.port, timeout_ms
+        var report = run_bounded_call(
+            "max_local",
+            provider_stub.port,
+            timeout_ms,
+            5000,
+            guard_2,
+            BOUNDED_CORRELATION_BODY_STALL,
         )
-        var context = default_request_context()
-        var body = build_query_rewrite_request_body(
-            config, "eggs near me", context
-        )
-        var start = now_ms()
-        var outcome = post_max_local_chat_completion(config, body)
-        var elapsed = now_ms() - start
-        assert_true(not outcome.failure)
-        assert_true(outcome.response)
-        assert_equal(outcome.response.value().status, 200)
-        assert_true(elapsed >= 1200)
-        assert_true(elapsed < 5000)
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_true(report.latency_ms >= 1200)
+        assert_true(report.elapsed_ms < 5000)
         provider_stub.wait()
     guard_2.assert_clean()
 
@@ -471,21 +493,18 @@ def test_provider_delayed_head_is_bounded_and_specific() raises:
     var guard_3 = CleanupGuard()
     var timeout_ms = 300
     with spawn_max_local_scripted(0, scripts^, guard_3) as provider_stub:
-        var config = _bounded_timeout_provider_config(
-            provider_stub.port, timeout_ms
+        var report = run_bounded_call(
+            "max_local",
+            provider_stub.port,
+            timeout_ms,
+            5000,
+            guard_3,
+            BOUNDED_CORRELATION_DELAYED_HEAD,
         )
-        var context = default_request_context()
-        var body = build_query_rewrite_request_body(
-            config, "eggs near me", context
-        )
-        var start = now_ms()
-        var outcome = post_max_local_chat_completion(config, body)
-        var elapsed = now_ms() - start
-        assert_true(not outcome.failure)
-        assert_true(outcome.response)
-        assert_equal(outcome.response.value().status, 200)
-        assert_true(elapsed >= 1200)
-        assert_true(elapsed < 5000)
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_true(report.latency_ms >= 1200)
+        assert_true(report.elapsed_ms < 5000)
         provider_stub.wait()
     guard_3.assert_clean()
 
@@ -544,12 +563,19 @@ def test_provider_strict_delayed_success_under_bounded_harness() raises:
     var guard = CleanupGuard()
     with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
         var report = run_bounded_call(
-            "max_local", provider_stub.port, 5000, 5000, guard
+            "max_local",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_DELAYED_SUCCESS,
         )
-        assert_true(report.completed)
+        assert_true(report.ok())
         assert_true(not report.stopped)
+        assert_equal(report.status, 200)
+        assert_equal(report.problem, "")
+        assert_true(report.latency_ms >= 300)
         assert_true(report.cleanup_proved)
-        assert_true(report.report.find("ok max_local 200") >= 0)
         provider_stub.wait()
         assert_true(provider_stub.ok())
         assert_equal(provider_stub.request_count(), 1)
@@ -558,9 +584,11 @@ def test_provider_strict_delayed_success_under_bounded_harness() raises:
 
 
 def test_provider_stall_sends_headers_before_body() raises:
-    # TC02: prove the fixture delivered the response head before the bounded
-    # body stall, so the stall control characterizes a body-read stall rather
-    # than an unrelated connect/refusal condition.
+    # TC02/BC01: prove the fixture delivered the response head before the
+    # bounded body stall, so the stall control characterizes a body-read stall
+    # rather than an unrelated connect/refusal condition. The raw header/body
+    # observation runs through the same parent-bounded consumer as the product
+    # call, so a hanging peer cannot hang the owning test.
     var scripts = List[ExchangeScript]()
     var script = exchange_script(
         "head_then_stall", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
@@ -569,35 +597,22 @@ def test_provider_stall_sends_headers_before_body() raises:
     scripts.append(script^)
     var guard = CleanupGuard()
     with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
-        var client = TcpStream.connect(
-            SocketAddr.localhost(UInt16(provider_stub.port))
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_HEAD_BODY,
+            "/v1/chat/completions",
+            "choices",
         )
-        var start = now_ms()
-        client.write_all(
-            Span[UInt8, _](_raw_request_text("/v1/chat/completions").as_bytes())
-        )
-        var head = String("")
-        var buffer = InlineArray[Byte, 1024](fill=0)
-        while head.find("\r\n\r\n") < 0:
-            var n = client.read(buffer.unsafe_ptr(), 1024)
-            assert_true(n > 0)
-            head += String(
-                unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n))
-            )
-        var head_ms = now_ms() - start
-        var body = String("")
-        while True:
-            var n2 = client.read(buffer.unsafe_ptr(), 1024)
-            if n2 <= 0:
-                break
-            body += String(
-                unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n2))
-            )
-        var total_ms = now_ms() - start
-        client.close()
-        assert_true(head_ms < 400)
-        assert_true(total_ms >= 700)
-        assert_true(body.find("choices") >= 0)
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_true(report.head_ms < 400)
+        assert_true(report.total_ms >= 700)
+        assert_equal(report.body_match, "yes")
+        assert_true(report.body_bytes > 0)
         provider_stub.wait()
         assert_true(provider_stub.ok())
     guard.assert_clean()
@@ -754,8 +769,111 @@ def test_provider_scripted_declared_non_peer_cause_is_rejected() raises:
         _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
         provider_stub.reap()
         assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "declaration")
+        assert_true(
+            provider_stub.reason().find("invalid_expected_close_declaration")
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_scripted_invalid_phase_declaration_is_rejected() raises:
+    # EC01: an unknown/empty expected-close phase is an invalid declaration and
+    # cannot be satisfied by any real write step. It is rejected before any
+    # response work even though the response write would have succeeded.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "invalid_phase",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "unknown_phase"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "declaration")
+        assert_true(
+            provider_stub.reason().find("invalid_expected_close_declaration")
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_scripted_missing_expected_close_fails() raises:
+    # EC01: the script declares an expected peer close but the response write
+    # succeeds, so the declared event never happened. A successful write is not
+    # permission to accept a declared close that was not observed.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "missing_expected_close",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "delayed_write"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
         assert_equal(provider_stub.phase(), "peer_close")
-        assert_true(provider_stub.reason().find("unexpected_write_") >= 0)
+        assert_true(
+            provider_stub.reason().find("missing_expected_close_delayed_write")
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_permitted_close_continues_script_sequence() raises:
+    # EC01: a permitted peer close consumes that exchange only. The remaining
+    # scripted exchange must still be served and counted, so a permitted close
+    # can never terminate the whole sequence as successful with unused
+    # exchanges.
+    var scripts = List[ExchangeScript]()
+    var closing = exchange_script(
+        "permitted_then_next",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    closing.stall_after_head_ms = 300
+    closing.expect_peer_close = True
+    closing.expected_close_cause = "broken_pipe"
+    closing.expected_close_phase = "body_stall"
+    scripts.append(closing^)
+    scripts.append(
+        exchange_script(
+            "after_permitted_close",
+            "POST",
+            "/v1/chat/completions",
+            200,
+            '{"choices":[]}',
+        )
+    )
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _raw_send_then_close(provider_stub.port, "/v1/chat/completions")
+        var second = _raw_send_and_read(
+            provider_stub.port, "/v1/chat/completions"
+        )
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+        assert_equal(provider_stub.request_count(), 2)
+        assert_equal(provider_stub.connection_count(), 2)
+        assert_true(provider_stub.failure_case().find("_peer_close_") >= 0)
+        assert_true(second.find("choices") >= 0)
     guard.assert_clean()
 
 
@@ -771,7 +889,12 @@ def test_provider_stalled_call_is_parent_bounded() raises:
     var guard = CleanupGuard()
     with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
         var report = run_bounded_call(
-            "max_local", provider_stub.port, 5000, 600, guard
+            "max_local",
+            provider_stub.port,
+            5000,
+            600,
+            guard,
+            BOUNDED_CORRELATION_BOUNDED_STALL,
         )
         assert_true(report.stopped)
         assert_true(not report.completed)
@@ -787,12 +910,242 @@ def test_provider_never_returning_call_is_stopped_and_reaped() raises:
     # reap the call; this is the bounded-harness proof an elapsed assertion
     # after a synchronous call cannot provide.
     var guard = CleanupGuard()
-    var report = run_bounded_call("never_return", 0, 300, 400, guard)
+    var report = run_bounded_call(
+        "never_return", 0, 300, 400, guard, BOUNDED_CORRELATION_NEVER_RETURN
+    )
     assert_true(report.stopped)
     assert_true(not report.completed)
     assert_true(report.cleanup_proved)
     assert_true(report.elapsed_ms >= 350)
     assert_true(report.elapsed_ms < 5000)
+    guard.assert_clean()
+
+
+def test_bounded_call_retained_cleanup_recovers_and_leaks_nothing() raises:
+    # BC03: an unproved bounded-call cleanup must retain usable ownership in the
+    # caller-held guard, recover the exact owned child on retry, and leave no
+    # descriptor or child behind — including a following call whose pipe reuses
+    # the descriptor number the recovery released.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var report = run_bounded_call(
+        "never_return",
+        0,
+        300,
+        400,
+        guard,
+        BOUNDED_CORRELATION_RETAINED_CLEANUP,
+        "/v1/chat/completions",
+        "",
+        1,
+        0,
+    )
+    assert_true(report.stopped)
+    assert_true(not report.completed)
+    assert_true(not report.cleanup_proved)
+    assert_true(guard.retained() >= 1)
+    assert_equal(guard.recover_all(), 0)
+    guard.assert_clean()
+    var follow = run_bounded_call(
+        "never_return",
+        0,
+        300,
+        400,
+        guard,
+        BOUNDED_CORRELATION_REUSED_DESCRIPTOR,
+    )
+    assert_true(follow.stopped)
+    assert_true(follow.cleanup_proved)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked(), fd_before)
+    assert_equal(guard.pending(), 0)
+
+
+def test_bounded_call_rejects_nonzero_exit_after_valid_report() raises:
+    # BC02 before/after control: the period-12 child-only mutation produced a
+    # valid-looking report followed by exit 7 and the old consumer called it
+    # completed. The unchanged parent consumer must reject the non-zero exit
+    # after observing the natural exit, never kill the child and call it done.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_exit7",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_MUTANT_EXIT7,
+    )
+    assert_true(not report.completed)
+    assert_true(not report.stopped)
+    assert_equal(report.problem, "child_exit_7")
+    assert_true(report.child_status.find("exited=7") >= 0)
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+
+
+def test_bounded_call_rejects_unterminated_report() raises:
+    # BC02 before/after control: an unterminated report is a harness failure,
+    # never a completed call.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_unterminated",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_MUTANT_UNTERMINATED,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "report_unterminated")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+
+
+def test_bounded_call_rejects_duplicate_report() raises:
+    # BC02 before/after control: a second report line is surplus through EOF and
+    # can never be accepted, whatever its chunk alignment.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_duplicate",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_MUTANT_DUPLICATE,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "report_duplicate_report")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+
+
+def test_bounded_call_rejects_overrunning_child_after_report() raises:
+    # BC02/BC03 before/after control: the old consumer reported a valid-looking
+    # completed call after killing a child that stayed alive past the budget.
+    # The repaired consumer must stop and reap it and report an expiry, not
+    # success.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_delayed",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_MUTANT_DELAYED,
+    )
+    assert_true(not report.completed)
+    assert_true(report.stopped)
+    assert_true(report.cleanup_proved)
+    assert_true(report.elapsed_ms >= 400)
+    assert_true(report.elapsed_ms < 3000)
+    guard.assert_clean()
+
+
+def test_bounded_report_grammar_rejects_invalid_fields() raises:
+    # BC02: the shared parent consumer validates the declared call grammar. A
+    # wrong correlation, an unknown/duplicate/missing field, a malformed token
+    # or an incompatible outcome is rejected as a bounded problem, never as a
+    # completed call for the declared kind.
+    var good = "report kind=max_local correlation=7 outcome=ok status=200"
+    var accepted = parse_bounded_report(good, "max_local", 7)
+    assert_true(accepted.ok)
+    assert_equal(accepted.status, 200)
+    var failing_kind = parse_bounded_report(
+        (
+            "report kind=jev correlation=7 outcome=fail cause=transport"
+            " reason=unknown_transport"
+        ),
+        "jev",
+        7,
+    )
+    assert_true(failing_kind.domain_failure())
+    assert_equal(failing_kind.cause, "transport")
+    var cases = List[String]()
+    cases.append(
+        "not_a_report kind=max_local correlation=7 outcome=ok status=200"
+    )
+    cases.append("report kind=max_local correlation=7 outcome=ok")
+    cases.append("report kind=max_local outcome=ok status=200")
+    cases.append(
+        "report kind=max_local correlation=7 outcome=ok status=200 bogus=1"
+    )
+    cases.append(
+        "report kind=max_local correlation=7 outcome=ok status=200 status=200"
+    )
+    cases.append("report kind=jev correlation=7 outcome=ok status=200")
+    cases.append("report kind=max_local correlation=8 outcome=ok status=200")
+    cases.append("report kind=max_local correlation=7 outcome=maybe status=200")
+    cases.append(
+        "report kind=max_local correlation=7 outcome=fail cause=transport "
+        "reason=unknown_transport status=200"
+    )
+    cases.append("report kind=max_local correlation=7 outcome=ok status=abc")
+    cases.append("report kind=max_local correlation=7 outcome=ok status=999")
+    cases.append(
+        "report kind=max_local correlation=7 outcome=fail cause=transport"
+    )
+    cases.append("report x")
+    var expected = List[String]()
+    expected.append("report_prefix")
+    expected.append("report_status_missing")
+    expected.append("report_missing_field")
+    expected.append("report_unknown_field_bogus")
+    expected.append("report_duplicate_field_status")
+    expected.append("report_kind_mismatch")
+    expected.append("report_correlation_mismatch")
+    expected.append("report_outcome_unknown_maybe")
+    expected.append("report_incompatible_outcome")
+    expected.append("report_non_numeric_status")
+    expected.append("report_status_invalid")
+    expected.append("report_cause_missing")
+    expected.append("report_token_grammar")
+    for index in range(len(cases)):
+        var parsed = parse_bounded_report(cases[index], "max_local", 7)
+        assert_true(not parsed.ok)
+        assert_equal(parsed.problem, expected[index])
+
+
+def test_bounded_call_rejects_report_past_the_byte_cap() raises:
+    # BC02: a report line past the bounded cap is a cap-overflow harness
+    # failure, never a completed call.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_huge",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_MUTANT_HUGE,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "ready_output_overflow")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+
+
+def test_bounded_call_transient_wait_error_is_not_success() raises:
+    # BC02/BC03: a transient child-exit wait error is a bounded harness failure
+    # that stays retryable; it can never be reported as a completed call, and
+    # the following cleanup still proves the exact owned child is collected.
+    # The wait fault is a labelled test-only seam (never a real owned child
+    # replaced by a synthetic identity).
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_valid",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_WAIT_ERROR,
+        "/v1/chat/completions",
+        "",
+        0,
+        1,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "child_wait_error")
+    assert_true(report.cleanup_proved)
+    assert_true(report.child_status.find("exited=0") >= 0)
     guard.assert_clean()
 
 

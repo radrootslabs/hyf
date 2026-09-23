@@ -393,9 +393,10 @@ def _bounded_timeout_provider_config(
     )
 
 
-def test_provider_connect_timeout_is_bounded_and_specific() raises:
+def test_provider_refused_connection_is_bounded_and_specific() raises:
     # H007: a refused connection is a bounded, cause-specific transport failure,
-    # not a hang. No provider client policy is changed here.
+    # not a hang. It is explicitly characterized as a refusal, not as a real
+    # connect-timeout scenario, and no provider client policy is changed here.
     var guard = CleanupGuard()
     var dead_port = reserve_loopback_port()
     var config = _bounded_timeout_provider_config(dead_port, 300)
@@ -682,6 +683,38 @@ def test_provider_scripted_injected_write_error_fails() raises:
     script.stall_after_head_ms = 200
     script.expect_peer_close = True
     script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    script.inject_write_error = "Timeout"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(
+            provider_stub.reason().find(
+                "unexpected_write_write_timeout_body_stall"
+            )
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_scripted_declared_non_peer_cause_is_rejected() raises:
+    # TC01: the declared expected cause is restricted to a real peer-close class,
+    # so a write timeout can never be waived by declaring it as expected.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "declared_timeout",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 200
+    script.expect_peer_close = True
+    script.expected_close_cause = "write_timeout"
     script.expected_close_phase = "body_stall"
     script.inject_write_error = "Timeout"
     scripts.append(script^)

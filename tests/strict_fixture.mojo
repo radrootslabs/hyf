@@ -639,6 +639,16 @@ def classify_write_error_cause(text: String) -> String:
     return "unrelated_error"
 
 
+def is_peer_close_cause(cause: String) -> Bool:
+    """True only for the bounded peer-close classes a script may expect.
+
+    A declaration is structurally restricted to an actual peer close, so a
+    write timeout, an invalid descriptor or an unrelated handler error can
+    never be waived by naming it as the expected cause (ADR-0020 TC01).
+    """
+    return cause == "peer_reset" or cause == "broken_pipe"
+
+
 def serve_scripts(
     listener: TcpListener, var scripts: List[ExchangeScript], label: String
 ) raises -> ServeReport:
@@ -707,10 +717,7 @@ def serve_scripts(
                 request_count = next_index
                 if script.delay_ms > 0:
                     usleep(script.delay_ms * 1000)
-                var phase = (
-                    "body_stall" if script.stall_after_head_ms
-                    > 0 else "delayed_write"
-                )
+                var phase = "delayed_write"
                 try:
                     if script.stall_after_head_ms > 0:
                         # Headers-then-stall control (H007): write the complete
@@ -718,7 +725,10 @@ def serve_scripts(
                         # the declared bounded stall, then attempt the body. This
                         # separates a body-read stall from a connection timeout
                         # and from the overall budget using a bounded fixture
-                        # delay that never hangs the owning test.
+                        # delay that never hangs the owning test. ``phase`` is
+                        # the write step actually being attempted, not a script
+                        # label, so a head-write failure is not reported as a
+                        # body stall.
                         var rendered = render_response(
                             script,
                             framed.headers_raw,
@@ -728,14 +738,18 @@ def serve_scripts(
                         var separator = rendered.find("\r\n\r\n")
                         if separator >= 0:
                             var head_end = separator + 4
+                            phase = "head_write"
                             reader.write_all(String(rendered[byte=0:head_end]))
+                            phase = "body_stall"
                             usleep(script.stall_after_head_ms * 1000)
                             if script.inject_write_error != "":
                                 raise Error(script.inject_write_error)
                             reader.write_all(String(rendered[byte=head_end:]))
                         else:
+                            phase = "head_write"
                             reader.write_all(rendered)
                     else:
+                        phase = "delayed_write"
                         if script.inject_write_error != "":
                             raise Error(script.inject_write_error)
                         reader.write_all(
@@ -752,10 +766,14 @@ def serve_scripts(
                     # whose exact bounded cause and phase match is accepted;
                     # unexpected/wrong-phase closes, write timeouts, invalid
                     # descriptors and unrelated handler errors fail the fixture
-                    # with a bounded, cause-specific reason.
+                    # with a bounded, cause-specific reason. The declared cause
+                    # is itself restricted to a real peer-close class, so a
+                    # timeout or unrelated error cannot be waived by declaring
+                    # it as the expected cause.
                     var observed = classify_write_error_cause(String(e))
                     if (
                         script.expect_peer_close
+                        and is_peer_close_cause(script.expected_close_cause)
                         and observed == script.expected_close_cause
                         and phase == script.expected_close_phase
                     ):

@@ -452,3 +452,133 @@ def test_transport_cleanup_and_local_cancellation() raises:
             )
 
     guard_7.assert_clean()
+
+
+from flare.net import SocketAddr
+from flare.tcp import TcpStream
+from jev_provider_helper import (
+    header_names_json,
+    require_bearer_for,
+    spawn_jev_scripted_auto,
+)
+from strict_fixture import ExchangeScript, exchange_script
+
+
+def _raw_jev_exchange(port: Int, raw: String) raises -> String:
+    var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
+    client.write_all(Span[UInt8, _](raw.as_bytes()))
+    var response = String("")
+    var buffer = InlineArray[Byte, 4096](fill=0)
+    while True:
+        var n = client.read(buffer.unsafe_ptr(), 4096)
+        if n <= 0:
+            break
+        response += String(
+            unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n))
+        )
+    client.close()
+    return response^
+
+
+def test_jev_fixture_captures_headers_without_leaking_a_secret() raises:
+    # H006: the loopback Jev fixture captures request headers and reports only
+    # the captured *names*, so characterization never needs a real credential.
+    assert_equal(
+        header_names_json(
+            "host: h\r\nx-sentinel: v\r\nauthorization: Bearer t"
+        ),
+        '["host","x-sentinel","authorization"]',
+    )
+    var guard = CleanupGuard()
+    with spawn_jev_stub_auto("echo_headers", 1, guard) as started:
+        var response = _raw_jev_exchange(
+            started.port,
+            (
+                "POST /v1/systemone HTTP/1.1\r\nhost: 127.0.0.1\r\n"
+                "x-sentinel: value\r\nauthorization: Bearer"
+                " hyf-sentinel-token\r\ncontent-length: 2\r\n"
+                "connection: close\r\n\r\n{}"
+            ),
+        )
+        assert_true(response.find('"x-sentinel"') >= 0)
+        assert_true(response.find('"authorization"') >= 0)
+        # Redaction baseline: names only, never the credential value.
+        assert_true(response.find("hyf-sentinel-token") < 0)
+        started.stub.wait()
+    guard.assert_clean()
+
+
+def test_jev_provider_wiring_sends_no_authorization_today() raises:
+    # H006: characterize the current absence. The Jev client reaches the
+    # intended origin today without an Authorization header; this test is green
+    # by design and documents exactly what the later implementation step flips.
+    var guard = CleanupGuard()
+    with spawn_jev_stub_auto("echo_headers", 1, guard) as started:
+        var outcome = post_jev_systemone(
+            "http://127.0.0.1:" + String(started.port),
+            _loads('{"model":"jev-1.13.0","state":"s","questions":{}}'),
+            5000,
+        )
+        assert_equal(outcome.status, 200)
+        assert_true(outcome.body_text.find('"captured_headers"') >= 0)
+        # Current gap: no credential header is sent or captured.
+        assert_true(outcome.body_text.find('"authorization"') < 0)
+        assert_true(outcome.body_text.find('"x-sentinel"') < 0)
+        started.stub.wait()
+    guard.assert_clean()
+
+
+def test_jev_target_requires_bearer_header_characterization() raises:
+    # H006: the target behavior for the intended origin is that a Bearer header
+    # is required. Turning this on for the real wiring is the later step's
+    # change; the sentinel value is the only credential used here.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "target_auth", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.require_bearer = True
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        # The intended origin refuses the exchange before answering: the
+        # fixture records the exact rejection reason instead of returning 200.
+        _ = _raw_jev_exchange(
+            started.port,
+            (
+                "POST /v1/systemone HTTP/1.1\r\nhost: 127.0.0.1\r\n"
+                "content-length: 2\r\nconnection: close\r\n\r\n{}"
+            ),
+        )
+        started.stub.reap()
+        assert_equal(started.stub.phase(), "exchange")
+        assert_equal(started.stub.reason(), "auth_missing")
+    guard.assert_clean()
+
+    var accepted_guard = CleanupGuard()
+    var accepted_scripts = List[ExchangeScript]()
+    var accepted_script = exchange_script(
+        "target_auth_ok", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    accepted_script.require_bearer = True
+    accepted_scripts.append(accepted_script^)
+    with spawn_jev_scripted_auto(
+        accepted_scripts^, accepted_guard
+    ) as ok_started:
+        var accepted = _raw_jev_exchange(
+            ok_started.port,
+            (
+                "POST /v1/systemone HTTP/1.1\r\nhost: 127.0.0.1\r\n"
+                "authorization: Bearer hyf-sentinel-token\r\n"
+                "content-length: 2\r\nconnection: close\r\n\r\n{}"
+            ),
+        )
+        assert_true(accepted.find("200") >= 0)
+        ok_started.stub.wait()
+    accepted_guard.assert_clean()
+
+
+def test_jev_require_bearer_target_is_characterized_off() raises:
+    # H006: the fixture's convenience modes still report no Bearer requirement,
+    # which is the characterization surface the later step flips.
+    assert_true(not require_bearer_for("ok"))
+    assert_true(not require_bearer_for("echo_headers"))

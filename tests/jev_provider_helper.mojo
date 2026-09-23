@@ -32,6 +32,7 @@ from parent_lifecycle import (
 )
 from strict_fixture import (
     STRICT_MAX_REPORT_BYTES,
+    json_escape,
     STRICT_COMPLETION_GRACE_MS,
     ConnectionReader,
     ExchangeScript,
@@ -113,6 +114,29 @@ def _delay_ms(mode: String) -> Int:
     return 0
 
 
+def header_names_json(headers_raw: String) -> String:
+    """Captured request header *names* as a JSON array, values redacted.
+
+    H006 characterization: the loopback fixture can report which headers it
+    captured without ever embedding a real or sentinel credential value.
+    """
+    var out = String("[")
+    var first = True
+    for line in headers_raw.split("\r\n"):
+        var entry = String(line)
+        var colon = entry.find(":")
+        if colon <= 0:
+            continue
+        var name = String(entry[byte=0:colon]).strip().lower()
+        if name == "":
+            continue
+        if not first:
+            out += ","
+        out += json_escape(name)
+        first = False
+    return out + "]"
+
+
 def _body(mode: String) -> String:
     if mode == "ok" or mode == "slow":
         return analysis()
@@ -141,6 +165,11 @@ def _build_script(mode: String, framed: FramedRequest) -> ExchangeScript:
     var raw = _raw_response(mode)
     if raw != "":
         script.raw_response = raw
+    elif mode == "echo_headers":
+        # Header capture with values redacted: only names are echoed.
+        script.response_body = (
+            '{"captured_headers":' + header_names_json(framed.headers_raw) + "}"
+        )
     elif mode == "echo_authorization":
         var auth = authorization_reason(framed.headers_raw, True)
         if auth != "":

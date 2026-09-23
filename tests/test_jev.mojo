@@ -719,3 +719,91 @@ def test_jev_require_bearer_target_is_characterized_off() raises:
     # which is the characterization surface the later step flips.
     assert_true(not require_bearer_for("ok"))
     assert_true(not require_bearer_for("echo_headers"))
+
+
+# ── H008 exact wire attempt counts ──────────────────────────────────────────
+
+
+def test_retry_policy_units_are_bounded() raises:
+    # H008: pin the existing HYF retry-policy unit behavior before any client
+    # change can introduce a hidden Flare retry.
+    var policy = retry_policy(2, 100, 500, 1000)
+    assert_equal(retry_delay_ms(policy, 0), 100)
+    assert_equal(retry_delay_ms(policy, 1), 200)
+    assert_equal(retry_delay_ms(policy, 2), 400)
+    assert_equal(retry_delay_ms(policy, 3), 500)
+    assert_equal(retry_delay_ms(policy, 9), 500)
+    assert_true(should_retry(policy, 0, 0, True))
+    assert_true(not should_retry(policy, 0, 0, False))
+    assert_true(not should_retry(policy, 2, 0, True))
+    assert_true(not should_retry(policy, 0, 900, True))
+    assert_true(should_retry(policy, 0, 899, True))
+    with assert_raises():
+        _ = retry_policy(-1, 100, 200, 1000)
+    with assert_raises():
+        _ = retry_policy(1, 0, 200, 1000)
+    with assert_raises():
+        _ = retry_policy(1, 300, 200, 1000)
+    with assert_raises():
+        _ = retry_policy(1, 100, 200, 0)
+
+
+def test_jev_wire_attempt_counts_for_retryable_then_success() raises:
+    # H008: a retryable status does not trigger a hidden retry. Each explicit
+    # call makes exactly one counted wire attempt, and applying the retry
+    # decision produces the next counted attempt.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "retryable_500", "POST", "/v1/systemone", 500, '{"error":"busy"}'
+        )
+    )
+    scripts.append(
+        exchange_script(
+            "retry_success", "POST", "/v1/systemone", 200, '{"ok":true}'
+        )
+    )
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var payload = _loads(
+            '{"model":"jev-1.13.0","state":"s","questions":{}}'
+        )
+        var url = "http://127.0.0.1:" + String(started.port)
+        var first = post_jev_systemone(url, payload, 3000)
+        assert_equal(first.status, 500)
+        var policy = retry_policy(1, 50, 200, 5000)
+        assert_true(retry_decision(policy, 0, 0, 500))
+        var second = post_jev_systemone(url, payload, 3000)
+        assert_equal(second.status, 200)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+        assert_equal(started.stub.request_count(), 2)
+        assert_equal(started.stub.connection_count(), 2)
+    guard.assert_clean()
+
+
+def test_jev_wire_attempt_counts_for_non_retryable_failure() raises:
+    # H008: a non-retryable status is one wire attempt and the decision is
+    # false, so no later migration may silently retry it.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "auth_401", "POST", "/v1/systemone", 401, '{"error":"denied"}'
+        )
+    )
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var payload = _loads(
+            '{"model":"jev-1.13.0","state":"s","questions":{}}'
+        )
+        var outcome = post_jev_systemone(
+            "http://127.0.0.1:" + String(started.port), payload, 3000
+        )
+        assert_equal(outcome.status, 401)
+        var policy = retry_policy(2, 50, 200, 5000)
+        assert_true(not retry_decision(policy, 0, 0, 401))
+        started.stub.wait()
+        assert_true(started.stub.ok())
+        assert_equal(started.stub.request_count(), 1)
+        assert_equal(started.stub.connection_count(), 1)
+    guard.assert_clean()

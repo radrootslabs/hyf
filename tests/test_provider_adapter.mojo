@@ -796,5 +796,60 @@ def test_provider_never_returning_call_is_stopped_and_reaped() raises:
     guard.assert_clean()
 
 
+def test_maxlocal_wire_attempt_counts_are_exact() raises:
+    # H008: a retryable non-2xx does not trigger a hidden retry. Each explicit
+    # call makes exactly one counted wire attempt (request and connection).
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script("ml_500", "POST", "/v1/chat/completions", 500, "{}")
+    )
+    scripts.append(
+        exchange_script(
+            "ml_ok", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+        )
+    )
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var config = _bounded_timeout_provider_config(provider_stub.port, 3000)
+        var context = default_request_context()
+        var body = build_query_rewrite_request_body(
+            config, "eggs near me", context
+        )
+        var first = post_max_local_chat_completion(config, body)
+        assert_true(first.failure)
+        assert_equal(first.failure.value().kind, "http_status")
+        var second = post_max_local_chat_completion(config, body)
+        assert_true(not second.failure)
+        assert_equal(second.response.value().status, 200)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+        assert_equal(provider_stub.request_count(), 2)
+        assert_equal(provider_stub.connection_count(), 2)
+    guard.assert_clean()
+
+
+def test_maxlocal_wire_attempt_counts_for_non_retryable_status() raises:
+    # H008: a non-2xx status that must not be retried is exactly one attempt.
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script("ml_400", "POST", "/v1/chat/completions", 400, "{}")
+    )
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var config = _bounded_timeout_provider_config(provider_stub.port, 3000)
+        var context = default_request_context()
+        var body = build_query_rewrite_request_body(
+            config, "eggs near me", context
+        )
+        var outcome = post_max_local_chat_completion(config, body)
+        assert_true(outcome.failure)
+        assert_equal(outcome.failure.value().kind, "http_status")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+        assert_equal(provider_stub.request_count(), 1)
+        assert_equal(provider_stub.connection_count(), 1)
+    guard.assert_clean()
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

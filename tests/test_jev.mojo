@@ -170,6 +170,47 @@ def test_parse_jev_response_validates_answer_set() raises:
         _ = parse_jev_response(missing, _bundle())
 
 
+def test_jev_envelope_boundary_characterizes_duplicate_and_null_fields() raises:
+    # H009: pin current JEV envelope boundary behavior. A duplicated model or
+    # answer key is accepted first-wins; a null answer object is rejected.
+    var duplicate_model = loads(
+        '{"model":"jev-1.13.0","model":"jev-other","answers":{'
+        '"supply_status":{"type":"choice","choice":"offered","probabilities":'
+        '{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0},'
+        '"seconds_ok":{"type":"noul","noul":0.9},'
+        '"culinary_fit":{"type":"score","score":2,"legend":{"0":"u","1":"l",'
+        '"2":"s"},"probabilities":{"0":0.0,"1":0.0,"2":1.0},"confidence":1.0}},'
+        '"usage":{"input_tokens":10,"output_tokens":5}}'
+    )
+    var answers = parse_jev_response(duplicate_model, _bundle())
+    assert_equal(len(answers), 3)
+    # A duplicated answer key is rejected at this boundary (unlike the raw JSON
+    # layer, which accepts duplicates): the answer set is not the declared one.
+    var duplicate_answer = loads(
+        '{"model":"jev-1.13.0","answers":{'
+        '"supply_status":{"type":"choice","choice":"offered","probabilities":'
+        '{"offered":1.0,"forecast":0.0,"unclear":0.0},"confidence":1.0},'
+        '"seconds_ok":{"type":"noul","noul":0.9},'
+        '"culinary_fit":{"type":"score","score":2,"legend":{"0":"u","1":"l",'
+        '"2":"s"},"confidence":1.0},'
+        '"supply_status":{"type":"noul","noul":0.1}}}'
+    )
+    var duplicate_message = ""
+    try:
+        _ = parse_jev_response(duplicate_answer, _bundle())
+    except e:
+        duplicate_message = String(e)
+    assert_true(duplicate_message.find("provider_answer_extra") >= 0)
+    var null_answer = loads(
+        '{"model":"jev-1.13.0","answers":{"supply_status":null,'
+        '"seconds_ok":{"type":"noul","noul":0.9},'
+        '"culinary_fit":{"type":"score","score":2,"legend":{"0":"u","1":"l",'
+        '"2":"s"},"confidence":1.0}}}'
+    )
+    with assert_raises():
+        _ = parse_jev_response(null_answer, _bundle())
+
+
 from hyf_provider.jev_failures import map_jev_failure
 
 

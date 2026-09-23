@@ -38,7 +38,7 @@ from bounded_call_helper import (
     parse_bounded_report,
     run_bounded_call,
 )
-from strict_fixture import ExchangeScript, exchange_script
+from strict_fixture import ExchangeScript, exchange_script, json_escape
 
 # H007 BC02: each bounded-call invocation carries its own correlation value, so
 # a report produced for one call can never be accepted for another.
@@ -1202,6 +1202,68 @@ def test_maxlocal_wire_attempt_counts_for_non_retryable_status() raises:
         assert_equal(provider_stub.request_count(), 1)
         assert_equal(provider_stub.connection_count(), 1)
     guard.assert_clean()
+
+
+# ── H009 query-analysis JSON boundary characterization ──────────────────────
+
+
+def _analysis_envelope(content: String) raises -> Value:
+    return loads(
+        '{"choices":[{"message":{"content":' + json_escape(content) + "}}]}"
+    )
+
+
+def _analysis_content(fields: String) -> String:
+    return "{" + fields + "}"
+
+
+comptime ANALYSIS_TAIL = (
+    '"normalization_signals":[],"ranking_hints":[],'
+    '"extracted_filters":{"local_intent":true,"fulfillment":"unspecified",'
+    '"time_window":"unspecified"}'
+)
+
+
+def test_query_analysis_boundary_characterizes_duplicate_and_null_fields() raises:
+    # H009: pin current query-analysis boundary behavior. A duplicated field is
+    # accepted first-wins; a null string field and a non-array field are
+    # rejected as provider_schema_invalid.
+    var duplicate = _analysis_envelope(
+        _analysis_content(
+            '"original_text":"a","original_text":"b","normalized_text":"a",'
+            '"rewritten_text":"a","query_terms":["a"],'
+            + ANALYSIS_TAIL
+        )
+    )
+    var analysis = parse_query_analysis_from_chat_completion(duplicate)
+    assert_equal(analysis.original_text, "a")
+    assert_equal(len(analysis.query_terms), 1)
+    var null_text = _analysis_envelope(
+        _analysis_content(
+            '"original_text":null,"normalized_text":"a","rewritten_text":"a",'
+            '"query_terms":["a"],'
+            + ANALYSIS_TAIL
+        )
+    )
+    var message = ""
+    try:
+        _ = parse_query_analysis_from_chat_completion(null_text)
+    except e:
+        message = String(e)
+    assert_true(message.find("provider_schema_invalid") >= 0)
+    var numeric_terms = _analysis_envelope(
+        _analysis_content(
+            '"original_text":"a","normalized_text":"a","rewritten_text":"a",'
+            '"query_terms":7,'
+            + ANALYSIS_TAIL
+        )
+    )
+    var terms_message = ""
+    try:
+        _ = parse_query_analysis_from_chat_completion(numeric_terms)
+    except e:
+        terms_message = String(e)
+    assert_true(terms_message.find("provider_schema_invalid") >= 0)
 
 
 def main() raises:

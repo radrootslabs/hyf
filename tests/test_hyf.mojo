@@ -9,7 +9,7 @@ from std.testing import (
 )
 from safe_tempdir import SafeTempDir
 
-from json import Value, loads, validate
+from json import Value, dumps, loads, validate
 
 from fixture_assertions import (
     assert_matches_scenario_response,
@@ -1388,3 +1388,113 @@ def test_gated_operation_descriptors_are_prepared_not_exposed() raises:
     assert_true(not gated_operation_is_exposed("farm_update.interpret", False))
     assert_true(gated_operation_is_exposed("buyer_request.match", True))
     assert_true(not gated_operation_is_exposed("query_rewrite", True))
+
+
+# ── H009 strict JSON boundary characterization (current behavior) ────────────
+
+
+def test_strict_json_boundary_characterizes_duplicate_keys() raises:
+    # H009: pin the current duplicate-key behavior without declaring the final
+    # policy. The shared decoder accepts a repeated key, preserves every entry
+    # and resolves lookup to the first occurrence; a type-conflicting duplicate
+    # is likewise not rejected.
+    var value = loads('{"n":1,"m":2,"n":3}')
+    assert_equal(value.object_count(), 3)
+    assert_equal(value["n"].int_value(), 1)
+    assert_equal(dumps(value), '{"n":1,"m":2,"n":3}')
+    var conflicting = loads('{"n":1,"n":"x"}')
+    assert_equal(conflicting.object_count(), 2)
+    assert_equal(conflicting["n"].int_value(), 1)
+
+
+def test_strict_json_boundary_characterizes_numeric_and_null_values() raises:
+    # H009: current int_value() performs no type check. Exponents, floats, null
+    # and out-of-range integers decode to 0, and a string/bool/array value is
+    # interpreted without a type error. Pinned as current behavior, not as an
+    # approved contract.
+    var exponent = loads('{"n":1e2}')
+    assert_equal(exponent["n"].int_value(), 0)
+    var fractional = loads('{"n":1.5}')
+    assert_equal(fractional["n"].int_value(), 0)
+    var null_value = loads('{"n":null}')
+    assert_equal(null_value["n"].int_value(), 0)
+    var overflow = loads('{"n":9223372036854775808}')
+    assert_equal(overflow["n"].int_value(), 0)
+    var negative = loads('{"n":-1}')
+    assert_equal(negative["n"].int_value(), -1)
+    var plain = loads('{"n":7}')
+    assert_equal(plain["n"].int_value(), 7)
+    var string_value = loads('{"n":"7"}')
+    assert_true(string_value["n"].int_value() != 7)
+    var boolean = loads('{"n":true}')
+    assert_equal(boolean["n"].int_value(), 1)
+    var array = loads('{"n":[1,2]}')
+    assert_true(array["n"].int_value() != 0)
+
+
+def test_strict_json_boundary_accepts_invalid_utf8_in_a_string() raises:
+    # H009: the shared decoder currently accepts a string value that contains
+    # invalid UTF-8 bytes instead of rejecting the document.
+    var bytes = List[UInt8]()
+    for byte in '{"s":"'.as_bytes():
+        bytes.append(UInt8(Int(byte)))
+    bytes.append(255)
+    bytes.append(254)
+    for byte in '"}'.as_bytes():
+        bytes.append(UInt8(Int(byte)))
+    var raw = String(
+        unsafe_from_utf8=Span(ptr=bytes.unsafe_ptr(), length=len(bytes))
+    )
+    var value = loads(raw)
+    assert_equal(value.object_count(), 1)
+    assert_true(_has_key(value, "s"))
+
+
+def test_stdio_envelope_boundary_characterizes_duplicate_keys() raises:
+    # H009: the stdio request envelope currently accepts duplicated envelope
+    # and input keys and resolves each to its first occurrence.
+    var envelope = decode_request(
+        '{"version":1,"version":2,"request_id":"a","request_id":"b",'
+        '"capability":"query_rewrite","input":{"query":"eggs","query":"milk"}}'
+    )
+    assert_equal(envelope.version, 1)
+    assert_equal(envelope.request_id, "a")
+    assert_equal(envelope.input["query"].string_value(), "eggs")
+
+
+def test_stdio_envelope_boundary_rejects_null_and_numeric_fields() raises:
+    # H009: required envelope fields carry bounded, type-checked rejections for
+    # null, a non-integer number, a non-string and a missing field.
+    var cases = List[String]()
+    cases.append(
+        '{"version":null,"request_id":"a","capability":"query_rewrite",'
+        '"input":{"query":"eggs"}}'
+    )
+    cases.append(
+        '{"version":1.5,"request_id":"a","capability":"query_rewrite",'
+        '"input":{"query":"eggs"}}'
+    )
+    cases.append(
+        '{"request_id":"a","capability":"query_rewrite","input":{"query":"eggs"}}'
+    )
+    cases.append(
+        '{"version":1,"request_id":7,"capability":"query_rewrite",'
+        '"input":{"query":"eggs"}}'
+    )
+    cases.append(
+        '{"version":1,"request_id":"a","capability":null,'
+        '"input":{"query":"eggs"}}'
+    )
+    var messages = List[String]()
+    for index in range(len(cases)):
+        var message = ""
+        try:
+            _ = decode_request(cases[index])
+        except e:
+            message = String(e)
+        messages.append(message)
+    assert_true(messages[0].find("must be an integer") >= 0)
+    assert_true(messages[1].find("must be an integer") >= 0)
+    assert_true(messages[2].find("'version' is required") >= 0)
+    assert_true(messages[3].find("not a string") >= 0)
+    assert_true(messages[4].find("not a string") >= 0)

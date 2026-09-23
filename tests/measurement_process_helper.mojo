@@ -1760,19 +1760,20 @@ def measure_persistent_process(
             var response = process.read_response(index)
             process.assert_no_surplus(index)
             var latency = now_ms() - frame_start
-            if index == 0:
-                # Startup is the true spawn-to-first-validated-response
-                # latency; any sampling that overlapped the child's own
-                # startup is recorded separately as instrumentation rather than
-                # subtracted, so the value can never understate real startup.
-                startup_wall_ms = now_ms() - process.spawn_ms
-                startup_sampling_ms = pre_sample_ms
-                startup_ms = startup_wall_ms
             var verdict = validate_status_frame(response, request_id, trace_id)
             if verdict.declared_max_requests >= 0:
                 declared = verdict.declared_max_requests
             if verdict.ok:
                 ok_frames += 1
+                if index == 0:
+                    # Startup is the true spawn-to-first-validated-response
+                    # latency, captured only after the first response has been
+                    # validated. Any sampling that overlapped the child's own
+                    # startup is recorded separately as instrumentation rather
+                    # than subtracted, so the value cannot understate startup.
+                    startup_wall_ms = now_ms() - process.spawn_ms
+                    startup_sampling_ms = pre_sample_ms
+                    startup_ms = startup_wall_ms
             else:
                 failed_frames += 1
                 if first_failure == "":

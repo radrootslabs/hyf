@@ -38,8 +38,6 @@ def main() raises:
                 var measured = measure_persistent_process(
                     ".",
                     binary,
-                    "argv=[<hyfd>]",
-                    "env=verified at run time",
                     argv^,
                     WARMUP_FRAMES,
                     MEASURED_FRAMES,

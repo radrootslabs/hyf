@@ -70,8 +70,6 @@ def _run_sh_measurement(
     return measure_persistent_process(
         ".",
         "/bin/sh",
-        "argv=[/bin/sh -c <controlled child>]",
-        "env=minimal; HYF_PATHS_PROFILE=repo_local",
         argv^,
         warmup,
         measured,
@@ -100,8 +98,6 @@ def test_persistent_measurement_validates_every_frame() raises:
                 var session = measure_persistent_process(
                     ".",
                     binary,
-                    "argv=[<hyfd>]",
-                    "env=verified at run time",
                     argv^,
                     WARMUP_FRAMES,
                     MEASURED_FRAMES,

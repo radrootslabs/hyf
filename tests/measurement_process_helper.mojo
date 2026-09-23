@@ -897,11 +897,17 @@ struct MeasurementSession(Movable):
         )
 
 
+def argv_profile_of(binary_path: String, var argv: List[String]) -> String:
+    """Machine-derived argv profile of the measured child (not asserted)."""
+    var profile = String("<" + binary_path + ">")
+    for index in range(len(argv)):
+        profile += " " + argv[index]
+    return profile^
+
+
 def measure_persistent_process(
     source_root: String,
     binary_path: String,
-    argv_profile: String,
-    env_profile: String,
     var argv: List[String],
     warmup_frames: Int,
     measured_frames: Int,
@@ -919,9 +925,11 @@ def measure_persistent_process(
     """
     if warmup_frames < 0 or measured_frames < 1:
         raise Error("measurement: invalid warmup/measured frame counts")
-    _ = env_profile
     var identity = measurement_identity(
-        source_root, binary_path, argv_profile, guard
+        source_root,
+        binary_path,
+        argv_profile_of(binary_path, argv.copy()),
+        guard,
     )
     var process = spawn_measurement_process(
         identity.binary_path, argv^, deadline_ms, guard

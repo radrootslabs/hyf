@@ -44,6 +44,7 @@ from parent_lifecycle import (
     write_raw_bytes,
 )
 from strict_fixture import (
+    STRICT_MAX_REPORT_BYTES,
     ConnectionReader,
     ExchangeScript,
     FramedRequest,
@@ -1675,6 +1676,14 @@ def test_report_stream_controls_both_providers() raises:
         0,
         "duplicate_field",
     )
+    var oversize = "result ok phase=complete case="
+    while (
+        oversize.byte_length() + tail.byte_length()
+        <= STRICT_MAX_REPORT_BYTES + 1
+    ):
+        oversize += "z"
+    oversize += tail
+    _report_controls(oversize, 0, "ready_output_overflow")
 
 
 def test_startup_failure_cleanup_ownership_is_truthful() raises:

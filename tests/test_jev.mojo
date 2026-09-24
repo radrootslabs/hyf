@@ -527,6 +527,15 @@ comptime JEV_CORRELATION_OB_SPLIT_TERMINATOR = 210
 comptime JEV_CORRELATION_OB_SPLIT_BODY = 211
 comptime JEV_CORRELATION_OB_SURPLUS = 212
 comptime JEV_CORRELATION_OB_NO_LENGTH = 213
+# H007 D44/IL01: distinct correlations for the inclusive raw-body-cap boundary
+# controls on the Jev caller.
+comptime JEV_CORRELATION_OB_CAP_DECLARED_MINUS = 214
+comptime JEV_CORRELATION_OB_CAP_DECLARED_EXACT = 215
+comptime JEV_CORRELATION_OB_CAP_DECLARED_PLUS = 216
+comptime JEV_CORRELATION_OB_CAP_NO_LENGTH_MINUS = 217
+comptime JEV_CORRELATION_OB_CAP_NO_LENGTH_EXACT = 218
+comptime JEV_CORRELATION_OB_CAP_NO_LENGTH_PLUS = 219
+comptime JEV_CORRELATION_OB_CAP_NO_LENGTH_STALL = 220
 
 
 def _raw_jev_request_text(path: String) -> String:
@@ -1237,6 +1246,255 @@ def test_jev_raw_head_body_no_length_completes_at_eof() raises:
         assert_equal(report.length_match, "unknown")
         started.stub.wait()
         assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+# D44/IL01: the inclusive 1,048,576-byte raw-body cap on the Jev caller, for
+# both a declared Content-Length and an EOF-delimited (no-length) response.
+
+comptime JEV_RAW_BODY_CAP_TEST = 1048576
+
+
+def _jev_cap_body(count: Int) -> String:
+    var out = List[UInt8]()
+    var mark_bytes = "a".as_bytes()
+    for _ in range(count):
+        for index in range(len(mark_bytes)):
+            out.append(UInt8(Int(mark_bytes[index])))
+    return String(unsafe_from_utf8=Span(ptr=out.unsafe_ptr(), length=len(out)))
+
+
+def test_jev_raw_head_body_declared_cap_minus_one_succeeds() raises:
+    var body = _jev_cap_body(JEV_RAW_BODY_CAP_TEST - 1)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_declared_cap_m1", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: "
+        + String(JEV_RAW_BODY_CAP_TEST - 1)
+        + "\r\nconnection: close\r\n\r\n"
+        + body
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            10000,
+            guard,
+            JEV_CORRELATION_OB_CAP_DECLARED_MINUS,
+            "/v1/systemone",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, JEV_RAW_BODY_CAP_TEST - 1)
+        assert_equal(report.declared_bytes, JEV_RAW_BODY_CAP_TEST - 1)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_declared_cap_exact_succeeds() raises:
+    var body = _jev_cap_body(JEV_RAW_BODY_CAP_TEST)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_declared_cap_exact", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: "
+        + String(JEV_RAW_BODY_CAP_TEST)
+        + "\r\nconnection: close\r\n\r\n"
+        + body
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            10000,
+            guard,
+            JEV_CORRELATION_OB_CAP_DECLARED_EXACT,
+            "/v1/systemone",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, JEV_RAW_BODY_CAP_TEST)
+        assert_equal(report.declared_bytes, JEV_RAW_BODY_CAP_TEST)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_declared_cap_plus_one_is_over_cap() raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_declared_cap_p1", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: "
+        + String(JEV_RAW_BODY_CAP_TEST + 1)
+        + "\r\nconnection: close\r\n\r\nabc"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            10000,
+            guard,
+            JEV_CORRELATION_OB_CAP_DECLARED_PLUS,
+            "/v1/systemone",
+            "abc",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_overflow")
+        assert_equal(report.reason, "raw_body_overflow")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_no_length_cap_minus_one_succeeds() raises:
+    var body = _jev_cap_body(JEV_RAW_BODY_CAP_TEST - 1)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_nolen_cap_m1", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            10000,
+            guard,
+            JEV_CORRELATION_OB_CAP_NO_LENGTH_MINUS,
+            "/v1/systemone",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, JEV_RAW_BODY_CAP_TEST - 1)
+        assert_equal(report.declared_bytes, -1)
+        assert_equal(report.length_match, "unknown")
+        assert_equal(report.surplus_bytes, 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_no_length_exact_cap_succeeds_at_eof() raises:
+    var body = _jev_cap_body(JEV_RAW_BODY_CAP_TEST)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_nolen_cap_exact", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            10000,
+            guard,
+            JEV_CORRELATION_OB_CAP_NO_LENGTH_EXACT,
+            "/v1/systemone",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, JEV_RAW_BODY_CAP_TEST)
+        assert_equal(report.declared_bytes, -1)
+        assert_equal(report.length_match, "unknown")
+        assert_equal(report.surplus_bytes, 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_no_length_cap_plus_one_overflows() raises:
+    var body = _jev_cap_body(JEV_RAW_BODY_CAP_TEST + 1)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_nolen_cap_p1", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            10000,
+            guard,
+            JEV_CORRELATION_OB_CAP_NO_LENGTH_PLUS,
+            "/v1/systemone",
+            "aaa",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_overflow")
+        assert_equal(report.reason, "body_overflow")
+        assert_equal(report.body_bytes, JEV_RAW_BODY_CAP_TEST)
+        assert_equal(report.surplus_bytes, 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_no_length_exact_cap_stall_is_timeout() raises:
+    # D44/IL01: the Jev caller must also report a stopped (timeout) call, not an
+    # invented overflow, when an EOF-delimited peer delivers exactly the cap and
+    # then stalls under the existing parent deadline.
+    var body = _jev_cap_body(JEV_RAW_BODY_CAP_TEST)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_nolen_cap_stall", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    script.close_connection = False
+    scripts.append(script^)
+    scripts.append(
+        exchange_script(
+            "jev_nolen_cap_stall_unused", "POST", "/v1/systemone", 200, ""
+        )
+    )
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            10000,
+            1500,
+            guard,
+            JEV_CORRELATION_OB_CAP_NO_LENGTH_STALL,
+            "/v1/systemone",
+            "aaa",
+        )
+        assert_true(report.stopped)
+        assert_true(not report.completed)
+        assert_true(report.cleanup_proved)
+        assert_equal(report.problem, "")
+        assert_equal(report.cause, "")
     guard.assert_clean()
 
 

@@ -98,6 +98,15 @@ comptime BOUNDED_CORRELATION_OB_SPLIT_BODY = 147
 comptime BOUNDED_CORRELATION_OB_NEAR_CAP = 148
 comptime BOUNDED_CORRELATION_OB_MALFORMED_HEAD = 149
 comptime BOUNDED_CORRELATION_OB_SYNTHETIC = 150
+# H007 D44/IL01: distinct correlations for the inclusive raw-body-cap boundary
+# controls (declared and EOF-delimited) through the actual acquisition path.
+comptime BOUNDED_CORRELATION_OB_CAP_DECLARED_MINUS = 151
+comptime BOUNDED_CORRELATION_OB_CAP_DECLARED_EXACT = 152
+comptime BOUNDED_CORRELATION_OB_CAP_DECLARED_PLUS = 153
+comptime BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_MINUS = 154
+comptime BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_EXACT = 155
+comptime BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_PLUS = 156
+comptime BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_STALL = 157
 
 from flare.net import SocketAddr
 from flare.tcp import TcpStream
@@ -2297,6 +2306,264 @@ def test_provider_raw_head_body_reports_malformed_length_grammar() raises:
         assert_equal(report.cause, "raw_content_length_malformed")
         provider_stub.wait()
         assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+# D44/IL01: the inclusive 1,048,576-byte raw-body cap, proven through the
+# actual incremental acquisition path for both a declared Content-Length and an
+# EOF-delimited (no-length) response. Exact cap is inclusive; a real extra byte
+# fails overflow; a stalled peer fails the existing parent deadline (timeout),
+# never an invented overflow.
+
+comptime RAW_BODY_CAP_TEST = 1048576
+
+
+def _cap_body(count: Int) -> String:
+    return _repeat_text("a", count)
+
+
+def test_provider_raw_head_body_declared_cap_minus_one_succeeds() raises:
+    var body = _cap_body(RAW_BODY_CAP_TEST - 1)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "declared_cap_m1", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: "
+        + String(RAW_BODY_CAP_TEST - 1)
+        + "\r\nconnection: close\r\n\r\n"
+        + body
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            10000,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_DECLARED_MINUS,
+            "/v1/chat/completions",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, RAW_BODY_CAP_TEST - 1)
+        assert_equal(report.declared_bytes, RAW_BODY_CAP_TEST - 1)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_declared_cap_exact_succeeds() raises:
+    # D44/IL01: a declared body of exactly the cap is inclusive and completes
+    # without a sentinel read, because the declared length already bounds it.
+    var body = _cap_body(RAW_BODY_CAP_TEST)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "declared_cap_exact", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: "
+        + String(RAW_BODY_CAP_TEST)
+        + "\r\nconnection: close\r\n\r\n"
+        + body
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            10000,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_DECLARED_EXACT,
+            "/v1/chat/completions",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, RAW_BODY_CAP_TEST)
+        assert_equal(report.declared_bytes, RAW_BODY_CAP_TEST)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_declared_cap_plus_one_is_over_cap() raises:
+    # D44/IL01: a declared length above the cap is rejected at the head grammar
+    # (declared-length rejection), distinctly from an EOF acquisition overflow.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "declared_cap_p1", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: "
+        + String(RAW_BODY_CAP_TEST + 1)
+        + "\r\nconnection: close\r\n\r\nabc"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            10000,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_DECLARED_PLUS,
+            "/v1/chat/completions",
+            "abc",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_overflow")
+        assert_equal(report.reason, "raw_body_overflow")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_no_length_cap_minus_one_succeeds() raises:
+    var body = _cap_body(RAW_BODY_CAP_TEST - 1)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "nolen_cap_m1", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            10000,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_MINUS,
+            "/v1/chat/completions",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, RAW_BODY_CAP_TEST - 1)
+        assert_equal(report.declared_bytes, -1)
+        assert_equal(report.length_match, "unknown")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_no_length_exact_cap_succeeds_at_eof() raises:
+    # D44/IL01 regression: the exact inclusive cap is a success when the peer
+    # closed at the cap. The one-byte sentinel observes EOF and is never
+    # appended, so body_bytes stays at the cap.
+    var body = _cap_body(RAW_BODY_CAP_TEST)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "nolen_cap_exact", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            10000,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_EXACT,
+            "/v1/chat/completions",
+            "aaa",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, RAW_BODY_CAP_TEST)
+        assert_equal(report.declared_bytes, -1)
+        assert_equal(report.length_match, "unknown")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_no_length_cap_plus_one_overflows() raises:
+    # D44/IL01: a real extra byte beyond the cap fails overflow through the
+    # sentinel read; the sentinel is never appended, so body_bytes stays at the
+    # inclusive maximum rather than exceeding it.
+    var body = _cap_body(RAW_BODY_CAP_TEST + 1)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "nolen_cap_p1", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            10000,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_PLUS,
+            "/v1/chat/completions",
+            "aaa",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_overflow")
+        assert_equal(report.reason, "body_overflow")
+        assert_equal(report.body_bytes, RAW_BODY_CAP_TEST)
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_no_length_exact_cap_stall_is_timeout() raises:
+    # D44/IL01: a peer that delivers exactly the cap and then stalls must be
+    # reported by the existing parent deadline as a stopped (timeout) call,
+    # never as an invented raw_body_overflow. The fixture keeps the connection
+    # open, so only the parent deadline can end the call.
+    var body = _cap_body(RAW_BODY_CAP_TEST)
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "nolen_cap_stall", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n" + body
+    script.close_connection = False
+    scripts.append(script^)
+    scripts.append(
+        exchange_script(
+            "nolen_cap_stall_unused", "POST", "/v1/chat/completions", 200, ""
+        )
+    )
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            10000,
+            1500,
+            guard,
+            BOUNDED_CORRELATION_OB_CAP_NO_LENGTH_STALL,
+            "/v1/chat/completions",
+            "aaa",
+        )
+        assert_true(report.stopped)
+        assert_true(not report.completed)
+        assert_true(report.cleanup_proved)
+        assert_equal(report.problem, "")
+        assert_equal(report.cause, "")
     guard.assert_clean()
 
 

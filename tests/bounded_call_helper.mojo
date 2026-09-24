@@ -738,7 +738,19 @@ def _child_raw_head_body(
         if declared >= 0 and body_bytes >= declared:
             break
         if declared < 0 and body_bytes >= RAW_MAX_BODY_BYTES:
-            overflow = True
+            # D44/IL01: the 1,048,576-byte body cap is inclusive and a no-length
+            # (EOF-delimited) response is complete at the exact cap only when
+            # the peer has actually closed. Distinguish a real EOF from a real
+            # extra byte with at most one one-byte sentinel read under the same
+            # parent deadline; the sentinel is never appended to the capped
+            # body, so the reported body_bytes stays at the inclusive maximum.
+            # A peer that instead stalls leaves this read blocking, and the
+            # existing parent deadline/cleanup reports a stopped (timeout)
+            # call rather than an invented overflow.
+            var sentinel = InlineArray[Byte, 1](fill=0)
+            var extra = client.read(sentinel.unsafe_ptr(), 1)
+            if extra > 0:
+                overflow = True
             break
         var want2 = _plan_read_size(
             chunk_plan, plan_index, RAW_READ_CHUNK_BYTES

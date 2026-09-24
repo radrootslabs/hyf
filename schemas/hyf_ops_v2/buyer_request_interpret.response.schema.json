@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "hyf_ops_v2/buyer_request_interpret.response.schema.json",
-  "title": "hyf_ops_v2 buyer_request.interpret strict response (ADR-0025 D45 CB02-CB04)",
-  "$comment": "Typed demand lines with the D23 reported decimal-string projection; inference is never treated as confirmation.",
+  "title": "hyf_ops_v2 buyer_request.interpret strict response (ADR-0025 D45 CB01-CB04, ADR-0026 D46 CR01-CR02)",
+  "$comment": "Exact pre-activation wire algebra: ok:true requires output and forbids error; ok:false requires error and forbids output and meta. Typed demand lines with the D23 reported decimal-string projection; inference is never treated as confirmation. Envelope version stays 1. output.versions echoes the requested seven axes; execution.model is the actual model use.",
   "type": "object",
   "properties": {
     "version": {
@@ -10,11 +10,11 @@
       "const": 1
     },
     "request_id": {
-      "type": "string",
-      "minLength": 1
+      "type": "string"
     },
     "trace_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "ok": {
       "type": "boolean"
@@ -32,27 +32,108 @@
   },
   "required": ["version", "request_id", "ok"],
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {"ok": {"const": true}},
+        "required": ["ok"]
+      },
+      "then": {
+        "required": ["output"],
+        "properties": {"request_id": {"type": "string", "minLength": 1}},
+        "not": {"required": ["error"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"ok": {"const": false}},
+        "required": ["ok"]
+      },
+      "then": {
+        "required": ["error"],
+        "not": {"anyOf": [{"required": ["output"]}, {"required": ["meta"]}]}
+      }
+    }
+  ],
   "$defs": {
     "wire_error": {
       "type": "object",
       "properties": {
-        "code": {"type": "string", "minLength": 1},
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unsupported_capability",
+            "capability_disabled",
+            "capability_unavailable",
+            "internal_error"
+          ]
+        },
         "message": {"type": "string"}
       },
       "required": ["code", "message"],
       "additionalProperties": false
     },
+    "output_versions": {
+      "type": "object",
+      "properties": {
+        "schema": {"type": "string", "const": "hyf_ops_v2"},
+        "taxonomy": {"type": "string", "minLength": 1},
+        "normalization": {"type": "string", "minLength": 1},
+        "review_policy": {"type": "string", "minLength": 1},
+        "ranking_policy": {"type": "string", "minLength": 1},
+        "question_bundle": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1}
+      },
+      "required": [
+        "schema",
+        "taxonomy",
+        "normalization",
+        "review_policy",
+        "ranking_policy",
+        "question_bundle",
+        "model"
+      ],
+      "additionalProperties": false
+    },
     "evidence_span": {
       "type": "object",
       "properties": {
+        "kind": {"type": "string", "const": "span"},
         "source_id": {"type": "string", "minLength": 1},
         "revision": {"type": "string", "minLength": 1},
         "start": {"type": "integer", "minimum": 0},
         "end": {"type": "integer", "minimum": 0},
         "method": {"type": "string", "minLength": 1}
       },
-      "required": ["source_id", "revision", "start", "end", "method"],
+      "required": ["kind", "source_id", "revision", "start", "end", "method"],
       "additionalProperties": false
+    },
+    "record_field_evidence": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "const": "record_field"},
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "record_id": {"type": "string", "minLength": 1},
+        "field": {"type": "string", "minLength": 1},
+        "method": {"type": "string", "const": "trusted_record"}
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "revision",
+        "record_id",
+        "field",
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "oneOf": [
+        {"$ref": "#/$defs/evidence_span"},
+        {"$ref": "#/$defs/record_field_evidence"}
+      ]
     },
     "reported_quantity": {
       "type": "object",
@@ -134,7 +215,7 @@
               "value": {"type": ["string", "null"]},
               "evidence": {
                 "type": "array",
-                "items": {"$ref": "#/$defs/evidence_span"}
+                "items": {"$ref": "#/$defs/evidence_ref"}
               }
             },
             "required": ["kind", "strength", "evidence"],
@@ -143,7 +224,7 @@
         },
         "evidence": {
           "type": "array",
-          "items": {"$ref": "#/$defs/evidence_span"}
+          "items": {"$ref": "#/$defs/evidence_ref"}
         },
         "review_required": {"type": "boolean"}
       },
@@ -183,14 +264,48 @@
         "status": {"type": "string", "enum": ["complete", "degraded", "failed"]},
         "provider_calls": {"type": "integer", "minimum": 0},
         "model": {"type": ["string", "null"]},
-        "question_bundle": {"type": ["string", "null"]}
+        "question_bundle": {"type": ["string", "null"]},
+        "degraded_reason": {"type": ["string", "null"], "minLength": 1}
       },
-      "required": ["status", "provider_calls", "model", "question_bundle"],
-      "additionalProperties": false
+      "required": [
+        "status",
+        "provider_calls",
+        "model",
+        "question_bundle",
+        "degraded_reason"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "degraded"}},
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["degraded_reason"],
+            "properties": {"degraded_reason": {"type": "string", "minLength": 1}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"enum": ["complete", "failed"]}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"degraded_reason": {"type": "null"}}}
+        },
+        {
+          "if": {
+            "properties": {"provider_calls": {"const": 0}},
+            "required": ["provider_calls"]
+          },
+          "then": {"properties": {"model": {"type": "null"}}}
+        }
+      ]
     },
     "interpret_output": {
       "type": "object",
       "properties": {
+        "versions": {"$ref": "#/$defs/output_versions"},
         "demand_lines": {
           "type": "array",
           "items": {"$ref": "#/$defs/demand_line"}
@@ -198,7 +313,7 @@
         "review": {"$ref": "#/$defs/review"},
         "execution": {"$ref": "#/$defs/execution"}
       },
-      "required": ["demand_lines", "review", "execution"],
+      "required": ["versions", "demand_lines", "review", "execution"],
       "additionalProperties": false
     }
   }

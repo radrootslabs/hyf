@@ -7,7 +7,7 @@
 # request is parsed here and then refused by the pre-activation guard in
 # hyf_stdio.server; it must never reach the legacy shortcut handlers.
 
-from std.collections import List, Optional
+from std.collections import Dict, List, Optional
 
 from json import Value
 from json.deserialize import get_bool, get_int, get_string
@@ -52,13 +52,15 @@ def _require_object(value: Value, context: String) raises:
 
 
 def _require_no_duplicate_keys(value: Value, context: String) raises:
-    var keys = value.object_keys()
-    for left in range(len(keys)):
-        for right in range(left + 1, len(keys)):
-            if keys[left] == keys[right]:
-                raise Error(
-                    context + " contains duplicate field '" + keys[left] + "'"
-                )
+    # ADR-0026 D46 CR04: bounded linear seen-key admission. The previous
+    # all-pairs scan was quadratic in the decoded key count; this visits each
+    # entry once and rejects the first repeated decoded key.
+    var seen = Dict[String, Bool]()
+    for item in value.object_items():
+        var key = String(item[0])
+        if key in seen:
+            raise Error(context + " contains duplicate field '" + key + "'")
+        seen[key] = True
 
 
 def _require_allowed_keys(
@@ -204,6 +206,10 @@ def operation_context_selects_v2(context_json: Value) raises -> Bool:
     Missing, null, wrong-type and unknown selectors are not recognized here;
     they fall through to the unchanged legacy parser, which rejects
     ``versions`` for unrelated capabilities and returns invalid_request.
+
+    ADR-0026 D46 CR04: this first-wins lookup is only used after the envelope
+    root duplicate gate has rejected any ambiguous v2-targeting envelope; use
+    ``context_selects_v2_any`` when duplicate-aware inspection is required.
     """
     if not context_json.is_object():
         return False
@@ -218,6 +224,32 @@ def operation_context_selects_v2(context_json: Value) raises -> Bool:
     if not schema.is_string():
         return False
     return String(schema.string_value()) == OPERATION_CONTRACT_SCHEMA_V2
+
+
+def context_selects_v2_any(context_json: Value) raises -> Bool:
+    """Duplicate-aware v2 selector inspection for the envelope admission gate.
+
+    Scans every decoded ``versions`` member and every decoded ``schema`` entry
+    instead of the first match, so a duplicate key cannot hide a v2 selector
+    behind an earlier legacy value. Not a substitute for unambiguous parsing:
+    the caller rejects the whole envelope when duplicate root keys are found.
+    """
+    if not context_json.is_object():
+        return False
+    for item in context_json.object_items():
+        if item[0] != "versions":
+            continue
+        var versions = item[1].copy()
+        if not versions.is_object():
+            continue
+        for member in versions.object_items():
+            if member[0] == "schema" and member[1].is_string():
+                if (
+                    String(member[1].string_value())
+                    == OPERATION_CONTRACT_SCHEMA_V2
+                ):
+                    return True
+    return False
 
 
 def parse_operation_context(

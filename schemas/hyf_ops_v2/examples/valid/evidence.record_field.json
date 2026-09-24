@@ -1,0 +1,8 @@
+{
+  "kind": "record_field",
+  "source_id": "src-farm-1",
+  "revision": "rev-2",
+  "record_id": "record-100",
+  "field": "quantity",
+  "method": "trusted_record"
+}

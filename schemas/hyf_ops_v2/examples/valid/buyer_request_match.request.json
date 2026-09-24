@@ -37,12 +37,12 @@
               "strength": "mandatory",
               "value": "pickup",
               "evidence": [
-                {"source_id": "src-buyer-1", "revision": "rev-3", "start": 55, "end": 61, "method": "span"}
+                {"kind": "span", "source_id": "src-buyer-1", "revision": "rev-3", "start": 55, "end": 61, "method": "span"}
               ]
             }
           ],
           "evidence": [
-            {"source_id": "src-buyer-1", "revision": "rev-3", "start": 12, "end": 39, "method": "span"}
+            {"kind": "span", "source_id": "src-buyer-1", "revision": "rev-3", "start": 12, "end": 39, "method": "span"}
           ],
           "review_required": false
         }

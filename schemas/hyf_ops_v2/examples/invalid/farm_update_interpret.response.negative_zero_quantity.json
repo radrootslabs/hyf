@@ -3,6 +3,15 @@
   "request_id": "farm-interpret-req-1",
   "ok": true,
   "output": {
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
     "claims": [
       {
         "claim_id": "claim-1",
@@ -15,6 +24,6 @@
     ],
     "proposed_changes": [],
     "review": {"required": false, "clarifications": []},
-    "execution": {"status": "complete", "provider_calls": 0, "model": null, "question_bundle": null}
+    "execution": {"status": "complete", "provider_calls": 0, "model": null, "question_bundle": null, "degraded_reason": null}
   }
 }

@@ -233,9 +233,10 @@
         "source_id": {"type": "string", "minLength": 1},
         "revision": {"type": "string", "minLength": 1},
         "target_field": {"type": "string", "minLength": 1},
-        "text": {"type": "string", "minLength": 1}
+        "text": {"type": "string", "minLength": 1},
+        "expected_revision": {"type": "string", "minLength": 1}
       },
-      "required": ["source_id", "revision", "target_field", "text"],
+      "required": ["source_id", "revision", "target_field", "text", "expected_revision"],
       "additionalProperties": false
     },
     "buyer_interpret_input": {

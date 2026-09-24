@@ -30,6 +30,7 @@ from hyf_stdio.codec import (
     encode_success,
     extract_request_correlation,
 )
+from hyf_stdio.dispatch_sentinel import record_business_dispatch_attempt
 from hyf_stdio.control.capabilities import (
     build_capabilities_output_with_runtime_context,
 )
@@ -202,6 +203,11 @@ def _route_business_capability(
     # their legacy enable flag is set. C008/C009 retain this guard.
     if request.operation_context:
         return encode_error(_unavailable_response(request))
+
+    # ADR-0026 D46 CR04: every path below is a real dispatch attempt. The
+    # bounded local sentinel records it only when explicitly enabled, so the
+    # guard above can be proven to short-circuit before this point.
+    record_business_dispatch_attempt(String(request.capability))
 
     if is_gated_operation(request.capability):
         if not operation_enabled(runtime_context.config, request.capability):

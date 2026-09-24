@@ -4,6 +4,15 @@
   "trace_id": "farm-interpret-trace-1",
   "ok": true,
   "output": {
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
     "claims": [
       {
         "claim_id": "claim-1",
@@ -11,7 +20,7 @@
         "status": "offered",
         "quantity": {"state": "known", "value": "80.00", "unit": "lb", "qualifier": "approximate"},
         "evidence": [
-          {"source_id": "src-farm-1", "revision": "rev-7", "start": 11, "end": 21, "method": "span"}
+          {"kind": "span", "source_id": "src-farm-1", "revision": "rev-7", "start": 11, "end": 21, "method": "span"}
         ],
         "review_required": true
       }
@@ -22,7 +31,7 @@
         "operation": "remaining",
         "expected_revision": "rev-2",
         "evidence": [
-          {"source_id": "src-farm-1", "revision": "rev-7", "start": 11, "end": 21, "method": "span"}
+          {"kind": "span", "source_id": "src-farm-1", "revision": "rev-7", "start": 11, "end": 21, "method": "span"}
         ]
       }
     ],
@@ -34,7 +43,8 @@
       "status": "complete",
       "provider_calls": 0,
       "model": null,
-      "question_bundle": null
+      "question_bundle": null,
+      "degraded_reason": null
     }
   }
 }

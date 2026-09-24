@@ -41,7 +41,11 @@ from hyf_stdio.control.capabilities import build_capabilities_output
 from hyf_stdio.codec import decode_request, encode_error, encode_success
 from hyf_stdio.envelope import WireErrorResponse, WireSuccessResponse
 from hyf_stdio.errors import WireError
-from hyf_runtime.startup import RuntimeStartupInput, resolve_startup_context
+from hyf_runtime.startup import (
+    RuntimeStartupContext,
+    RuntimeStartupInput,
+    resolve_startup_context,
+)
 from hyf_stdio.server import (
     handle_request_line_with_runtime_context,
 )
@@ -1916,3 +1920,331 @@ def test_c004_operation_v2_whitespace_only_identity_is_rejected() raises:
         '"model":"m"},"actor_id":"farm-1","farm_id":"farm-1"'
     )
     assert_true(_decode_error_message(blank_version).find("blank") >= 0)
+
+
+# ADR-0026 D46 CR04: unambiguous duplicate admission, safe correlation and an
+# executed zero-dispatch sentinel for all three corrected operations.
+from hyf_stdio.dispatch_sentinel import hyf_dispatch_sentinel_env_name
+
+
+def _v2_farm_request_minimal(request_id: String) -> String:
+    return (
+        '{"version":1,"request_id":"'
+        + request_id
+        + '","capability":"farm_update.interpret",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+    )
+
+
+def _v2_buyer_request_minimal(capability: String, request_id: String) -> String:
+    return (
+        '{"version":1,"request_id":"'
+        + request_id
+        + '","capability":"'
+        + capability
+        + '","context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"buyer-7"},"input":{}}'
+    )
+
+
+def _temp_runtime_context(temp_dir: String) raises -> RuntimeStartupContext:
+    return resolve_startup_context(
+        RuntimeStartupInput(
+            env_paths_profile="repo_local",
+            env_repo_local_base_root=temp_dir,
+            user_home="/home/unused",
+            argv=List[String](),
+        )
+    )
+
+
+def test_c004_cr04_duplicate_capability_cannot_hide_corrected_operation() raises:
+    # Corrected capability first, legacy capability second.
+    var v2_first = (
+        '{"version":1,"request_id":"dup-cap-a",'
+        '"capability":"farm_update.interpret","capability":"query_rewrite",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+    )
+    assert_true(_decode_error_message(v2_first).find("duplicate") >= 0)
+
+    # Legacy capability first, corrected capability second: the corrected value
+    # must still make the envelope v2-targeting and therefore ambiguous.
+    var v2_second = (
+        '{"version":1,"request_id":"dup-cap-b",'
+        '"capability":"query_rewrite","capability":"buyer_request.match",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"buyer-7"},"input":{}}'
+    )
+    assert_true(_decode_error_message(v2_second).find("duplicate") >= 0)
+
+
+def test_c004_cr04_duplicate_context_cannot_hide_v2_selector() raises:
+    # Legacy context first, v2 context second.
+    var legacy_first = (
+        '{"version":1,"request_id":"dup-ctx-a",'
+        '"capability":"farm_update.interpret",'
+        '"context":{"consumer":"cli"},'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+    )
+    assert_true(_decode_error_message(legacy_first).find("duplicate") >= 0)
+
+    # v2 context first, legacy context second.
+    var v2_first = (
+        '{"version":1,"request_id":"dup-ctx-b",'
+        '"capability":"buyer_request.interpret",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"buyer-7"},"context":{"consumer":"cli"},"input":{}}'
+    )
+    assert_true(_decode_error_message(v2_first).find("duplicate") >= 0)
+
+
+def test_c004_cr04_duplicate_correlation_and_equal_values_are_rejected() raises:
+    var duplicate_request_id = (
+        '{"version":1,"request_id":"dup-rid-a","request_id":"dup-rid-b",'
+        '"capability":"farm_update.interpret",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+    )
+    assert_true(
+        _decode_error_message(duplicate_request_id).find("duplicate") >= 0
+    )
+
+    # Equal values are still ambiguous duplicates.
+    var equal_values = (
+        '{"version":1,"request_id":"dup-eq-a","request_id":"dup-eq-a",'
+        '"capability":"buyer_request.match",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"buyer-7"},"input":{}}'
+    )
+    assert_true(_decode_error_message(equal_values).find("duplicate") >= 0)
+
+    # Escaped equivalent of `capability` is a decoded-key duplicate.
+    var escaped_capability = (
+        '{"version":1,"request_id":"dup-esc",'
+        '"capability":"farm_update.interpret","\\u0063apability":"query_rewrite",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+    )
+    assert_true(
+        _decode_error_message(escaped_capability).find("duplicate") >= 0
+    )
+
+
+def test_c004_cr04_unrelated_legacy_duplicate_keeps_existing_admission() raises:
+    # An unrelated legacy capability is not v2-targeting, so the new duplicate
+    # gate deliberately does not apply and the existing legacy admission is
+    # unchanged (first-wins envelope parse proceeds).
+    var legacy_duplicate = (
+        '{"version":1,"request_id":"legacy-dup",'
+        '"capability":"query_rewrite","capability":"query_rewrite",'
+        '"input":{"query":"eggs"}}'
+    )
+    var request = decode_request(legacy_duplicate)
+    assert_true(not request.operation_context)
+    assert_equal(request.capability, "query_rewrite")
+
+
+def test_c004_cr04_ambiguous_duplicate_correlation_is_untrusted() raises:
+    with SafeTempDir() as temp_dir:
+        var runtime_context = _temp_runtime_context(temp_dir)
+        var line = (
+            '{"version":1,"request_id":"dup-cor-a","request_id":"dup-cor-b",'
+            '"trace_id":"dup-trace-a","trace_id":"dup-trace-b",'
+            '"capability":"farm_update.interpret",'
+            '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+            + _v2_versions_json()
+            + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+        )
+        var response = loads(
+            handle_request_line_with_runtime_context(line, runtime_context)
+        )
+        assert_equal(response["ok"].bool_value(), False)
+        assert_equal(
+            response["error"]["code"].string_value(), "invalid_request"
+        )
+        # Ambiguous duplicates are never first/last-wins correlation.
+        assert_equal(response["request_id"].string_value(), "")
+        assert_true(not _has_key(response, "trace_id"))
+
+        # A single unambiguous correlation is still preserved on the same error.
+        var unambiguous = (
+            '{"version":1,"request_id":"dup-cor-ok","trace_id":"trace-ok",'
+            '"capability":"farm_update.interpret",'
+            '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+            + _v2_versions_json()
+            + ',"actor_id":"farm-1"},"input":{}}'
+        )
+        var preserved = loads(
+            handle_request_line_with_runtime_context(
+                unambiguous, runtime_context
+            )
+        )
+        assert_equal(preserved["ok"].bool_value(), False)
+        assert_equal(preserved["request_id"].string_value(), "dup-cor-ok")
+        assert_equal(preserved["trace_id"].string_value(), "trace-ok")
+
+
+def test_c004_cr04_context_admission_is_bounded_and_linear() raises:
+    # A large repeated allowed key is one decoded-key duplicate and is rejected
+    # by the linear seen-key scan rather than an all-pairs comparison.
+    var repeated = List[String]()
+    for _ in range(256):
+        repeated.append('"actor_id":"farm-1"')
+    var many_duplicates = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ","
+        + ",".join(repeated)
+        + ',"farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(many_duplicates).find("duplicate") >= 0)
+
+    # An unknown key is still rejected by the fixed allowed-key set.
+    var unknown_and_dup = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00","planner":"strict",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","actor_id":"farm-2","farm_id":"farm-1"'
+    )
+    var message = _decode_error_message(unknown_and_dup)
+    assert_true(
+        message.find("duplicate") >= 0 or message.find("unexpected") >= 0
+    )
+
+
+def test_c004_cr04_zero_dispatch_sentinel_executed_controls() raises:
+    with SafeTempDir() as temp_dir:
+        var sentinel_path = temp_dir + "/hyf-dispatch-sentinel.log"
+        var runtime_context = _temp_runtime_context(temp_dir)
+        runtime_context.config.effective.runtime.enable_farm_update_interpret = (
+            True
+        )
+        runtime_context.config.effective.runtime.enable_buyer_request_interpret = (
+            True
+        )
+        runtime_context.config.effective.runtime.enable_buyer_request_match = (
+            True
+        )
+        with ScopedEnvVar(hyf_dispatch_sentinel_env_name(), sentinel_path):
+            # Negative controls: every recognized v2 request for all three
+            # corrected operations returns capability_unavailable and performs
+            # zero dispatch, including with the legacy flags enabled.
+            var v2_requests = List[String]()
+            v2_requests.append(_v2_farm_request_minimal("sentry-farm"))
+            v2_requests.append(
+                _v2_buyer_request_minimal(
+                    "buyer_request.interpret", "sentry-interpret"
+                )
+            )
+            v2_requests.append(
+                _v2_buyer_request_minimal("buyer_request.match", "sentry-match")
+            )
+            for line in v2_requests:
+                assert_true(
+                    _operation_enabled(
+                        runtime_context.config,
+                        loads(line)["capability"].string_value(),
+                    )
+                )
+                var response = loads(
+                    handle_request_line_with_runtime_context(
+                        line, runtime_context
+                    )
+                )
+                assert_equal(response["ok"].bool_value(), False)
+                assert_equal(
+                    response["error"]["code"].string_value(),
+                    "capability_unavailable",
+                )
+            assert_true(
+                not exists(sentinel_path),
+            )
+
+            # Positive control: an actual legacy dispatch does record a line,
+            # proving the sentinel observes dispatch rather than nothing.
+            var legacy = (
+                '{"version":1,"request_id":"legacy-sentry",'
+                '"capability":"farm_update.interpret","input":{'
+                + _v2_farm_source_json()
+                + "}}"
+            )
+            var legacy_response = loads(
+                handle_request_line_with_runtime_context(
+                    legacy, runtime_context
+                )
+            )
+            assert_equal(legacy_response["ok"].bool_value(), True)
+            assert_true(exists(sentinel_path))
+            var recorded = Path(sentinel_path).read_text()
+            assert_true(recorded.find("dispatch farm_update.interpret") >= 0)
+
+
+def test_c004_cr04_large_unknown_key_context_is_bounded() raises:
+    # ADR-0026 D46 CR04 asks for large unknown-key contexts and field-count
+    # edge cases: a 128-key unknown context must be rejected by the fixed
+    # allowed-key set without an unbounded scan.
+    var unknown = List[String]()
+    for index in range(128):
+        unknown.append('"unknown_' + String(index) + '":"x"')
+    var large_unknown = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1",'
+        + ",".join(unknown)
+    )
+    assert_true(_decode_error_message(large_unknown).find("unexpected") >= 0)
+
+    # A duplicated unknown key is rejected by the bounded seen-key scan.
+    var duplicate_unknown = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1",'
+        + '"unknown_x":"a","unknown_x":"b"'
+    )
+    var message = _decode_error_message(duplicate_unknown)
+    assert_true(
+        message.find("duplicate") >= 0 or message.find("unexpected") >= 0
+    )
+
+
+def test_c004_cr04_duplicate_version_input_and_trace_fields() raises:
+    # CR04 requires every duplicate correlation/envelope field to fail, not only
+    # capability/context: version, input, trace_id and request_id.
+    var base = (
+        '{"version":1,"trace_id":"t1","request_id":"dup-fields",'
+        '"capability":"farm_update.interpret",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+    )
+    var duplicate_trace = base.replace(
+        '"trace_id":"t1"', '"trace_id":"t1","trace_id":"t2"'
+    )
+    assert_true(_decode_error_message(duplicate_trace).find("duplicate") >= 0)
+
+    var duplicate_version = base.replace(
+        '"version":1', '"version":1,"version":1'
+    )
+    assert_true(_decode_error_message(duplicate_version).find("duplicate") >= 0)
+
+    var duplicate_input = base.replace('"input":{}', '"input":{},"input":{}')
+    assert_true(_decode_error_message(duplicate_input).find("duplicate") >= 0)
+
+    var duplicate_request_id = base.replace(
+        '"request_id":"dup-fields"',
+        '"request_id":"dup-fields","request_id":"dup-fields-2"',
+    )
+    assert_true(
+        _decode_error_message(duplicate_request_id).find("duplicate") >= 0
+    )

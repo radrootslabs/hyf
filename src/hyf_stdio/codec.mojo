@@ -31,6 +31,16 @@ def _extract_optional_string(value: Value, key: String) -> Optional[String]:
     return None
 
 
+def _root_key_occurrences(value: Value, key: String) -> Int:
+    if not value.is_object():
+        return 0
+    var count = 0
+    for candidate in value.object_keys():
+        if candidate == key:
+            count += 1
+    return count
+
+
 def decode_request(line: String) raises -> WireRequest:
     if line == "":
         raise Error("request line must not be empty")
@@ -48,11 +58,20 @@ def extract_request_correlation(line: String) -> RequestCorrelation:
 
     try:
         var json = loads(line)
+        # ADR-0026 D46 CR04: only a single unambiguous correlation key is
+        # trusted. A duplicated request_id/trace_id is ambiguous, so recovery
+        # uses the existing no-trustworthy-correlation behavior instead of
+        # first/last-wins correlation.
         var extracted_request_id = _extract_optional_string(json, "request_id")
-        if extracted_request_id:
+        if (
+            extracted_request_id
+            and _root_key_occurrences(json, "request_id") == 1
+        ):
             request_id = extracted_request_id.value()
 
-        trace_id = _extract_optional_string(json, "trace_id")
+        var extracted_trace_id = _extract_optional_string(json, "trace_id")
+        if _root_key_occurrences(json, "trace_id") == 1:
+            trace_id = extracted_trace_id
     except e:
         pass
 

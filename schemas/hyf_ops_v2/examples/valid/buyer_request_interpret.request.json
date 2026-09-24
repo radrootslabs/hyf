@@ -57,7 +57,8 @@
       "source_id": "src-clar-2",
       "revision": "rev-1",
       "target_field": "conditions.window",
-      "text": "weekend includes Friday evening"
+      "text": "weekend includes Friday evening",
+      "expected_revision": "rev-3"
     }
   }
 }

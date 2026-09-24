@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "hyf_ops_v2/buyer_request_match.request.schema.json",
   "title": "hyf_ops_v2 buyer_request.match strict request (ADR-0025 D45 CB01-CB04)",
-  "$comment": "Corrected versioned operation contract. Consumes the typed reviewed need, authorized snapshots and coverage; no flattened product_phrase/unreserved_value/scale shortcut.",
+  "$comment": "Corrected versioned operation contract (ADR-0026 D46 CR02). Consumes the typed reviewed need, authorized snapshots and coverage; no flattened product_phrase/unreserved_value/scale shortcut. Evidence is the closed span|record_field union.",
   "type": "object",
   "properties": {
     "version": {
@@ -75,14 +75,34 @@
     "evidence_span": {
       "type": "object",
       "properties": {
+        "kind": {"type": "string", "const": "span"},
         "source_id": {"type": "string", "minLength": 1},
         "revision": {"type": "string", "minLength": 1},
         "start": {"type": "integer", "minimum": 0},
         "end": {"type": "integer", "minimum": 0},
         "method": {"type": "string", "minLength": 1}
       },
-      "required": ["source_id", "revision", "start", "end", "method"],
+      "required": ["kind", "source_id", "revision", "start", "end", "method"],
       "additionalProperties": false
+    },
+    "record_field_evidence": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "const": "record_field"},
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "record_id": {"type": "string", "minLength": 1},
+        "field": {"type": "string", "minLength": 1},
+        "method": {"type": "string", "const": "trusted_record"}
+      },
+      "required": ["kind", "source_id", "revision", "record_id", "field", "method"],
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "oneOf": [
+        {"$ref": "#/$defs/evidence_span"},
+        {"$ref": "#/$defs/record_field_evidence"}
+      ]
     },
     "reported_quantity": {
       "type": "object",
@@ -257,7 +277,7 @@
               "value": {"type": ["string", "null"]},
               "evidence": {
                 "type": "array",
-                "items": {"$ref": "#/$defs/evidence_span"}
+                "items": {"$ref": "#/$defs/evidence_ref"}
               }
             },
             "required": ["kind", "strength", "evidence"],
@@ -266,7 +286,7 @@
         },
         "evidence": {
           "type": "array",
-          "items": {"$ref": "#/$defs/evidence_span"}
+          "items": {"$ref": "#/$defs/evidence_ref"}
         },
         "review_required": {"type": "boolean"}
       },

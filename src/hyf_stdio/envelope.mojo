@@ -1,4 +1,4 @@
-from std.collections import Optional
+from std.collections import Dict, Optional
 
 from json import Value, loads
 from json.deserialize import Deserializable, get_string
@@ -6,6 +6,7 @@ from json.deserialize import Deserializable, get_string
 from hyf_core.metadata import hyf_protocol_version
 from hyf_core.operation_context import (
     OperationContext,
+    context_selects_v2_any,
     is_corrected_operation,
     operation_context_selects_v2,
     parse_operation_context,
@@ -49,6 +50,37 @@ def _has_key(value: Value, key: String) -> Bool:
     for candidate in value.object_keys():
         if candidate == key:
             return True
+    return False
+
+
+def _first_duplicate_root_key(value: Value) raises -> Optional[String]:
+    # ADR-0026 D46 CR04: decoded-key identity across every raw object entry, so
+    # escaped equivalents (`\u0063ontext`) and repeated values are both found
+    # rather than only the first `value[key]` lookup.
+    var seen = Dict[String, Bool]()
+    for item in value.object_items():
+        var key = String(item[0])
+        if key in seen:
+            return Optional[String](key)
+        seen[key] = True
+    return None
+
+
+def envelope_targets_corrected_v2(json: Value) raises -> Bool:
+    """True when an envelope contains a corrected-op capability value or a
+    duplicate-aware v2 context selector.
+
+    Scans every raw root entry, so a duplicated `capability` or `context` key
+    cannot hide a corrected-operation value or a v2 selector behind an earlier
+    legacy entry.
+    """
+    for item in json.object_items():
+        if item[0] == "capability" and item[1].is_string():
+            if is_corrected_operation(String(item[1].string_value())):
+                return True
+        elif item[0] == "context":
+            if context_selects_v2_any(item[1]):
+                return True
     return False
 
 
@@ -106,6 +138,18 @@ struct WireRequest(Copyable, Deserializable, Movable):
     @staticmethod
     def from_json(json: Value) raises -> Self:
         _require_object(json, "request envelope")
+        # ADR-0026 D46 CR04: reject ambiguous duplicate top-level keys before
+        # first-wins lookup/selector dispatch for any envelope that targets a
+        # corrected-operation capability or a v2 context selector. Unrelated
+        # legacy capabilities keep their existing admission behavior.
+        if envelope_targets_corrected_v2(json):
+            var duplicate = _first_duplicate_root_key(json)
+            if duplicate:
+                raise Error(
+                    "request envelope contains duplicate top-level field '"
+                    + duplicate.value()
+                    + "'"
+                )
         _require_request_keys(json)
         var version = _require_protocol_version(json)
 

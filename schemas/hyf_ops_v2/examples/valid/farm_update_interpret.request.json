@@ -62,13 +62,14 @@
       }
     },
     "prior_records": [
-      {"record_id": "record-100", "revision": "rev-2", "role": "authorized_listing"}
+      {"record_id": "record-100", "revision": "rev-2", "role": "authorized_listing", "farm_id": "farm-1"}
     ],
     "clarification": {
       "source_id": "src-clar-1",
       "revision": "rev-1",
       "target_field": "quantity",
-      "text": "about 80 lb means at least 75 and at most 85 lb"
+      "text": "about 80 lb means at least 75 and at most 85 lb",
+      "expected_revision": "rev-7"
     }
   }
 }

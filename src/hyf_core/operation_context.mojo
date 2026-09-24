@@ -74,11 +74,6 @@ def _require_allowed_keys(
             raise Error(context + " contains unexpected field '" + key + "'")
 
 
-def _require_non_empty(value: String, context: String) raises:
-    if value == "":
-        raise Error(context + " must not be empty")
-
-
 def _has_nonblank(value: String) -> Bool:
     return String(value).strip().byte_length() > 0
 
@@ -106,12 +101,6 @@ def _required_string(
     var raw = get_string(value, key)
     _require_nonblank(raw, context)
     return String(raw)
-
-
-def _object_or_empty(value: Value, key: String) -> Value:
-    if _has_key(value, key):
-        return value[key].clone()
-    return Value(None)
 
 
 @fieldwise_init

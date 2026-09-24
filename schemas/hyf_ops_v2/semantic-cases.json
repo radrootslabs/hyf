@@ -4,7 +4,9 @@
   "revision": "hyf_ops_v2",
   "note": "Semantic obligations that JSON Schema alone cannot express. Each case is labelled with the enforcing owner and the C004 control that exercises it. No case is claimed enforced by a regex or by the reference validator; C008/C009/C023 own the full typed/semantic enforcement.",
   "cases": [
-    {"id": "duplicate_key_identity", "path": "input.source.revision", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "strict duplicate-key detection in hyf_core.operation_context and Mojo control test"},
+    {"id": "duplicate_key_identity", "path": "context/versions duplicate object keys", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "strict duplicate-key detection in hyf_core.operation_context and Mojo control test"},
+    {"id": "input_duplicate_key_identity", "path": "input.* duplicate object keys", "expect": "reject", "wire": "invalid_request", "owner": "C008/C009", "enforced_by": "C004 keeps input as a Value; typed strict input decode is C008/C009"},
+    {"id": "whitespace_only_identity_strings", "path": "blank-only actor_id/farm_id/version strings", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "runtime _require_nonblank is intentionally stricter than schema minLength:1; Mojo control test"},
     {"id": "escaped_duplicate_key_identity", "path": "context.actor_id vs context.\\u0061ctor_id", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "decoded key identity in duplicate detection"},
     {"id": "taxonomy_version_mismatch", "path": "context.versions.taxonomy != input.references.taxonomy.version", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
     {"id": "normalization_version_mismatch", "path": "context.versions.normalization != input.references.normalization.version", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},

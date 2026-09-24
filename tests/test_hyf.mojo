@@ -1888,3 +1888,31 @@ def test_c004_v2_schema_assets_and_manifest_integrity() raises:
     assert_true(len(entries) >= 30)
     for entry in entries:
         assert_true(exists(schema_dir / entry["file"].string_value()))
+
+
+def test_c004_operation_v2_escaped_duplicate_key_is_rejected() raises:
+    # \u0061 is 'a'; the parser decodes key escapes, so the second key is a
+    # duplicate actor_id and must be rejected by decoded-key identity.
+    var escaped = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","\\u0061ctor_id":"farm-2","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(escaped).find("duplicate") >= 0)
+
+
+def test_c004_operation_v2_whitespace_only_identity_is_rejected() raises:
+    var blank_actor = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"   ","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(blank_actor).find("blank") >= 0)
+
+    var blank_version = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00","versions":{'
+        '"schema":"hyf_ops_v2","taxonomy":"   ","normalization":"n",'
+        '"review_policy":"r","ranking_policy":"k","question_bundle":"q",'
+        '"model":"m"},"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(blank_version).find("blank") >= 0)

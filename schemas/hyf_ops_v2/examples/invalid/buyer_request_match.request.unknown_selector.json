@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "request_id": "match-bad-selector",
+  "capability": "buyer_request.match",
+  "context": {
+    "evaluation_time": "2026-09-24T09:05:00-07:00",
+    "versions": {
+      "schema": "hyf_ops_v3",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
+    "actor_id": "buyer-7"
+  },
+  "input": {
+    "need": {
+      "need_id": "need-1",
+      "revision": "rev-4",
+      "actor_id": "buyer-7",
+      "demand_lines": [],
+      "partial_fulfillment": "unstated"
+    },
+    "snapshots": [],
+    "coverage": {"scope": "supplied_only", "truncated": false},
+    "references": {
+      "taxonomy": {"version": "hyf_ops_v2.taxonomy.v1", "provenance": "host_supplied", "products": []},
+      "normalization": {"version": "hyf_ops_v2.normalization.v1", "provenance": "host_supplied", "units": [], "conversions": [], "packs": []}
+    }
+  }
+}

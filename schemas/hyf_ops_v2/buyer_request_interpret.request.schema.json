@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v2/buyer_request_interpret.request.schema.json",
+  "title": "hyf_ops_v2 buyer_request.interpret strict request (ADR-0025 D45 CB01-CB04)",
+  "$comment": "Corrected versioned operation contract. Buyer operations never require a fabricated farm identity; context farm_id is forbidden and the trusted buyer principal is context.actor_id.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability": {
+      "type": "string",
+      "const": "buyer_request.interpret"
+    },
+    "context": {
+      "$ref": "#/$defs/buyer_context"
+    },
+    "input": {
+      "$ref": "#/$defs/buyer_interpret_input"
+    }
+  },
+  "required": ["version", "request_id", "capability", "context", "input"],
+  "additionalProperties": false,
+  "$defs": {
+    "versions": {
+      "type": "object",
+      "properties": {
+        "schema": {"type": "string", "const": "hyf_ops_v2"},
+        "taxonomy": {"type": "string", "minLength": 1},
+        "normalization": {"type": "string", "minLength": 1},
+        "review_policy": {"type": "string", "minLength": 1},
+        "ranking_policy": {"type": "string", "minLength": 1},
+        "question_bundle": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1}
+      },
+      "required": [
+        "schema",
+        "taxonomy",
+        "normalization",
+        "review_policy",
+        "ranking_policy",
+        "question_bundle",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "buyer_context": {
+      "type": "object",
+      "properties": {
+        "consumer": {"type": "string", "minLength": 1},
+        "execution_mode_preference": {
+          "type": "string",
+          "enum": ["deterministic", "assisted"]
+        },
+        "deadline_ms": {"type": "integer", "minimum": 1},
+        "evaluation_time": {"type": "string", "minLength": 1},
+        "timezone": {"type": "string", "minLength": 1},
+        "locale": {"type": "string", "minLength": 1},
+        "versions": {"$ref": "#/$defs/versions"},
+        "return_provenance": {"type": "boolean"},
+        "actor_id": {"type": "string", "minLength": 1}
+      },
+      "required": ["evaluation_time", "versions", "actor_id"],
+      "additionalProperties": false
+    },
+    "interpretation_source_buyer": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1},
+        "source_time": {"type": "string", "minLength": 1},
+        "timezone": {"type": "string", "minLength": 1},
+        "locale": {"type": "string", "minLength": 1},
+        "actor_id": {"type": "string", "minLength": 1},
+        "ingestion_time": {"type": "string", "minLength": 1}
+      },
+      "required": [
+        "source_id",
+        "revision",
+        "text",
+        "source_time",
+        "actor_id"
+      ],
+      "additionalProperties": false
+    },
+    "reported_quantity": {
+      "type": "object",
+      "properties": {
+        "state": {"type": "string", "enum": ["known", "unknown"]},
+        "value": {
+          "type": ["string", "null"],
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+        },
+        "unit": {"type": ["string", "null"], "minLength": 1},
+        "qualifier": {"type": "string", "enum": ["exact", "approximate"]}
+      },
+      "required": ["state", "qualifier"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"state": {"const": "unknown"}},
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {"value": {"type": "null"}, "unit": {"type": "null"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"state": {"const": "known"}},
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+              },
+              "unit": {"type": "string", "minLength": 1}
+            },
+            "required": ["value", "unit"]
+          }
+        }
+      ]
+    },
+    "taxonomy_bundle": {
+      "type": "object",
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "provenance": {"type": "string", "enum": ["synthetic", "host_supplied"]},
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "catalogue_id": {"type": "string", "minLength": 1},
+              "terms": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              }
+            },
+            "required": ["catalogue_id", "terms"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "provenance", "products"],
+      "additionalProperties": false
+    },
+    "normalization_bundle": {
+      "type": "object",
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "provenance": {"type": "string", "enum": ["synthetic", "host_supplied"]},
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "unit": {"type": "string", "minLength": 1},
+              "dimension": {
+                "type": "string",
+                "enum": ["mass", "volume", "count", "unknown"]
+              }
+            },
+            "required": ["unit", "dimension"],
+            "additionalProperties": false
+          }
+        },
+        "conversions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from_unit": {"type": "string", "minLength": 1},
+              "to_unit": {"type": "string", "minLength": 1},
+              "numerator": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+              "denominator": {"type": "string", "pattern": "^10*$"}
+            },
+            "required": ["from_unit", "to_unit", "numerator", "denominator"],
+            "additionalProperties": false
+          }
+        },
+        "packs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "product_id": {"type": "string", "minLength": 1},
+              "pack_unit": {"type": "string", "minLength": 1},
+              "inner_unit": {"type": "string", "minLength": 1},
+              "value": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$",
+                "allOf": [
+                  {"not": {"const": "0"}},
+                  {"not": {"pattern": "^0(\\.0+)?$"}}
+                ]
+              }
+            },
+            "required": ["product_id", "pack_unit", "inner_unit", "value"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "provenance", "units", "conversions", "packs"],
+      "additionalProperties": false
+    },
+    "references": {
+      "type": "object",
+      "properties": {
+        "taxonomy": {"$ref": "#/$defs/taxonomy_bundle"},
+        "normalization": {"$ref": "#/$defs/normalization_bundle"}
+      },
+      "required": ["taxonomy", "normalization"],
+      "additionalProperties": false
+    },
+    "clarification": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "target_field": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1}
+      },
+      "required": ["source_id", "revision", "target_field", "text"],
+      "additionalProperties": false
+    },
+    "buyer_interpret_input": {
+      "type": "object",
+      "properties": {
+        "source": {"$ref": "#/$defs/interpretation_source_buyer"},
+        "references": {"$ref": "#/$defs/references"},
+        "clarification": {"$ref": "#/$defs/clarification"}
+      },
+      "required": ["source", "references"],
+      "additionalProperties": false
+    }
+  }
+}

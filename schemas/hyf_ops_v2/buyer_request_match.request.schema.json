@@ -1,0 +1,390 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v2/buyer_request_match.request.schema.json",
+  "title": "hyf_ops_v2 buyer_request.match strict request (ADR-0025 D45 CB01-CB04)",
+  "$comment": "Corrected versioned operation contract. Consumes the typed reviewed need, authorized snapshots and coverage; no flattened product_phrase/unreserved_value/scale shortcut.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability": {
+      "type": "string",
+      "const": "buyer_request.match"
+    },
+    "context": {
+      "$ref": "#/$defs/buyer_context"
+    },
+    "input": {
+      "$ref": "#/$defs/match_input"
+    }
+  },
+  "required": ["version", "request_id", "capability", "context", "input"],
+  "additionalProperties": false,
+  "$defs": {
+    "versions": {
+      "type": "object",
+      "properties": {
+        "schema": {"type": "string", "const": "hyf_ops_v2"},
+        "taxonomy": {"type": "string", "minLength": 1},
+        "normalization": {"type": "string", "minLength": 1},
+        "review_policy": {"type": "string", "minLength": 1},
+        "ranking_policy": {"type": "string", "minLength": 1},
+        "question_bundle": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1}
+      },
+      "required": [
+        "schema",
+        "taxonomy",
+        "normalization",
+        "review_policy",
+        "ranking_policy",
+        "question_bundle",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "buyer_context": {
+      "type": "object",
+      "properties": {
+        "consumer": {"type": "string", "minLength": 1},
+        "execution_mode_preference": {
+          "type": "string",
+          "enum": ["deterministic", "assisted"]
+        },
+        "deadline_ms": {"type": "integer", "minimum": 1},
+        "evaluation_time": {"type": "string", "minLength": 1},
+        "timezone": {"type": "string", "minLength": 1},
+        "locale": {"type": "string", "minLength": 1},
+        "versions": {"$ref": "#/$defs/versions"},
+        "return_provenance": {"type": "boolean"},
+        "actor_id": {"type": "string", "minLength": 1}
+      },
+      "required": ["evaluation_time", "versions", "actor_id"],
+      "additionalProperties": false
+    },
+    "evidence_span": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0},
+        "method": {"type": "string", "minLength": 1}
+      },
+      "required": ["source_id", "revision", "start", "end", "method"],
+      "additionalProperties": false
+    },
+    "reported_quantity": {
+      "type": "object",
+      "properties": {
+        "state": {"type": "string", "enum": ["known", "unknown"]},
+        "value": {
+          "type": ["string", "null"],
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+        },
+        "unit": {"type": ["string", "null"], "minLength": 1},
+        "qualifier": {"type": "string", "enum": ["exact", "approximate"]}
+      },
+      "required": ["state", "qualifier"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"state": {"const": "unknown"}},
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {"value": {"type": "null"}, "unit": {"type": "null"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"state": {"const": "known"}},
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+              },
+              "unit": {"type": "string", "minLength": 1}
+            },
+            "required": ["value", "unit"]
+          }
+        }
+      ]
+    },
+    "product_ref": {
+      "type": "object",
+      "properties": {
+        "phrase": {"type": "string", "minLength": 1},
+        "catalogue_id": {"type": ["string", "null"], "minLength": 1},
+        "resolution": {"type": "string", "enum": ["resolved", "unresolved"]}
+      },
+      "required": ["phrase", "catalogue_id", "resolution"],
+      "additionalProperties": false
+    },
+    "taxonomy_bundle": {
+      "type": "object",
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "provenance": {"type": "string", "enum": ["synthetic", "host_supplied"]},
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "catalogue_id": {"type": "string", "minLength": 1},
+              "terms": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              }
+            },
+            "required": ["catalogue_id", "terms"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "provenance", "products"],
+      "additionalProperties": false
+    },
+    "normalization_bundle": {
+      "type": "object",
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "provenance": {"type": "string", "enum": ["synthetic", "host_supplied"]},
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "unit": {"type": "string", "minLength": 1},
+              "dimension": {
+                "type": "string",
+                "enum": ["mass", "volume", "count", "unknown"]
+              }
+            },
+            "required": ["unit", "dimension"],
+            "additionalProperties": false
+          }
+        },
+        "conversions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from_unit": {"type": "string", "minLength": 1},
+              "to_unit": {"type": "string", "minLength": 1},
+              "numerator": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+              "denominator": {"type": "string", "pattern": "^10*$"}
+            },
+            "required": ["from_unit", "to_unit", "numerator", "denominator"],
+            "additionalProperties": false
+          }
+        },
+        "packs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "product_id": {"type": "string", "minLength": 1},
+              "pack_unit": {"type": "string", "minLength": 1},
+              "inner_unit": {"type": "string", "minLength": 1},
+              "value": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$",
+                "allOf": [
+                  {"not": {"const": "0"}},
+                  {"not": {"pattern": "^0(\\.0+)?$"}}
+                ]
+              }
+            },
+            "required": ["product_id", "pack_unit", "inner_unit", "value"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "provenance", "units", "conversions", "packs"],
+      "additionalProperties": false
+    },
+    "references": {
+      "type": "object",
+      "properties": {
+        "taxonomy": {"$ref": "#/$defs/taxonomy_bundle"},
+        "normalization": {"$ref": "#/$defs/normalization_bundle"}
+      },
+      "required": ["taxonomy", "normalization"],
+      "additionalProperties": false
+    },
+    "demand_line": {
+      "type": "object",
+      "properties": {
+        "line_id": {"type": "string", "minLength": 1},
+        "product": {"$ref": "#/$defs/product_ref"},
+        "quantity": {"$ref": "#/$defs/reported_quantity"},
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "fulfillment",
+                  "window",
+                  "grade",
+                  "price",
+                  "attribute",
+                  "substitution"
+                ]
+              },
+              "strength": {
+                "type": "string",
+                "enum": ["mandatory", "preferred", "excluded", "permitted"]
+              },
+              "value": {"type": ["string", "null"]},
+              "evidence": {
+                "type": "array",
+                "items": {"$ref": "#/$defs/evidence_span"}
+              }
+            },
+            "required": ["kind", "strength", "evidence"],
+            "additionalProperties": false
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence_span"}
+        },
+        "review_required": {"type": "boolean"}
+      },
+      "required": [
+        "line_id",
+        "product",
+        "quantity",
+        "conditions",
+        "evidence",
+        "review_required"
+      ],
+      "additionalProperties": false
+    },
+    "need": {
+      "type": "object",
+      "properties": {
+        "need_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "actor_id": {"type": "string", "minLength": 1},
+        "demand_lines": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/demand_line"}
+        },
+        "partial_fulfillment": {
+          "type": "string",
+          "enum": ["allowed", "disallowed", "unstated"]
+        }
+      },
+      "required": [
+        "need_id",
+        "revision",
+        "actor_id",
+        "demand_lines",
+        "partial_fulfillment"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "lot_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "supplier_id": {"type": "string", "minLength": 1},
+        "product": {"$ref": "#/$defs/product_ref"},
+        "unreserved_quantity": {"$ref": "#/$defs/reported_quantity"},
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "verified": {"type": "boolean"}
+            },
+            "required": ["name", "verified"],
+            "additionalProperties": false
+          }
+        },
+        "fulfillment": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["pickup", "delivery", "unspecified"]
+            },
+            "area": {"type": ["string", "null"]},
+            "window": {"type": ["string", "null"]}
+          },
+          "required": ["method", "area", "window"],
+          "additionalProperties": false
+        },
+        "price": {
+          "type": "object",
+          "properties": {
+            "state": {"type": "string", "enum": ["known", "unknown"]},
+            "amount": {
+              "type": ["string", "null"],
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
+            },
+            "currency": {"type": ["string", "null"], "minLength": 3},
+            "basis": {"type": ["string", "null"], "minLength": 1}
+          },
+          "required": ["state", "amount", "currency", "basis"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "lot_id",
+        "revision",
+        "supplier_id",
+        "product",
+        "unreserved_quantity"
+      ],
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "scope": {"type": "string", "enum": ["supplied_only"]},
+        "truncated": {"type": "boolean"},
+        "evaluated": {"type": "integer", "minimum": 0},
+        "excluded": {"type": "integer", "minimum": 0}
+      },
+      "required": ["scope", "truncated"],
+      "additionalProperties": false
+    },
+    "match_input": {
+      "type": "object",
+      "properties": {
+        "need": {"$ref": "#/$defs/need"},
+        "snapshots": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/snapshot"}
+        },
+        "coverage": {"$ref": "#/$defs/coverage"},
+        "references": {"$ref": "#/$defs/references"}
+      },
+      "required": ["need", "snapshots", "coverage", "references"],
+      "additionalProperties": false
+    }
+  }
+}

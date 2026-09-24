@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "program": "hyf_http_v1",
+  "revision": "hyf_ops_v2",
+  "note": "Schema-to-domain mapping for the corrected three operations. Every v2 business object maps to an existing approved domain type or an explicitly named future owner; no new business capability is introduced by C004.",
+  "mappings": [
+    {"schema_path": "context", "domain": "hyf_core.operation_context.OperationContext", "owner": "C004", "status": "parsed_strictly"},
+    {"schema_path": "context.versions", "domain": "hyf_core.operation_context.OperationVersions", "owner": "C004", "status": "closed_seven_axes"},
+    {"schema_path": "input.source", "domain": "hyf_application.context.InterpretationSource", "owner": "C008/C009", "status": "schema_bound"},
+    {"schema_path": "input.references.taxonomy", "domain": "hyf_core.normalization.candidates.Candidate discovery terms", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.references.normalization.units", "domain": "hyf_core.domain.units.unit_dimension", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.references.normalization.conversions", "domain": "hyf_core.domain.units.ConversionRule / conversion_rule", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.references.normalization.packs", "domain": "hyf_core.domain.pack.PackRule / pack_rule", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.prior_records", "domain": "hyf_core.domain.source.Revision (immutable id/revision)", "owner": "C008/C009", "status": "schema_bound"},
+    {"schema_path": "input.clarification", "domain": "hyf_core.domain.clarification.ClarificationEvidence", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.need", "domain": "hyf_core.domain.demand.DemandLine", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.need.actor_id", "domain": "hyf_core.domain.source.ActorId", "owner": "C023", "status": "schema_bound"},
+    {"schema_path": "input.snapshots", "domain": "hyf_core.domain.snapshot.SupplySnapshot", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "input.coverage", "domain": "hyf_core.domain.coverage.Coverage", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "*.quantity.value", "domain": "hyf_core.domain.quantity.Quantity value/scale (D23 decimal-string grammar)", "owner": "C004/C009", "status": "schema_bound"},
+    {"schema_path": "*.evidence", "domain": "hyf_core.domain.evidence.EvidenceRef (UTF-8 byte span, source_id + revision)", "owner": "C008/C009/C023", "status": "schema_bound"},
+    {"schema_path": "output.claims/proposed_changes", "domain": "hyf_application.farm_review_output", "owner": "C008/C009/C030", "status": "schema_bound"},
+    {"schema_path": "output.demand_lines", "domain": "hyf_application.buyer_needs", "owner": "C008/C009/C030", "status": "schema_bound"},
+    {"schema_path": "output.assessments/plans/limitations", "domain": "hyf_application.match_checks / match_plan / match_index", "owner": "C008/C009/C038", "status": "schema_bound"},
+    {"schema_path": "output.execution", "domain": "hyf_core.domain.execution.execution_state", "owner": "C008/C009", "status": "schema_bound"}
+  ],
+  "authority_integration": "docs/spec/hyf_v1_jev/specs/AUTHORITY_INTEGRATION.md: HYF is read-only; supplied records are host-authorized preconditions, HYF validates consistency but performs no writes and claims no authentication.",
+  "unavailability": "C004 parses the corrected context and then refuses dispatch with capability_unavailable until C042-C046 activate the operations."
+}

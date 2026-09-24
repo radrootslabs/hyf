@@ -1,0 +1,11 @@
+{
+  "version": "hyf_ops_v2.normalization.v1",
+  "provenance": "host_supplied",
+  "units": [
+    {"unit": "crate", "dimension": "count"}
+  ],
+  "conversions": [],
+  "packs": [
+    {"product_id": "egg.chicken", "pack_unit": "crate", "inner_unit": "crate", "value": "0"}
+  ]
+}

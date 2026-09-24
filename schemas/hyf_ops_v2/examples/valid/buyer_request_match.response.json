@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "request_id": "buyer-match-req-1",
+  "ok": true,
+  "output": {
+    "assessments": [
+      {
+        "candidate_id": "lot-1",
+        "eligibility": "eligible",
+        "checks": [
+          {"kind": "product", "result": "pass", "reason": "product_match", "evidence": []},
+          {"kind": "availability", "result": "pass", "reason": "availability_known", "evidence": []},
+          {"kind": "quantity", "result": "pass", "reason": "quantity_sufficient", "evidence": []}
+        ]
+      },
+      {
+        "candidate_id": "lot-2",
+        "eligibility": "conditional",
+        "checks": [
+          {"kind": "product", "result": "unknown", "reason": "product_unresolved", "evidence": []},
+          {"kind": "availability", "result": "unknown", "reason": "stock_unknown", "evidence": []}
+        ]
+      }
+    ],
+    "plans": [
+      {
+        "plan_id": "plan-1",
+        "supplier_id": "farm-1",
+        "allocations": [
+          {
+            "lot_id": "lot-1",
+            "revision": "rev-9",
+            "line_id": "line-1",
+            "quantity": {"state": "known", "value": "25", "unit": "lb", "qualifier": "exact"}
+          }
+        ],
+        "coverage": {"lines_covered": ["line-1"], "uncovered": [], "partial": false},
+        "unresolved": []
+      }
+    ],
+    "limitations": {
+      "scope": "supplied_only",
+      "truncated": false,
+      "supported_mode": "single_supplier_compatible_lots",
+      "unsupported": ["multi_supplier"]
+    },
+    "execution": {"status": "complete", "provider_calls": 0, "model": null, "question_bundle": null}
+  }
+}

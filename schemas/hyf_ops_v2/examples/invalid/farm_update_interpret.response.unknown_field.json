@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "request_id": "farm-interpret-req-1",
+  "ok": true,
+  "extra": true,
+  "output": {
+    "claims": [],
+    "proposed_changes": [],
+    "review": {"required": false, "clarifications": []},
+    "execution": {"status": "complete", "provider_calls": 0, "model": null, "question_bundle": null}
+  }
+}

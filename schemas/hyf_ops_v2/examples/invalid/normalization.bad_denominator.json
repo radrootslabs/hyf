@@ -1,0 +1,12 @@
+{
+  "version": "hyf_ops_v2.normalization.v1",
+  "provenance": "host_supplied",
+  "units": [
+    {"unit": "lb", "dimension": "mass"},
+    {"unit": "kg", "dimension": "mass"}
+  ],
+  "conversions": [
+    {"from_unit": "lb", "to_unit": "kg", "numerator": "45359237", "denominator": "12"}
+  ],
+  "packs": []
+}

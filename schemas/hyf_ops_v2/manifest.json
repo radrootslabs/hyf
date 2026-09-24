@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "program": "hyf_http_v1",
+  "revision": "hyf_ops_v2",
+  "selector": {
+    "field": "context.versions.schema",
+    "value": "hyf_ops_v2"
+  },
+  "envelope_version": 1,
+  "activation": {
+    "state": "pre_activation",
+    "guard_error_code": "capability_unavailable",
+    "owner": "C042-C046",
+    "note": "Before activation a recognized hyf_ops_v2 request is parsed and then refused with capability_unavailable; it never reaches the legacy shortcut handlers even when their enable flag is set. C004 does not advertise v2 readiness."
+  },
+  "operations": {
+    "farm_update.interpret": {
+      "request_schema": "farm_update_interpret.request.schema.json",
+      "response_schema": "farm_update_interpret.response.schema.json"
+    },
+    "buyer_request.interpret": {
+      "request_schema": "buyer_request_interpret.request.schema.json",
+      "response_schema": "buyer_request_interpret.response.schema.json"
+    },
+    "buyer_request.match": {
+      "request_schema": "buyer_request_match.request.schema.json",
+      "response_schema": "buyer_request_match.response.schema.json"
+    }
+  },
+  "error_families": {
+    "invalid_request": "malformed JSON/schema/type/selector/version/reference/scope inconsistency",
+    "unsupported_capability": "unknown capability",
+    "capability_disabled": "disabled legacy operation",
+    "capability_unavailable": "recognized hyf_ops_v2 request before activation",
+    "internal_error": "unexpected internal failure (sanitized)"
+  },
+  "semantic_cases": "semantic-cases.json",
+  "version_manifest": "version_manifest.json",
+  "domain_manifest": "domain_manifest.json"
+}

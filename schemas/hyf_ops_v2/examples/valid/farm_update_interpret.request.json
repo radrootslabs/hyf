@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "request_id": "farm-interpret-req-1",
+  "trace_id": "farm-interpret-trace-1",
+  "capability": "farm_update.interpret",
+  "context": {
+    "consumer": "radroots-cli",
+    "execution_mode_preference": "deterministic",
+    "deadline_ms": 2500,
+    "evaluation_time": "2026-09-24T09:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
+    "return_provenance": true,
+    "actor_id": "farm-1",
+    "farm_id": "farm-1"
+  },
+  "input": {
+    "source": {
+      "source_id": "src-farm-1",
+      "revision": "rev-7",
+      "text": "Got about 80 lb of Roma tomatoes and two crates of eggs today.",
+      "source_time": "2026-09-24T08:30:00-07:00",
+      "timezone": "America/Vancouver",
+      "locale": "en-CA",
+      "actor_id": "farm-1",
+      "farm_id": "farm-1",
+      "ingestion_time": "2026-09-24T08:31:00-07:00"
+    },
+    "references": {
+      "taxonomy": {
+        "version": "hyf_ops_v2.taxonomy.v1",
+        "provenance": "host_supplied",
+        "products": [
+          {"catalogue_id": "tomato.roma", "terms": ["Roma tomatoes", "roma tomato"]},
+          {"catalogue_id": "egg.chicken", "terms": ["eggs"]}
+        ]
+      },
+      "normalization": {
+        "version": "hyf_ops_v2.normalization.v1",
+        "provenance": "host_supplied",
+        "units": [
+          {"unit": "lb", "dimension": "mass"},
+          {"unit": "kg", "dimension": "mass"},
+          {"unit": "crate", "dimension": "count"},
+          {"unit": "egg", "dimension": "count"}
+        ],
+        "conversions": [
+          {"from_unit": "lb", "to_unit": "kg", "numerator": "45359237", "denominator": "100000000"}
+        ],
+        "packs": [
+          {"product_id": "egg.chicken", "pack_unit": "crate", "inner_unit": "egg", "value": "12"}
+        ]
+      }
+    },
+    "prior_records": [
+      {"record_id": "record-100", "revision": "rev-2", "role": "authorized_listing"}
+    ],
+    "clarification": {
+      "source_id": "src-clar-1",
+      "revision": "rev-1",
+      "target_field": "quantity",
+      "text": "about 80 lb means at least 75 and at most 85 lb"
+    }
+  }
+}

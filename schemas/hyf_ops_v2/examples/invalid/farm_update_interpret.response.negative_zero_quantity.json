@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "request_id": "farm-interpret-req-1",
+  "ok": true,
+  "output": {
+    "claims": [
+      {
+        "claim_id": "claim-1",
+        "product": {"phrase": "Roma tomatoes", "catalogue_id": "tomato.roma", "resolution": "resolved"},
+        "status": "offered",
+        "quantity": {"state": "known", "value": "-0", "unit": "lb", "qualifier": "exact"},
+        "evidence": [],
+        "review_required": false
+      }
+    ],
+    "proposed_changes": [],
+    "review": {"required": false, "clarifications": []},
+    "execution": {"status": "complete", "provider_calls": 0, "model": null, "question_bundle": null}
+  }
+}

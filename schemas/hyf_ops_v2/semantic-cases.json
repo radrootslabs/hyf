@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "program": "hyf_http_v1",
+  "revision": "hyf_ops_v2",
+  "note": "Semantic obligations that JSON Schema alone cannot express. Each case is labelled with the enforcing owner and the C004 control that exercises it. No case is claimed enforced by a regex or by the reference validator; C008/C009/C023 own the full typed/semantic enforcement.",
+  "cases": [
+    {"id": "duplicate_key_identity", "path": "input.source.revision", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "strict duplicate-key detection in hyf_core.operation_context and Mojo control test"},
+    {"id": "escaped_duplicate_key_identity", "path": "context.actor_id vs context.\\u0061ctor_id", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "decoded key identity in duplicate detection"},
+    {"id": "taxonomy_version_mismatch", "path": "context.versions.taxonomy != input.references.taxonomy.version", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "normalization_version_mismatch", "path": "context.versions.normalization != input.references.normalization.version", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "source_actor_mismatch", "path": "input.source.actor_id != context.actor_id", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "match_need_actor_mismatch", "path": "input.need.actor_id != context.actor_id", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "farm_source_farm_mismatch", "path": "input.source.farm_id != context.farm_id", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "unknown_quantity_with_value", "path": "quantity.state=unknown with non-null value", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema if/then; C009 typed mapping"},
+    {"id": "known_quantity_without_value", "path": "quantity.state=known without value/unit", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema if/then; C009 typed mapping"},
+    {"id": "negative_zero", "path": "quantity.value='-0' or '-0.00'", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "D23 grammar; labelled semantic script + C009 parse"},
+    {"id": "fractional_width_10", "path": "quantity.value with 10 fractional digits", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema pattern; C009 int64/scale bound"},
+    {"id": "ambiguous_leading_zero", "path": "quantity.value='080'", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema pattern"},
+    {"id": "exponent_spelling", "path": "quantity.value='8e2'", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema pattern"},
+    {"id": "leading_plus", "path": "quantity.value='+8'", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema pattern"},
+    {"id": "int64_coefficient_overflow", "path": "quantity coefficient beyond int64 after removing the point", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "C009 checked int64 decode; labelled semantic script"},
+    {"id": "span_end_before_start", "path": "evidence span end < start", "expect": "reject", "wire": "invalid_request", "owner": "C008/C009", "enforced_by": "hyf_core.domain.evidence.span_evidence; C004 labelled semantic script"},
+    {"id": "span_revision_mismatch", "path": "evidence span revision differs from its source revision", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "validate_span_against_revision; C004 labelled semantic script"},
+    {"id": "type_coercion_number_for_string", "path": "quantity.value as JSON number instead of string", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema type; C009 typed decode (no coercion)"},
+    {"id": "present_null_optional_scalar", "path": "context.timezone=null", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema type string; parser rejects present null"},
+    {"id": "missing_selector", "path": "context.versions absent", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "operation-context parse requires versions"},
+    {"id": "unknown_selector", "path": "context.versions.schema is not hyf_ops_v2", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "selector detection falls back to the legacy parser, which rejects versions"},
+    {"id": "deterministic_path_reports_model_non_use", "path": "context.versions.model present with deterministic execution", "expect": "accepted_no_call", "wire": "capability_unavailable (pre-activation)", "owner": "C042-C046", "enforced_by": "C004 unavailability guard issues zero provider calls"}
+  ]
+}

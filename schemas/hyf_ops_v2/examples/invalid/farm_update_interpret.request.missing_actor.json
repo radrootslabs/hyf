@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "request_id": "farm-interpret-bad-actor",
+  "capability": "farm_update.interpret",
+  "context": {
+    "evaluation_time": "2026-09-24T09:00:00-07:00",
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
+    "farm_id": "farm-1"
+  },
+  "input": {
+    "source": {
+      "source_id": "src-farm-1",
+      "revision": "rev-7",
+      "text": "80 lb of Roma tomatoes",
+      "source_time": "2026-09-24T08:30:00-07:00",
+      "actor_id": "farm-1",
+      "farm_id": "farm-1"
+    },
+    "references": {
+      "taxonomy": {"version": "hyf_ops_v2.taxonomy.v1", "provenance": "host_supplied", "products": []},
+      "normalization": {"version": "hyf_ops_v2.normalization.v1", "provenance": "host_supplied", "units": [], "conversions": [], "packs": []}
+    }
+  }
+}

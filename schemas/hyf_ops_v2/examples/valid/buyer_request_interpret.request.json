@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "request_id": "buyer-interpret-req-1",
+  "capability": "buyer_request.interpret",
+  "context": {
+    "consumer": "radroots-cli",
+    "execution_mode_preference": "deterministic",
+    "deadline_ms": 2500,
+    "evaluation_time": "2026-09-24T09:00:00-07:00",
+    "timezone": "America/Vancouver",
+    "locale": "en-CA",
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
+    "return_provenance": false,
+    "actor_id": "buyer-7"
+  },
+  "input": {
+    "source": {
+      "source_id": "src-buyer-1",
+      "revision": "rev-3",
+      "text": "Looking for 25 lb of Roma tomatoes, pickup near Vancouver this weekend.",
+      "source_time": "2026-09-24T08:45:00-07:00",
+      "timezone": "America/Vancouver",
+      "locale": "en-CA",
+      "actor_id": "buyer-7",
+      "ingestion_time": "2026-09-24T08:46:00-07:00"
+    },
+    "references": {
+      "taxonomy": {
+        "version": "hyf_ops_v2.taxonomy.v1",
+        "provenance": "host_supplied",
+        "products": [
+          {"catalogue_id": "tomato.roma", "terms": ["Roma tomatoes", "roma tomato", "tomates"]}
+        ]
+      },
+      "normalization": {
+        "version": "hyf_ops_v2.normalization.v1",
+        "provenance": "host_supplied",
+        "units": [
+          {"unit": "lb", "dimension": "mass"},
+          {"unit": "kg", "dimension": "mass"}
+        ],
+        "conversions": [
+          {"from_unit": "lb", "to_unit": "kg", "numerator": "45359237", "denominator": "100000000"}
+        ],
+        "packs": []
+      }
+    },
+    "clarification": {
+      "source_id": "src-clar-2",
+      "revision": "rev-1",
+      "target_field": "conditions.window",
+      "text": "weekend includes Friday evening"
+    }
+  }
+}

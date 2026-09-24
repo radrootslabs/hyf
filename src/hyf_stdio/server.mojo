@@ -30,7 +30,10 @@ from hyf_stdio.codec import (
     encode_success,
     extract_request_correlation,
 )
-from hyf_stdio.dispatch_sentinel import record_business_dispatch_attempt
+from hyf_stdio.dispatch_observer import (
+    DispatchAttemptObserver,
+    NoopDispatchAttemptObserver,
+)
 from hyf_stdio.control.capabilities import (
     build_capabilities_output_with_runtime_context,
 )
@@ -192,7 +195,10 @@ def _dispatch_business_capability(
     return _dispatch_capability_result(request_id, request.trace_id, result)
 
 
-def _route_business_capability(
+def _route_business_capability[
+    O: DispatchAttemptObserver
+](
+    mut observer: O,
     request: WireRequest,
     request_id: String,
     runtime_context: RuntimeStartupContext,
@@ -204,10 +210,10 @@ def _route_business_capability(
     if request.operation_context:
         return encode_error(_unavailable_response(request))
 
-    # ADR-0026 D46 CR04: every path below is a real dispatch attempt. The
-    # bounded local sentinel records it only when explicitly enabled, so the
-    # guard above can be proven to short-circuit before this point.
-    record_business_dispatch_attempt(String(request.capability))
+    # ADR-0027 D47 BP02: every path below is a real pre-dispatch boundary. The
+    # compile-time no-op production observer records nothing; a test-owned
+    # in-memory observer proves the guard above short-circuits before this point.
+    observer.record_dispatch_attempt(String(request.capability))
 
     if is_gated_operation(request.capability):
         if not operation_enabled(runtime_context.config, request.capability):
@@ -242,6 +248,19 @@ def handle_request(request: WireRequest) raises -> String:
 def handle_request_with_runtime_context(
     request: WireRequest, runtime_context: RuntimeStartupContext
 ) raises -> String:
+    var observer = NoopDispatchAttemptObserver()
+    return handle_request_with_runtime_context_and_observer(
+        request, runtime_context, observer
+    )
+
+
+def handle_request_with_runtime_context_and_observer[
+    O: DispatchAttemptObserver
+](
+    request: WireRequest,
+    runtime_context: RuntimeStartupContext,
+    mut observer: O,
+) raises -> String:
     var request_id = String(request.request_id)
     var trace_id = request.trace_id
     var diagnostics_dir = effective_diagnostics_dir_for_runtime_paths(
@@ -273,7 +292,7 @@ def handle_request_with_runtime_context(
                 )
             )
         return _route_business_capability(
-            request.copy(), request_id, runtime_context
+            observer, request.copy(), request_id, runtime_context
         )
     except e:
         _emit_internal_diagnostic(
@@ -312,9 +331,22 @@ def handle_request_line(line: String) raises -> String:
 def handle_request_line_with_runtime_context(
     line: String, runtime_context: RuntimeStartupContext
 ) raises -> String:
+    var observer = NoopDispatchAttemptObserver()
+    return handle_request_line_with_runtime_context_and_observer(
+        line, runtime_context, observer
+    )
+
+
+def handle_request_line_with_runtime_context_and_observer[
+    O: DispatchAttemptObserver
+](
+    line: String, runtime_context: RuntimeStartupContext, mut observer: O
+) raises -> String:
     try:
         var request = decode_request(line)
-        return handle_request_with_runtime_context(request^, runtime_context)
+        return handle_request_with_runtime_context_and_observer(
+            request^, runtime_context, observer
+        )
     except e:
         var correlation = extract_request_correlation(line)
         return encode_error(

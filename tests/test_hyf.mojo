@@ -1922,9 +1922,13 @@ def test_c004_operation_v2_whitespace_only_identity_is_rejected() raises:
     assert_true(_decode_error_message(blank_version).find("blank") >= 0)
 
 
-# ADR-0026 D46 CR04: unambiguous duplicate admission, safe correlation and an
-# executed zero-dispatch sentinel for all three corrected operations.
-from hyf_stdio.dispatch_sentinel import hyf_dispatch_sentinel_env_name
+# ADR-0026 D46 CR04 / ADR-0027 D47 BP02: unambiguous duplicate admission,
+# safe correlation and an executed zero-dispatch observer for all three
+# corrected operations.
+from hyf_stdio.dispatch_observer import RecordingDispatchAttemptObserver
+from hyf_stdio.server import (
+    handle_request_line_with_runtime_context_and_observer,
+)
 
 
 def _v2_farm_request_minimal(request_id: String) -> String:
@@ -2123,9 +2127,8 @@ def test_c004_cr04_context_admission_is_bounded_and_linear() raises:
     )
 
 
-def test_c004_cr04_zero_dispatch_sentinel_executed_controls() raises:
+def test_c004_cr04_zero_dispatch_observer_executed_controls() raises:
     with SafeTempDir() as temp_dir:
-        var sentinel_path = temp_dir + "/hyf-dispatch-sentinel.log"
         var runtime_context = _temp_runtime_context(temp_dir)
         runtime_context.config.effective.runtime.enable_farm_update_interpret = (
             True
@@ -2136,58 +2139,97 @@ def test_c004_cr04_zero_dispatch_sentinel_executed_controls() raises:
         runtime_context.config.effective.runtime.enable_buyer_request_match = (
             True
         )
-        with ScopedEnvVar(hyf_dispatch_sentinel_env_name(), sentinel_path):
-            # Negative controls: every recognized v2 request for all three
-            # corrected operations returns capability_unavailable and performs
-            # zero dispatch, including with the legacy flags enabled.
-            var v2_requests = List[String]()
-            v2_requests.append(_v2_farm_request_minimal("sentry-farm"))
-            v2_requests.append(
-                _v2_buyer_request_minimal(
-                    "buyer_request.interpret", "sentry-interpret"
-                )
-            )
-            v2_requests.append(
-                _v2_buyer_request_minimal("buyer_request.match", "sentry-match")
-            )
-            for line in v2_requests:
-                assert_true(
-                    _operation_enabled(
-                        runtime_context.config,
-                        loads(line)["capability"].string_value(),
-                    )
-                )
-                var response = loads(
-                    handle_request_line_with_runtime_context(
-                        line, runtime_context
-                    )
-                )
-                assert_equal(response["ok"].bool_value(), False)
-                assert_equal(
-                    response["error"]["code"].string_value(),
-                    "capability_unavailable",
-                )
-            assert_true(
-                not exists(sentinel_path),
-            )
+        # The observation state is owned by this test invocation: a bounded
+        # in-memory list threaded through the real pre-dispatch boundary. No
+        # environment variable, file path or global state is involved.
+        var observer = RecordingDispatchAttemptObserver(attempts=List[String]())
 
-            # Positive control: an actual legacy dispatch does record a line,
-            # proving the sentinel observes dispatch rather than nothing.
-            var legacy = (
-                '{"version":1,"request_id":"legacy-sentry",'
-                '"capability":"farm_update.interpret","input":{'
-                + _v2_farm_source_json()
-                + "}}"
+        # Negative controls: every recognized v2 request for all three
+        # corrected operations returns capability_unavailable and performs
+        # zero dispatch attempts, including with the legacy flags enabled.
+        var v2_requests = List[String]()
+        v2_requests.append(_v2_farm_request_minimal("sentry-farm"))
+        v2_requests.append(
+            _v2_buyer_request_minimal(
+                "buyer_request.interpret", "sentry-interpret"
             )
-            var legacy_response = loads(
-                handle_request_line_with_runtime_context(
-                    legacy, runtime_context
+        )
+        v2_requests.append(
+            _v2_buyer_request_minimal("buyer_request.match", "sentry-match")
+        )
+        for line in v2_requests:
+            assert_true(
+                _operation_enabled(
+                    runtime_context.config,
+                    loads(line)["capability"].string_value(),
                 )
             )
-            assert_equal(legacy_response["ok"].bool_value(), True)
-            assert_true(exists(sentinel_path))
-            var recorded = Path(sentinel_path).read_text()
-            assert_true(recorded.find("dispatch farm_update.interpret") >= 0)
+            var response = loads(
+                handle_request_line_with_runtime_context_and_observer(
+                    line, runtime_context, observer
+                )
+            )
+            assert_equal(response["ok"].bool_value(), False)
+            assert_equal(
+                response["error"]["code"].string_value(),
+                "capability_unavailable",
+            )
+        assert_equal(len(observer.attempts), 0)
+
+        # Malformed duplicate controls are rejected before any dispatch point,
+        # so they record nothing either.
+        var malformed = List[String]()
+        malformed.append(
+            '{"version":1,"request_id":"dup-ctx",'
+            '"capability":"farm_update.interpret",'
+            '"context":{"consumer":"cli"},'
+            '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+            + _v2_versions_json()
+            + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+        )
+        malformed.append(
+            '{"version":1,"request_id":"dup-rid","request_id":"dup-rid-2",'
+            '"capability":"buyer_request.match",'
+            '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+            + _v2_versions_json()
+            + ',"actor_id":"buyer-7"},"input":{}}'
+        )
+        malformed.append(
+            '{"version":1,"request_id":"dup-esc",'
+            '"capability":"farm_update.interpret",'
+            '"\\u0063apability":"query_rewrite",'
+            '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+            + _v2_versions_json()
+            + ',"actor_id":"farm-1","farm_id":"farm-1"},"input":{}}'
+        )
+        for line in malformed:
+            var response = loads(
+                handle_request_line_with_runtime_context_and_observer(
+                    line, runtime_context, observer
+                )
+            )
+            assert_equal(response["ok"].bool_value(), False)
+            assert_equal(
+                response["error"]["code"].string_value(), "invalid_request"
+            )
+        assert_equal(len(observer.attempts), 0)
+
+        # Positive control: an actual legacy dispatch records exactly one
+        # attempt through the same seam, proving it observes the real call path.
+        var legacy = (
+            '{"version":1,"request_id":"legacy-sentry",'
+            '"capability":"farm_update.interpret","input":{'
+            + _v2_farm_source_json()
+            + "}}"
+        )
+        var legacy_response = loads(
+            handle_request_line_with_runtime_context_and_observer(
+                legacy, runtime_context, observer
+            )
+        )
+        assert_equal(legacy_response["ok"].bool_value(), True)
+        assert_equal(len(observer.attempts), 1)
+        assert_equal(observer.attempts[0], "farm_update.interpret")
 
 
 def test_c004_cr04_large_unknown_key_context_is_bounded() raises:

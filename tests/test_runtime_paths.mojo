@@ -9,6 +9,27 @@ from hyf_runtime.paths import (
     hyf_runtime_paths_for_unix_profile,
     runtime_paths_for_namespace,
 )
+from hyf_runtime.provider_limits import (
+    PROVIDER_DECLARED_BODY_OVERFLOW_REASON,
+    PROVIDER_DECLARED_LENGTH_OVERFLOW_CAUSE,
+    PROVIDER_DECODED_BODY_OVERFLOW_CAUSE,
+    PROVIDER_DECODED_BODY_OVERFLOW_REASON,
+    PROVIDER_HEAD_OVERFLOW_CAUSE,
+    PROVIDER_HEAD_OVERFLOW_REASON,
+    PROVIDER_MAX_DECODED_BODY_BYTES,
+    PROVIDER_MAX_HEADER_BYTES,
+    PROVIDER_MAX_RAW_BODY_BYTES,
+    PROVIDER_RAW_BODY_OVERFLOW_CAUSE,
+    PROVIDER_RAW_BODY_OVERFLOW_REASON,
+    decoded_body_byte_count_within_bound,
+    header_byte_count_within_bound,
+    provider_limit_bound,
+    provider_limit_failure_reason,
+    provider_limit_is_inclusive,
+    provider_limit_min_bytes,
+    provider_limit_overflow_cause,
+    raw_body_byte_count_within_bound,
+)
 from hyf_runtime.roots import runtime_roots_from_base_root
 from hyf_runtime.startup import RuntimeStartupInput, resolve_startup_context
 
@@ -845,3 +866,92 @@ def test_h092_budget_stage_cap_respects_absolute_deadline() raises:
     assert_equal(configured.cap_ms, 1500)
     assert_equal(budget_stage_cap_ms(configured, 1_000_000_000, 1000), 500)
     assert_equal(budget_stage_cap_ms(configured, 1_500_000_000, 1000), 0)
+
+
+# ADR-0026 D46 H093: codified inclusive provider response byte limits. Pure
+# boundary surface; pre-allocation/transport enforcement remains C005/C047.
+def test_h093_provider_limit_constants_match_policy_v2() raises:
+    assert_equal(PROVIDER_MAX_HEADER_BYTES, 65536)
+    assert_equal(PROVIDER_MAX_RAW_BODY_BYTES, 1048576)
+    assert_equal(PROVIDER_MAX_DECODED_BODY_BYTES, 4194304)
+    assert_true(provider_limit_is_inclusive())
+    assert_equal(provider_limit_bound("header"), 65536)
+    assert_equal(provider_limit_bound("raw_body"), 1048576)
+    assert_equal(provider_limit_bound("decoded_body"), 4194304)
+
+
+def test_h093_provider_limit_bounds_are_inclusive() raises:
+    # header 65536
+    assert_true(header_byte_count_within_bound(65535))
+    assert_true(header_byte_count_within_bound(65536))
+    assert_true(not header_byte_count_within_bound(65537))
+    # raw body 1048576
+    assert_true(raw_body_byte_count_within_bound(1048575))
+    assert_true(raw_body_byte_count_within_bound(1048576))
+    assert_true(not raw_body_byte_count_within_bound(1048577))
+    # decoded body 4194304
+    assert_true(decoded_body_byte_count_within_bound(4194303))
+    assert_true(decoded_body_byte_count_within_bound(4194304))
+    assert_true(not decoded_body_byte_count_within_bound(4194305))
+    # zero-byte bodies are admissible at the raw/decoded bounds; the header
+    # policy lower bound is min=1, so a zero header count is below range.
+    assert_true(not header_byte_count_within_bound(0))
+    assert_true(raw_body_byte_count_within_bound(0))
+    assert_true(decoded_body_byte_count_within_bound(0))
+    assert_equal(provider_limit_min_bytes("header"), 1)
+    assert_equal(provider_limit_min_bytes("raw_body"), 0)
+    assert_equal(provider_limit_min_bytes("decoded_body"), 0)
+
+
+def test_h093_provider_limit_counts_must_be_nonnegative() raises:
+    with assert_raises():
+        _ = header_byte_count_within_bound(-1)
+    with assert_raises():
+        _ = raw_body_byte_count_within_bound(-1)
+    with assert_raises():
+        _ = decoded_body_byte_count_within_bound(-1)
+    with assert_raises():
+        _ = provider_limit_bound("unknown")
+    with assert_raises():
+        _ = provider_limit_min_bytes("unknown")
+    with assert_raises():
+        _ = provider_limit_failure_reason("unknown")
+    with assert_raises():
+        _ = provider_limit_overflow_cause("unknown")
+
+
+def test_h093_provider_limit_failures_are_stable() raises:
+    assert_equal(
+        provider_limit_overflow_cause("header"), PROVIDER_HEAD_OVERFLOW_CAUSE
+    )
+    assert_equal(
+        provider_limit_failure_reason("header"), PROVIDER_HEAD_OVERFLOW_REASON
+    )
+    assert_equal(
+        provider_limit_overflow_cause("raw_body"),
+        PROVIDER_RAW_BODY_OVERFLOW_CAUSE,
+    )
+    assert_equal(
+        provider_limit_failure_reason("raw_body"),
+        PROVIDER_RAW_BODY_OVERFLOW_REASON,
+    )
+    assert_equal(
+        provider_limit_failure_reason("declared_length"),
+        PROVIDER_DECLARED_LENGTH_OVERFLOW_CAUSE,
+    )
+    assert_equal(
+        provider_limit_overflow_cause("declared_body"),
+        PROVIDER_RAW_BODY_OVERFLOW_CAUSE,
+    )
+    assert_equal(
+        provider_limit_failure_reason("declared_body"),
+        PROVIDER_DECLARED_BODY_OVERFLOW_REASON,
+    )
+    assert_equal(
+        provider_limit_overflow_cause("decoded_body"),
+        PROVIDER_DECODED_BODY_OVERFLOW_CAUSE,
+    )
+    assert_equal(
+        provider_limit_failure_reason("decoded_body"),
+        PROVIDER_DECODED_BODY_OVERFLOW_REASON,
+    )

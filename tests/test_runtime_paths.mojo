@@ -602,6 +602,156 @@ def test_budget_boundaries_are_deterministic() raises:
     assert_true(budget_exhausted(staged, 250_000_000))
 
 
+from hyf_application.resource_envelope import (
+    RESOURCE_ENVELOPE_MAX_CANDIDATES,
+    RESOURCE_ENVELOPE_MAX_PLANS,
+    RESOURCE_ENVELOPE_MAX_PROVIDER_CALLS,
+    RESOURCE_ENVELOPE_MAX_QUESTIONS,
+    RESOURCE_ENVELOPE_MAX_STATE_BYTES,
+    default_resource_envelope,
+    within_envelope,
+)
+from hyf_runtime.budget import (
+    CIRCUIT_COOLDOWN_MS,
+    CIRCUIT_HALF_OPEN_PROBES,
+    CIRCUIT_OPEN_THRESHOLD,
+    CONNECT_READ_CAP_MS,
+    MAX_RETRIES_PER_CALL,
+    MAX_WIRE_ATTEMPTS,
+    OUTPUT_BLOCK_CAP_MS,
+    RETRY_BACKOFF_MS,
+)
+from hyf_stdio.server import MAX_FRAME_BYTES, frame_too_large
+
+
+def _frame_of(count: Int) -> String:
+    var out = List[UInt8]()
+    for _ in range(count):
+        out.append(UInt8(97))
+    return String(unsafe_from_utf8=Span(ptr=out.unsafe_ptr(), length=len(out)))
+
+
+def test_policy_constants_match_frozen_d21_values() raises:
+    # C003 / ADR-0010 D21: the already-selected constants are frozen exactly in
+    # their named capsule owners; this slice may not enlarge or weaken them.
+    assert_equal(MAX_FRAME_BYTES, 1048576)
+    assert_equal(CONNECT_READ_CAP_MS, 1000)
+    assert_equal(OUTPUT_BLOCK_CAP_MS, 1000)
+    assert_equal(MAX_WIRE_ATTEMPTS, 4)
+    assert_equal(MAX_RETRIES_PER_CALL, 1)
+    assert_equal(RETRY_BACKOFF_MS, 100)
+    assert_equal(CIRCUIT_OPEN_THRESHOLD, 3)
+    assert_equal(CIRCUIT_COOLDOWN_MS, 30000)
+    assert_equal(CIRCUIT_HALF_OPEN_PROBES, 1)
+    assert_true(MAX_RETRIES_PER_CALL < MAX_WIRE_ATTEMPTS)
+
+
+def test_resource_envelope_boundaries_are_inclusive() raises:
+    # C003 / D21 limits: every semantic dimension is cap-1/cap/cap+1 tested and
+    # the cap itself is inclusive.
+    var envelope = default_resource_envelope()
+    assert_equal(envelope.max_candidates, RESOURCE_ENVELOPE_MAX_CANDIDATES)
+    assert_equal(envelope.max_plans, RESOURCE_ENVELOPE_MAX_PLANS)
+    assert_equal(envelope.max_state_bytes, RESOURCE_ENVELOPE_MAX_STATE_BYTES)
+    assert_equal(envelope.max_questions, RESOURCE_ENVELOPE_MAX_QUESTIONS)
+    assert_equal(
+        envelope.max_provider_calls, RESOURCE_ENVELOPE_MAX_PROVIDER_CALLS
+    )
+    # candidates
+    assert_true(
+        within_envelope(
+            envelope, RESOURCE_ENVELOPE_MAX_CANDIDATES - 1, 0, 0, 0, 0
+        )
+    )
+    assert_true(
+        within_envelope(envelope, RESOURCE_ENVELOPE_MAX_CANDIDATES, 0, 0, 0, 0)
+    )
+    assert_true(
+        not within_envelope(
+            envelope, RESOURCE_ENVELOPE_MAX_CANDIDATES + 1, 0, 0, 0, 0
+        )
+    )
+    # plans
+    assert_true(
+        within_envelope(envelope, 0, RESOURCE_ENVELOPE_MAX_PLANS - 1, 0, 0, 0)
+    )
+    assert_true(
+        within_envelope(envelope, 0, RESOURCE_ENVELOPE_MAX_PLANS, 0, 0, 0)
+    )
+    assert_true(
+        not within_envelope(
+            envelope, 0, RESOURCE_ENVELOPE_MAX_PLANS + 1, 0, 0, 0
+        )
+    )
+    # state bytes
+    assert_true(
+        within_envelope(
+            envelope, 0, 0, RESOURCE_ENVELOPE_MAX_STATE_BYTES - 1, 0, 0
+        )
+    )
+    assert_true(
+        within_envelope(envelope, 0, 0, RESOURCE_ENVELOPE_MAX_STATE_BYTES, 0, 0)
+    )
+    assert_true(
+        not within_envelope(
+            envelope, 0, 0, RESOURCE_ENVELOPE_MAX_STATE_BYTES + 1, 0, 0
+        )
+    )
+    # questions
+    assert_true(
+        within_envelope(
+            envelope, 0, 0, 0, RESOURCE_ENVELOPE_MAX_QUESTIONS - 1, 0
+        )
+    )
+    assert_true(
+        within_envelope(envelope, 0, 0, 0, RESOURCE_ENVELOPE_MAX_QUESTIONS, 0)
+    )
+    assert_true(
+        not within_envelope(
+            envelope, 0, 0, 0, RESOURCE_ENVELOPE_MAX_QUESTIONS + 1, 0
+        )
+    )
+    # logical provider calls
+    assert_true(
+        within_envelope(
+            envelope, 0, 0, 0, 0, RESOURCE_ENVELOPE_MAX_PROVIDER_CALLS - 1
+        )
+    )
+    assert_true(
+        within_envelope(
+            envelope, 0, 0, 0, 0, RESOURCE_ENVELOPE_MAX_PROVIDER_CALLS
+        )
+    )
+    assert_true(
+        not within_envelope(
+            envelope, 0, 0, 0, 0, RESOURCE_ENVELOPE_MAX_PROVIDER_CALLS + 1
+        )
+    )
+
+
+def test_budget_cap_boundaries_are_inclusive() raises:
+    # C003 / D21 timeout: the absolute request budget is
+    # min(positive deadline, server cap) and the cap itself is inclusive.
+    var server_cap = 1000
+    var at_cap = budget_from_clock(server_cap, server_cap, 0)
+    assert_equal(at_cap.cap_ms, server_cap)
+    var under_cap = budget_from_clock(server_cap - 1, server_cap, 0)
+    assert_equal(under_cap.cap_ms, server_cap - 1)
+    var over_cap = budget_from_clock(server_cap + 1, server_cap, 0)
+    assert_equal(over_cap.cap_ms, server_cap)
+    # remaining-time boundary: 1 ms left at cap-1, exhausted at cap.
+    assert_equal(budget_remaining_ms(at_cap, (server_cap - 1) * 1_000_000), 1)
+    assert_equal(budget_remaining_ms(at_cap, server_cap * 1_000_000), 0)
+
+
+def test_stdio_frame_cap_boundaries_are_inclusive() raises:
+    # C003 / D21 stdio frame cap: the frame limit is inclusive (cap-1 and cap
+    # are accepted; only cap+1 is oversized).
+    assert_true(not frame_too_large(_frame_of(MAX_FRAME_BYTES - 1)))
+    assert_true(not frame_too_large(_frame_of(MAX_FRAME_BYTES)))
+    assert_true(frame_too_large(_frame_of(MAX_FRAME_BYTES + 1)))
+
+
 from hyf_runtime.jev_composition import compose_jev
 
 

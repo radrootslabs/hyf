@@ -3,6 +3,11 @@ from std.pathlib import Path
 
 from morph.toml import from_toml
 
+# ADR-0010 D21 freeze: the request budget is min(positive request deadline, the
+# configured provider request_timeout_ms). This named default is consumed by
+# H092's derivation and must not be enlarged or weakened here.
+comptime DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS: Int = 15000
+
 
 @fieldwise_init
 struct HyfServiceRuntimeConfig(Copyable, Defaultable, Movable):
@@ -57,7 +62,7 @@ struct HyfTypesafeProviderRuntimeConfig(Copyable, Defaultable, Movable):
         self.enabled = False
         self.base_url = "https://api.typesafe.ai"
         self.model = "jev-1.13.0"
-        self.request_timeout_ms = 15000
+        self.request_timeout_ms = DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS
 
 
 @fieldwise_init

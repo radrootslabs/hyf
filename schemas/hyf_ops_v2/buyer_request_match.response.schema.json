@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hyf_ops_v2/buyer_request.match.response.schema.json",
+  "$id": "hyf_ops_v2/buyer_request_match.response.schema.json",
   "title": "hyf_ops_v2 buyer_request.match strict response (ADR-0025 D45 CB02-CB04)",
   "$comment": "Assessments and bounded single-supplier plans are suggestions, never reservations. Allocated quantities use the D23 reported projection and carry the lot revision.",
   "type": "object",

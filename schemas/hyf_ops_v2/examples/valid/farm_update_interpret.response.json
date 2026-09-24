@@ -32,7 +32,7 @@
     ],
     "proposed_changes": [
       {
-        "target": {"kind": "listing", "id": "listing-1"},
+        "target": {"kind": "listing", "id": "record-100"},
         "operation": "remaining",
         "expected_revision": "rev-2",
         "evidence": [

@@ -71,6 +71,7 @@
     {"file": "examples/invalid/farm_update_interpret.response.missing_provenance.json", "target": "farm_update.interpret.response", "schema_valid": false, "semantic": "provenance_required_on_success"},
     {"file": "examples/invalid/buyer_request_interpret.response.missing_provenance.json", "target": "buyer_request.interpret.response", "schema_valid": false, "semantic": "provenance_required_on_success"},
     {"file": "examples/invalid/buyer_request_match.response.missing_provenance.json", "target": "buyer_request.match.response", "schema_valid": false, "semantic": "provenance_required_on_success"},
-    {"file": "examples/valid/buyer_request_match.response.zero_plan_with_provenance.json", "target": "buyer_request.match.response", "schema_valid": true}
+    {"file": "examples/valid/buyer_request_match.response.zero_plan_with_provenance.json", "target": "buyer_request.match.response", "schema_valid": true},
+    {"file": "examples/valid/buyer_request_match.response.no_evaluation_empty_provenance.json", "target": "buyer_request.match.response", "schema_valid": true}
   ]
 }

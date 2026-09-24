@@ -4,7 +4,17 @@ from json import Value, loads
 from json.deserialize import Deserializable, get_string
 
 from hyf_core.metadata import hyf_protocol_version
-from hyf_core.request_context import RequestContext, parse_request_context
+from hyf_core.operation_context import (
+    OperationContext,
+    is_corrected_operation,
+    operation_context_selects_v2,
+    parse_operation_context,
+)
+from hyf_core.request_context import (
+    RequestContext,
+    default_request_context,
+    parse_request_context,
+)
 from hyf_stdio.errors import WireError
 
 
@@ -88,6 +98,10 @@ struct WireRequest(Copyable, Deserializable, Movable):
     var capability: String
     var context: RequestContext
     var input: Value
+    # ADR-0025 D45 CB01: present only for a recognized hyf_ops_v2 request to one
+    # of the three corrected operations. Legacy requests leave this None and
+    # keep the unchanged legacy context.
+    var operation_context: Optional[OperationContext]
 
     @staticmethod
     def from_json(json: Value) raises -> Self:
@@ -107,7 +121,16 @@ struct WireRequest(Copyable, Deserializable, Movable):
         if _has_key(json, "context"):
             context_json = json["context"].clone()
 
-        var context = parse_request_context(context_json)
+        var context = default_request_context()
+        var operation_context: Optional[OperationContext] = None
+        if is_corrected_operation(capability) and operation_context_selects_v2(
+            context_json
+        ):
+            operation_context = parse_operation_context(
+                context_json.clone(), capability
+            )
+        else:
+            context = parse_request_context(context_json)
         var input = _require_input_value(json)
 
         return Self(
@@ -117,6 +140,7 @@ struct WireRequest(Copyable, Deserializable, Movable):
             capability=capability,
             context=context^,
             input=input^,
+            operation_context=operation_context^,
         )
 
 

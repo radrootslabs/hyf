@@ -1498,3 +1498,393 @@ def test_stdio_envelope_boundary_rejects_null_and_numeric_fields() raises:
     assert_true(messages[2].find("'version' is required") >= 0)
     assert_true(messages[3].find("not a string") >= 0)
     assert_true(messages[4].find("not a string") >= 0)
+
+
+# ADR-0025 D45 C004: strict hyf_ops_v2 capability context and pre-activation guard.
+from hyf_core.operation_context import (
+    corrected_operation_activation_enabled,
+    is_corrected_operation,
+    operation_context_selects_v2,
+)
+from hyf_runtime.config import operation_enabled as _operation_enabled
+
+
+def _v2_versions_json() -> String:
+    return (
+        '"versions":{"schema":"hyf_ops_v2",'
+        '"taxonomy":"hyf_ops_v2.taxonomy.v1",'
+        '"normalization":"hyf_ops_v2.normalization.v1",'
+        '"review_policy":"hyf_ops_v2.review_policy.v1",'
+        '"ranking_policy":"hyf_ops_v2.ranking_policy.v1",'
+        '"question_bundle":"hyf_ops_v2.question_bundle.v1",'
+        '"model":"jev-1.13.0"}'
+    )
+
+
+def _v2_farm_references_json() -> String:
+    return (
+        '"references":{"taxonomy":{"version":"hyf_ops_v2.taxonomy.v1",'
+        '"provenance":"host_supplied","products":['
+        '{"catalogue_id":"tomato.roma","terms":["Roma tomatoes"]}]},'
+        '"normalization":{"version":"hyf_ops_v2.normalization.v1",'
+        '"provenance":"host_supplied","units":[{"unit":"lb","dimension":"mass"}],'
+        '"conversions":[],"packs":[]}}'
+    )
+
+
+def _v2_farm_source_json() -> String:
+    return (
+        '"source":{"source_id":"s1","revision":"r1",'
+        '"text":"80 lb of Roma tomatoes",'
+        '"source_time":"2026-09-24T08:30:00-07:00",'
+        '"timezone":"America/Vancouver","actor_id":"farm-1","farm_id":"farm-1"}'
+    )
+
+
+def _v2_farm_request() -> String:
+    return (
+        '{"version":1,"request_id":"v2-farm-1",'
+        '"capability":"farm_update.interpret",'
+        '"context":{"consumer":"radroots-cli",'
+        '"execution_mode_preference":"deterministic","deadline_ms":2500,'
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        '"timezone":"America/Vancouver","locale":"en-CA",'
+        + _v2_versions_json()
+        + ',"return_provenance":true,"actor_id":"farm-1","farm_id":"farm-1"},'
+        '"input":{'
+        + _v2_farm_source_json()
+        + ","
+        + _v2_farm_references_json()
+        + "}}"
+    )
+
+
+def _v2_farm_request_with_context(context_body: String) -> String:
+    return (
+        '{"version":1,"request_id":"v2-farm-variant",'
+        '"capability":"farm_update.interpret","context":{'
+        + context_body
+        + '},"input":{'
+        + _v2_farm_source_json()
+        + ","
+        + _v2_farm_references_json()
+        + "}}"
+    )
+
+
+def _decode_error_message(line: String) -> String:
+    try:
+        _ = decode_request(line)
+    except e:
+        return String(e)
+    return ""
+
+
+def test_c004_corrected_operation_registry_and_activation_boundary() raises:
+    assert_true(is_corrected_operation("farm_update.interpret"))
+    assert_true(is_corrected_operation("buyer_request.interpret"))
+    assert_true(is_corrected_operation("buyer_request.match"))
+    assert_true(not is_corrected_operation("query_rewrite"))
+    # C042-C046 own activation; C004 binds the guard but never activates.
+    assert_true(not corrected_operation_activation_enabled())
+
+
+def test_c004_decode_request_parses_operation_v2_context() raises:
+    var request = decode_request(_v2_farm_request())
+    assert_equal(request.capability, "farm_update.interpret")
+    assert_true(request.operation_context)
+    var context = request.operation_context.value().copy()
+    assert_equal(context.consumer, "radroots-cli")
+    assert_equal(context.execution_mode_preference, "deterministic")
+    assert_equal(context.deadline_ms, 2500)
+    assert_equal(context.evaluation_time, "2026-09-24T09:00:00-07:00")
+    assert_equal(context.timezone.value(), "America/Vancouver")
+    assert_equal(context.locale.value(), "en-CA")
+    assert_equal(context.return_provenance, True)
+    assert_equal(context.actor_id, "farm-1")
+    assert_equal(context.farm_id.value(), "farm-1")
+    assert_equal(context.versions.schema, "hyf_ops_v2")
+    assert_equal(context.versions.taxonomy, "hyf_ops_v2.taxonomy.v1")
+    assert_equal(context.versions.normalization, "hyf_ops_v2.normalization.v1")
+    assert_equal(context.versions.review_policy, "hyf_ops_v2.review_policy.v1")
+    assert_equal(
+        context.versions.ranking_policy, "hyf_ops_v2.ranking_policy.v1"
+    )
+    assert_equal(
+        context.versions.question_bundle, "hyf_ops_v2.question_bundle.v1"
+    )
+    assert_equal(context.versions.model, "jev-1.13.0")
+
+
+def test_c004_operation_v2_context_defaults_are_not_host_guesses() raises:
+    var request = decode_request(
+        _v2_farm_request_with_context(
+            '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+            + _v2_versions_json()
+            + ',"actor_id":"farm-1","farm_id":"farm-1"'
+        )
+    )
+    assert_true(request.operation_context)
+    var context = request.operation_context.value().copy()
+    assert_equal(context.consumer, "unknown")
+    assert_equal(context.execution_mode_preference, "deterministic")
+    assert_equal(context.deadline_ms, 2500)
+    assert_equal(context.return_provenance, False)
+    # Absent timezone/locale stay unknown; they are not filled from the host clock.
+    assert_true(not context.timezone)
+    assert_true(not context.locale)
+
+
+def test_c004_operation_v2_context_is_strict() raises:
+    var missing_actor = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(missing_actor).find("actor_id") >= 0)
+
+    var duplicate_actor = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","actor_id":"farm-2","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(duplicate_actor).find("duplicate") >= 0)
+
+    var missing_farm = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(missing_farm).find("farm_id") >= 0)
+
+    var null_timezone = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00","timezone":null,'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(null_timezone).find("string") >= 0)
+
+    var unknown_field = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00","planner":"strict",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(unknown_field).find("unexpected") >= 0)
+
+    var empty_actor = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(empty_actor).find("actor_id") >= 0)
+
+
+def test_c004_operation_v2_versions_are_closed_and_complete() raises:
+    var incomplete = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00","versions":{'
+        '"schema":"hyf_ops_v2","taxonomy":"t","normalization":"n",'
+        '"review_policy":"r","ranking_policy":"k","model":"jev-1.13.0"},'
+        '"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(incomplete).find("question_bundle") >= 0)
+
+    var unknown_axis = _v2_farm_request_with_context(
+        '"evaluation_time":"2026-09-24T09:00:00-07:00","versions":{'
+        '"schema":"hyf_ops_v2","taxonomy":"t","normalization":"n",'
+        '"review_policy":"r","ranking_policy":"k","question_bundle":"q",'
+        '"model":"jev-1.13.0","extra":"x"},'
+        '"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+    assert_true(_decode_error_message(unknown_axis).find("unexpected") >= 0)
+
+
+def test_c004_operation_v2_buyer_forbids_farm_identity() raises:
+    var buyer_with_farm = (
+        '{"version":1,"request_id":"v2-buyer-farm",'
+        '"capability":"buyer_request.interpret",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"buyer-7","farm_id":"farm-1"},'
+        '"input":{"source":{"source_id":"s1","revision":"r1","text":"25 lb",'
+        '"source_time":"2026-09-24T08:45:00-07:00","actor_id":"buyer-7"},'
+        + _v2_farm_references_json()
+        + "}}"
+    )
+    assert_true(_decode_error_message(buyer_with_farm).find("unexpected") >= 0)
+
+    var buyer_ok = (
+        '{"version":1,"request_id":"v2-buyer-ok",'
+        '"capability":"buyer_request.interpret",'
+        '"context":{"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"buyer-7"},'
+        '"input":{"source":{"source_id":"s1","revision":"r1","text":"25 lb",'
+        '"source_time":"2026-09-24T08:45:00-07:00","actor_id":"buyer-7"},'
+        + _v2_farm_references_json()
+        + "}}"
+    )
+    var request = decode_request(buyer_ok)
+    assert_true(request.operation_context)
+    assert_true(not request.operation_context.value().copy().farm_id)
+    assert_equal(request.operation_context.value().copy().actor_id, "buyer-7")
+
+
+def test_c004_selector_detection_does_not_broaden_legacy_context() raises:
+    var context = loads("{}")
+    context.set("versions", loads('{"schema":"hyf_ops_v2"}'))
+    assert_true(operation_context_selects_v2(context))
+    assert_true(not operation_context_selects_v2(loads('{"consumer":"cli"}')))
+    assert_true(
+        not operation_context_selects_v2(
+            loads('{"versions":{"schema":"hyf_ops_v3"}}')
+        )
+    )
+    assert_true(not operation_context_selects_v2(loads('{"versions":1}')))
+
+    # An unrelated capability keeps the unchanged legacy admission and rejects
+    # the advertised-but-unsupported `versions` field.
+    var legacy_with_versions = (
+        '{"version":1,"request_id":"legacy-versions",'
+        '"capability":"query_rewrite","context":{'
+        + _v2_versions_json()
+        + '},"input":{"query":"eggs"}}'
+    )
+    assert_true(
+        _decode_error_message(legacy_with_versions).find("unexpected") >= 0
+    )
+
+    # The unchanged legacy envelope still parses its original context.
+    var legacy_request = decode_request(
+        '{"version":1,"request_id":"legacy-ok","capability":"query_rewrite",'
+        '"context":{"consumer":"radroots-cli","deadline_ms":2500},'
+        '"input":{"query":"eggs"}}'
+    )
+    assert_true(not legacy_request.operation_context)
+    assert_equal(legacy_request.context.consumer, "radroots-cli")
+
+
+def test_c004_operation_v2_guard_blocks_shortcut_even_when_enabled() raises:
+    with SafeTempDir() as temp_dir:
+        var runtime_context = resolve_startup_context(
+            RuntimeStartupInput(
+                env_paths_profile="repo_local",
+                env_repo_local_base_root=temp_dir,
+                user_home="/home/unused",
+                argv=List[String](),
+            )
+        )
+        runtime_context.config.effective.runtime.enable_farm_update_interpret = (
+            True
+        )
+        assert_true(
+            _operation_enabled(runtime_context.config, "farm_update.interpret")
+        )
+        var response = loads(
+            handle_request_line_with_runtime_context(
+                _v2_farm_request(), runtime_context
+            )
+        )
+        assert_equal(response["ok"].bool_value(), False)
+        assert_equal(
+            response["error"]["code"].string_value(), "capability_unavailable"
+        )
+        # Never the placeholder shortcut output, and zero provider calls.
+        assert_true(not _has_key(response, "output"))
+
+
+def test_c004_legacy_gated_operation_still_executes_when_enabled() raises:
+    with SafeTempDir() as temp_dir:
+        var runtime_context = resolve_startup_context(
+            RuntimeStartupInput(
+                env_paths_profile="repo_local",
+                env_repo_local_base_root=temp_dir,
+                user_home="/home/unused",
+                argv=List[String](),
+            )
+        )
+        runtime_context.config.effective.runtime.enable_farm_update_interpret = (
+            True
+        )
+        var legacy = (
+            '{"version":1,"request_id":"legacy-farm-1",'
+            '"capability":"farm_update.interpret","input":{'
+            + _v2_farm_source_json()
+            + "}}"
+        )
+        var response = loads(
+            handle_request_line_with_runtime_context(legacy, runtime_context)
+        )
+        assert_equal(response["ok"].bool_value(), True)
+        assert_true(_has_key(response["output"], "claims"))
+
+
+def test_c004_v2_schema_assets_and_manifest_integrity() raises:
+    var schema_dir = _dir_of_current_file() / ".." / "schemas" / "hyf_ops_v2"
+    var manifest = loads((schema_dir / "manifest.json").read_text())
+    assert_equal(manifest["selector"]["value"].string_value(), "hyf_ops_v2")
+    assert_equal(Int(manifest["envelope_version"].int_value()), 1)
+    assert_equal(
+        manifest["activation"]["guard_error_code"].string_value(),
+        "capability_unavailable",
+    )
+    assert_equal(
+        manifest["activation"]["state"].string_value(), "pre_activation"
+    )
+
+    var versions = loads((schema_dir / "version_manifest.json").read_text())[
+        "versions"
+    ]
+    var axes = List[String]()
+    axes.append("schema")
+    axes.append("taxonomy")
+    axes.append("normalization")
+    axes.append("review_policy")
+    axes.append("ranking_policy")
+    axes.append("question_bundle")
+    axes.append("model")
+    for axis in axes:
+        assert_true(_has_key(versions, axis))
+        assert_true(versions[axis].string_value() != "")
+    assert_equal(versions["schema"].string_value(), "hyf_ops_v2")
+
+    var operations = manifest["operations"]
+    for operation in operations.object_keys():
+        var entry = operations[operation]
+        var request_schema = loads(
+            (schema_dir / entry["request_schema"].string_value()).read_text()
+        )
+        var response_schema = loads(
+            (schema_dir / entry["response_schema"].string_value()).read_text()
+        )
+        assert_equal(
+            request_schema["properties"]["capability"]["const"].string_value(),
+            operation,
+        )
+        var context_def = request_schema["$defs"][
+            "farm_context" if operation
+            == "farm_update.interpret" else "buyer_context"
+        ]
+        var context_required = List[String]()
+        for value in context_def["required"].array_items():
+            context_required.append(value.string_value())
+        assert_true("actor_id" in context_required)
+        assert_true("versions" in context_required)
+        assert_true("evaluation_time" in context_required)
+        var context_properties = context_def["properties"]
+        if operation == "farm_update.interpret":
+            assert_true(_has_key(context_properties, "farm_id"))
+        else:
+            assert_true(not _has_key(context_properties, "farm_id"))
+        var response_required = List[String]()
+        for required in response_schema["required"].array_items():
+            response_required.append(required.string_value())
+        assert_equal(len(response_required), 3)
+        assert_true("version" in response_required)
+        assert_true("request_id" in response_required)
+        assert_true("ok" in response_required)
+
+    var corpus = loads((schema_dir / "examples" / "corpus.json").read_text())
+    var entries = corpus["entries"].array_items()
+    assert_true(len(entries) >= 30)
+    for entry in entries:
+        assert_true(exists(schema_dir / entry["file"].string_value()))

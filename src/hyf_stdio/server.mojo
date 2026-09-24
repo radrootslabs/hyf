@@ -196,6 +196,13 @@ def _route_business_capability(
     request_id: String,
     runtime_context: RuntimeStartupContext,
 ) raises -> String:
+    # ADR-0025 D45 CB01 pre-activation guard: a recognized hyf_ops_v2 request has
+    # already passed the strict capability-context parse, but activation belongs
+    # to C042-C046, so it must not reach the legacy shortcut handlers even when
+    # their legacy enable flag is set. C008/C009 retain this guard.
+    if request.operation_context:
+        return encode_error(_unavailable_response(request))
+
     if is_gated_operation(request.capability):
         if not operation_enabled(runtime_context.config, request.capability):
             return encode_error(_disabled_response(request))

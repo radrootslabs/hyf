@@ -2,7 +2,7 @@
   "schema_version": 1,
   "program": "hyf_http_v1",
   "revision": "hyf_ops_v2",
-  "authority": "ADR-0025 D45 CB01-CB05 over ADR-0010 D21 (selector hyf_ops_v2) and ADR-0011 D23 (reported quantity grammar)",
+  "authority": "ADR-0025 D45 CB01-CB05 over ADR-0010 D21 (selector hyf_ops_v2) and ADR-0011 D23 (reported quantity grammar); ADR-0027 D47 BP01 binds the v2 snapshot.price scaled-money copy and required output provenance without changing these axes.",
   "note": "Mechanical C004 version manifest. These are the current checked-in identifiers for the seven closed context.versions axes. review_policy/ranking_policy/question_bundle identifier semantics are bound by C008/C009/C023 against the checked-in implementations; C004 records the contract-revision identifiers so the strict schemas, examples and parser are self-consistent. model is the configured pinned assisted model default.",
   "versions": {
     "schema": "hyf_ops_v2",

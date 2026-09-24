@@ -1894,6 +1894,119 @@ def test_c004_v2_schema_assets_and_manifest_integrity() raises:
         assert_true(exists(schema_dir / entry["file"].string_value()))
 
 
+def test_c004_bp01_money_and_provenance_bindings() raises:
+    # ADR-0027 D47 BP01: the v2 copy binds scaled money on snapshot.price and a
+    # required closed provenance object on every successful output.
+    var schema_dir = _dir_of_current_file() / ".." / "schemas" / "hyf_ops_v2"
+    var match_request = loads(
+        (schema_dir / "buyer_request_match.request.schema.json").read_text()
+    )
+    var price = match_request["$defs"]["snapshot_price"]
+    var price_required = List[String]()
+    for value in price["required"].array_items():
+        price_required.append(value.string_value())
+    assert_equal(len(price_required), 5)
+    for field in ["state", "amount", "scale", "currency", "basis"]:
+        assert_true(field in price_required)
+    assert_equal(price["additionalProperties"].bool_value(), False)
+    assert_true(_has_key(price["properties"], "fees"))
+    assert_equal(len(price["allOf"].array_items()), 2)
+
+    # price remains optional on the snapshot; the quantity fields stay required.
+    var snapshot_required = List[String]()
+    for value in match_request["$defs"]["snapshot"]["required"].array_items():
+        snapshot_required.append(value.string_value())
+    assert_true("lot_id" in snapshot_required)
+    assert_true(not ("price" in snapshot_required))
+
+    var farm_response = loads(
+        (schema_dir / "farm_update_interpret.response.schema.json").read_text()
+    )
+    var buyer_response = loads(
+        (
+            schema_dir / "buyer_request_interpret.response.schema.json"
+        ).read_text()
+    )
+    var match_response = loads(
+        (schema_dir / "buyer_request_match.response.schema.json").read_text()
+    )
+    var farm_required = List[String]()
+    for value in farm_response["$defs"]["farm_output"][
+        "required"
+    ].array_items():
+        farm_required.append(value.string_value())
+    assert_true("provenance" in farm_required)
+    var buyer_required = List[String]()
+    for value in buyer_response["$defs"]["interpret_output"][
+        "required"
+    ].array_items():
+        buyer_required.append(value.string_value())
+    assert_true("provenance" in buyer_required)
+    var match_required = List[String]()
+    for value in match_response["$defs"]["match_output"][
+        "required"
+    ].array_items():
+        match_required.append(value.string_value())
+    assert_true("provenance" in match_required)
+
+    # Farm provenance keeps the prior-record family; buyer provenance is closed
+    # without it; match provenance records need and evaluated snapshots.
+    assert_true(
+        _has_key(
+            farm_response["$defs"]["farm_output_provenance"]["properties"],
+            "prior_records",
+        )
+    )
+    assert_true(
+        not _has_key(
+            buyer_response["$defs"]["interpret_output_provenance"][
+                "properties"
+            ],
+            "prior_records",
+        )
+    )
+    var match_provenance_required = List[String]()
+    for value in match_response["$defs"]["match_output_provenance"][
+        "required"
+    ].array_items():
+        match_provenance_required.append(value.string_value())
+    assert_true("need" in match_provenance_required)
+    assert_true("snapshots" in match_provenance_required)
+
+    var corpus = loads((schema_dir / "examples" / "corpus.json").read_text())
+    var corpus_files = List[String]()
+    for entry in corpus["entries"].array_items():
+        corpus_files.append(entry["file"].string_value())
+    assert_true("examples/valid/price.known_zero.json" in corpus_files)
+    assert_true("examples/valid/price.unknown.json" in corpus_files)
+    assert_true("examples/invalid/price.adjacent_overflow.json" in corpus_files)
+    assert_true(
+        "examples/invalid/farm_update_interpret.response.missing_provenance.json"
+        in corpus_files
+    )
+
+    var semantic = loads((schema_dir / "semantic-cases.json").read_text())
+    var case_ids = List[String]()
+    for semantic_case in semantic["cases"].array_items():
+        case_ids.append(semantic_case["id"].string_value())
+    for case_id in [
+        "price_known_requires_scaled_facts",
+        "price_unknown_is_not_zero",
+        "price_coefficient_int64_bound",
+        "price_basis_closed",
+        "price_fee_family_closed",
+        "provenance_required_on_success",
+        "provenance_identity_closed",
+        "provenance_farm_prior_records_only",
+    ]:
+        assert_true(case_id in case_ids)
+
+    # The manifest documents both bindings.
+    var manifest = loads((schema_dir / "manifest.json").read_text())
+    assert_true(_has_key(manifest, "money_binding"))
+    assert_true(_has_key(manifest, "provenance_binding"))
+
+
 def test_c004_operation_v2_escaped_duplicate_key_is_rejected() raises:
     # \u0061 is 'a'; the parser decodes key escapes, so the second key is a
     # duplicate actor_id and must be rejected by decoded-key identity.

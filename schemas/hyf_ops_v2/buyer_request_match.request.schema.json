@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "hyf_ops_v2/buyer_request_match.request.schema.json",
   "title": "hyf_ops_v2 buyer_request.match strict request (ADR-0025 D45 CB01-CB04)",
-  "$comment": "Corrected versioned operation contract (ADR-0026 D46 CR02). Consumes the typed reviewed need, authorized snapshots and coverage; no flattened product_phrase/unreserved_value/scale shortcut. Evidence is the closed span|record_field union.",
+  "$comment": "Corrected versioned operation contract (ADR-0026 D46 CR02, ADR-0027 D47 BP01). Consumes the typed reviewed need, authorized snapshots and coverage; no flattened product_phrase/unreserved_value/scale shortcut. Evidence is the closed span|record_field union. snapshot.price binds the existing scaled money representation (state/amount/scale/currency/basis) distinct from the reported-quantity decimal projection; the optional fees family is the separate money-schema family.",
   "type": "object",
   "properties": {
     "version": {
@@ -357,20 +357,7 @@
           "required": ["method", "area", "window"],
           "additionalProperties": false
         },
-        "price": {
-          "type": "object",
-          "properties": {
-            "state": {"type": "string", "enum": ["known", "unknown"]},
-            "amount": {
-              "type": ["string", "null"],
-              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$"
-            },
-            "currency": {"type": ["string", "null"], "minLength": 3},
-            "basis": {"type": ["string", "null"], "minLength": 1}
-          },
-          "required": ["state", "amount", "currency", "basis"],
-          "additionalProperties": false
-        }
+        "price": {"$ref": "#/$defs/snapshot_price"}
       },
       "required": [
         "lot_id",
@@ -380,6 +367,90 @@
         "unreserved_quantity"
       ],
       "additionalProperties": false
+    },
+    "money_fee": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 19
+        },
+        "scale": {"type": "integer", "minimum": 0, "maximum": 9},
+        "currency": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "amount", "scale", "currency"],
+      "additionalProperties": false
+    },
+    "money_fees": {
+      "type": ["array", "null"],
+      "items": {"$ref": "#/$defs/money_fee"}
+    },
+    "snapshot_price": {
+      "type": "object",
+      "properties": {
+        "state": {"type": "string", "enum": ["known", "unknown"]},
+        "amount": {
+          "type": ["string", "null"],
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 19
+        },
+        "scale": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 9
+        },
+        "currency": {"type": ["string", "null"]},
+        "basis": {
+          "type": "string",
+          "enum": ["per_unit", "per_pack", "per_order", "unknown"]
+        },
+        "fees": {"$ref": "#/$defs/money_fees"}
+      },
+      "required": ["state", "amount", "scale", "currency", "basis"],
+      "additionalProperties": false,
+      "$comment": "ADR-0027 D47 BP01 scaled money. known: amount is a canonical nonnegative integer string (checked coefficient 0..9223372036854775807, enforced by C009), scale 0..9, currency nonblank, basis per_unit|per_pack|per_order; zero is a known price. unknown: amount/scale/currency null and basis unknown; never interpreted as free. No conversion, FX, minimum-order or fee inference.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {"state": {"const": "known"}},
+            "required": ["state"]
+          },
+          "then": {
+            "required": ["amount", "scale", "currency", "basis"],
+            "properties": {
+              "amount": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 19
+              },
+              "scale": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              "currency": {"type": "string", "minLength": 1},
+              "basis": {"enum": ["per_unit", "per_pack", "per_order"]}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"state": {"const": "unknown"}},
+            "required": ["state"]
+          },
+          "then": {
+            "required": ["amount", "scale", "currency", "basis"],
+            "properties": {
+              "amount": {"type": "null"},
+              "scale": {"type": "null"},
+              "currency": {"type": "null"},
+              "basis": {"const": "unknown"}
+            }
+          }
+        }
+      ]
     },
     "coverage": {
       "type": "object",

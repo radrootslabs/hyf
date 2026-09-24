@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "request_id": "buyer-match-req-1",
+  "ok": true,
+  "output": {
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
+    "provenance": {
+      "need": {
+        "need_id": "need-1",
+        "revision": "rev-4"
+      },
+      "snapshots": [
+        {
+          "lot_id": "lot-1",
+          "revision": "rev-9"
+        },
+        {
+          "lot_id": "lot-2",
+          "revision": "rev-4"
+        }
+      ]
+    },
+    "assessments": [],
+    "plans": [],
+    "limitations": {
+      "scope": "supplied_only",
+      "truncated": false,
+      "supported_mode": "single_supplier_compatible_lots",
+      "unsupported": [
+        "multi_supplier"
+      ]
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": null,
+      "degraded_reason": null
+    }
+  }
+}

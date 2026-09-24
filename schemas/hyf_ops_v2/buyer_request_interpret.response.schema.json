@@ -302,10 +302,44 @@
         }
       ]
     },
+    "provenance_identity": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["source_id", "revision"],
+      "additionalProperties": false
+    },
+    "clarification_identity": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["source_id", "revision"],
+      "additionalProperties": false
+    },
+    "interpret_output_provenance": {
+      "type": "object",
+      "$comment": "ADR-0027 D47 BP01: immutable identities actually used for every successful buyer interpretation, independently of optional detailed evidence and context.return_provenance. source equals the interpreted input.source revision; clarification is non-null only when that supplied clarification was used. The farm-only prior_records field is forbidden here. Repeated identical identity pairs and identity/coverage disagreement are semantic obligations owned by C023/C030.",
+      "properties": {
+        "source": {"$ref": "#/$defs/provenance_identity"},
+        "clarification": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/clarification_identity"}
+          ]
+        }
+      },
+      "required": ["source", "clarification"],
+      "additionalProperties": false
+    },
     "interpret_output": {
       "type": "object",
       "properties": {
         "versions": {"$ref": "#/$defs/output_versions"},
+        "provenance": {"$ref": "#/$defs/interpret_output_provenance"},
         "demand_lines": {
           "type": "array",
           "items": {"$ref": "#/$defs/demand_line"}
@@ -313,7 +347,13 @@
         "review": {"$ref": "#/$defs/review"},
         "execution": {"$ref": "#/$defs/execution"}
       },
-      "required": ["versions", "demand_lines", "review", "execution"],
+      "required": [
+        "versions",
+        "provenance",
+        "demand_lines",
+        "review",
+        "execution"
+      ],
       "additionalProperties": false
     }
   }

@@ -1,0 +1,16 @@
+{
+  "need": {
+    "need_id": "need-1",
+    "revision": "rev-4"
+  },
+  "snapshots": [
+    {
+      "lot_id": "lot-1",
+      "revision": "rev-9"
+    },
+    {
+      "lot_id": "lot-2",
+      "revision": "rev-4"
+    }
+  ]
+}

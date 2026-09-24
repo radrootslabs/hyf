@@ -15,15 +15,41 @@
     "claims": [
       {
         "claim_id": "claim-1",
-        "product": {"phrase": "Roma tomatoes", "catalogue_id": "tomato.roma", "resolution": "resolved"},
+        "product": {
+          "phrase": "Roma tomatoes",
+          "catalogue_id": "tomato.roma",
+          "resolution": "resolved"
+        },
         "status": "offered",
-        "quantity": {"state": "known", "value": "-0", "unit": "lb", "qualifier": "exact"},
+        "quantity": {
+          "state": "known",
+          "value": "-0",
+          "unit": "lb",
+          "qualifier": "exact"
+        },
         "evidence": [],
         "review_required": false
       }
     ],
     "proposed_changes": [],
-    "review": {"required": false, "clarifications": []},
-    "execution": {"status": "complete", "provider_calls": 0, "model": null, "question_bundle": null, "degraded_reason": null}
+    "review": {
+      "required": false,
+      "clarifications": []
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": null,
+      "degraded_reason": null
+    },
+    "provenance": {
+      "source": {
+        "source_id": "src-farm-1",
+        "revision": "rev-7"
+      },
+      "clarification": null,
+      "prior_records": []
+    }
   }
 }

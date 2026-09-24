@@ -36,5 +36,16 @@
   },
   "semantic_cases": "semantic-cases.json",
   "version_manifest": "version_manifest.json",
-  "domain_manifest": "domain_manifest.json"
+  "domain_manifest": "domain_manifest.json",
+  "money_binding": {
+    "schema": "buyer_request_match.request.schema.json#/$defs/snapshot_price",
+    "fees": "buyer_request_match.request.schema.json#/$defs/money_fees",
+    "note": "ADR-0027 D47 BP01: snapshot.price binds the existing scaled money representation (state/amount/scale/currency/basis) distinct from the reported-quantity decimal projection. known requires a canonical nonnegative integer amount, integer scale 0..9, nonblank currency and basis per_unit|per_pack|per_order (zero is known); unknown requires amount/scale/currency null and basis unknown and is never free. Optional closed fees {kind,amount,scale,currency} are the separate money-schema family. Legacy hyf_v1_jev money schema/domain constructors are unchanged; C009 enforces the checked int64 coefficient and typed mapping."
+  },
+  "provenance_binding": {
+    "farm": "farm_update_interpret.response.schema.json#/$defs/farm_output_provenance",
+    "buyer": "buyer_request_interpret.response.schema.json#/$defs/interpret_output_provenance",
+    "match": "buyer_request_match.response.schema.json#/$defs/match_output_provenance",
+    "note": "ADR-0027 D47 BP01: every successful output requires a closed provenance object carrying only the immutable identities actually used, independently of optional detailed evidence and context.return_provenance. Error envelopes carry no output/provenance. Identity equality, actual use, uniqueness and coverage/allocation agreement are semantic obligations owned by C009/C023/C030/C038/C041."
+  }
 }

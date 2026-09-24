@@ -13,36 +13,62 @@
       "question_bundle": "hyf_ops_v2.question_bundle.v1",
       "model": "jev-1.13.0"
     },
-    "provenance": {
-      "source": {"source_id": "src-farm-1", "revision": "rev-7"},
-      "clarification": {"source_id": "src-clar-1", "revision": "rev-1"},
-      "prior_records": [{"record_id": "record-100", "revision": "rev-2"}]
-    },
     "claims": [
       {
         "claim_id": "claim-1",
-        "product": {"phrase": "Roma tomatoes", "catalogue_id": "tomato.roma", "resolution": "resolved"},
+        "product": {
+          "phrase": "Roma tomatoes",
+          "catalogue_id": "tomato.roma",
+          "resolution": "resolved"
+        },
         "status": "offered",
-        "quantity": {"state": "known", "value": "80.00", "unit": "lb", "qualifier": "approximate"},
+        "quantity": {
+          "state": "known",
+          "value": "80.00",
+          "unit": "lb",
+          "qualifier": "approximate"
+        },
         "evidence": [
-          {"kind": "span", "source_id": "src-farm-1", "revision": "rev-7", "start": 11, "end": 21, "method": "span"}
+          {
+            "kind": "span",
+            "source_id": "src-farm-1",
+            "revision": "rev-7",
+            "start": 11,
+            "end": 21,
+            "method": "span"
+          }
         ],
         "review_required": true
       }
     ],
     "proposed_changes": [
       {
-        "target": {"kind": "listing", "id": "listing-1"},
+        "target": {
+          "kind": "listing",
+          "id": "listing-1"
+        },
         "operation": "remaining",
         "expected_revision": "rev-2",
         "evidence": [
-          {"kind": "span", "source_id": "src-farm-1", "revision": "rev-7", "start": 11, "end": 21, "method": "span"}
+          {
+            "kind": "span",
+            "source_id": "src-farm-1",
+            "revision": "rev-7",
+            "start": 11,
+            "end": 21,
+            "method": "span"
+          }
         ]
       }
     ],
     "review": {
       "required": true,
-      "clarifications": [{"field": "quantity", "reason": "approximation_requested"}]
+      "clarifications": [
+        {
+          "field": "quantity",
+          "reason": "approximation_requested"
+        }
+      ]
     },
     "execution": {
       "status": "complete",

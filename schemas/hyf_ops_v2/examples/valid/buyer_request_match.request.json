@@ -58,7 +58,14 @@
         "unreserved_quantity": {"state": "known", "value": "120", "unit": "lb", "qualifier": "exact"},
         "attributes": [{"name": "grade-A", "verified": true}],
         "fulfillment": {"method": "pickup", "area": "Vancouver", "window": "2026-09-26/2026-09-27"},
-        "price": {"state": "known", "amount": "2.50", "currency": "CAD", "basis": "per_lb"}
+        "price": {
+          "state": "known",
+          "amount": "250",
+          "scale": 2,
+          "currency": "CAD",
+          "basis": "per_unit",
+          "fees": [{"kind": "delivery", "amount": "500", "scale": 2, "currency": "CAD"}]
+        }
       },
       {
         "lot_id": "lot-2",

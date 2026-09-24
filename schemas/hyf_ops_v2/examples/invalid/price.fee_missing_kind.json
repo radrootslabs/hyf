@@ -1,0 +1,14 @@
+{
+  "state": "known",
+  "amount": "250",
+  "scale": 2,
+  "currency": "CAD",
+  "basis": "per_unit",
+  "fees": [
+    {
+      "amount": "500",
+      "scale": 2,
+      "currency": "CAD"
+    }
+  ]
+}

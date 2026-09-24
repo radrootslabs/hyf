@@ -325,10 +325,42 @@
         }
       ]
     },
+    "need_identity": {
+      "type": "object",
+      "properties": {
+        "need_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["need_id", "revision"],
+      "additionalProperties": false
+    },
+    "snapshot_identity": {
+      "type": "object",
+      "properties": {
+        "lot_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["lot_id", "revision"],
+      "additionalProperties": false
+    },
+    "match_output_provenance": {
+      "type": "object",
+      "$comment": "ADR-0027 D47 BP01: immutable identities actually used for every successful match, independently of optional detailed evidence and context.return_provenance. need equals the interpreted input.need identity/revision; snapshots lists the supplied snapshots actually assessed, even when assessments fail or no plans result. An empty list means no snapshots were assessed; a nonempty assessed scope with zero plans still records its revisions. Never copy all supplied inputs as proof of use. Repeated identical pairs and identity/coverage-allocation disagreement are semantic obligations owned by C023/C041.",
+      "properties": {
+        "need": {"$ref": "#/$defs/need_identity"},
+        "snapshots": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/snapshot_identity"}
+        }
+      },
+      "required": ["need", "snapshots"],
+      "additionalProperties": false
+    },
     "match_output": {
       "type": "object",
       "properties": {
         "versions": {"$ref": "#/$defs/output_versions"},
+        "provenance": {"$ref": "#/$defs/match_output_provenance"},
         "assessments": {
           "type": "array",
           "items": {"$ref": "#/$defs/assessment"}
@@ -342,6 +374,7 @@
       },
       "required": [
         "versions",
+        "provenance",
         "assessments",
         "plans",
         "limitations",

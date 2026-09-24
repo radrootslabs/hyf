@@ -334,10 +334,57 @@
         }
       ]
     },
+    "provenance_identity": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["source_id", "revision"],
+      "additionalProperties": false
+    },
+    "clarification_identity": {
+      "type": "object",
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["source_id", "revision"],
+      "additionalProperties": false
+    },
+    "prior_record_identity": {
+      "type": "object",
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "required": ["record_id", "revision"],
+      "additionalProperties": false
+    },
+    "farm_output_provenance": {
+      "type": "object",
+      "$comment": "ADR-0027 D47 BP01: immutable identities actually used for every successful farm interpretation, independently of optional detailed evidence and context.return_provenance. source equals the interpreted input.source revision; clarification is non-null only when that supplied clarification was used; prior_records lists only supplied records actually consulted. Repeated identical identity/revision pairs and identity/coverage disagreement are semantic obligations owned by C023/C030.",
+      "properties": {
+        "source": {"$ref": "#/$defs/provenance_identity"},
+        "clarification": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/clarification_identity"}
+          ]
+        },
+        "prior_records": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/prior_record_identity"}
+        }
+      },
+      "required": ["source", "clarification", "prior_records"],
+      "additionalProperties": false
+    },
     "farm_output": {
       "type": "object",
       "properties": {
         "versions": {"$ref": "#/$defs/output_versions"},
+        "provenance": {"$ref": "#/$defs/farm_output_provenance"},
         "claims": {
           "type": "array",
           "items": {"$ref": "#/$defs/claim"}
@@ -351,6 +398,7 @@
       },
       "required": [
         "versions",
+        "provenance",
         "claims",
         "proposed_changes",
         "review",

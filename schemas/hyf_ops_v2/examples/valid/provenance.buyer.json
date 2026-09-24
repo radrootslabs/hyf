@@ -1,0 +1,10 @@
+{
+  "source": {
+    "source_id": "src-buyer-1",
+    "revision": "rev-3"
+  },
+  "clarification": {
+    "source_id": "src-clar-2",
+    "revision": "rev-1"
+  }
+}

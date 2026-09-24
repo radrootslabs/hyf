@@ -12,6 +12,13 @@
       "question_bundle": "hyf_ops_v2.question_bundle.v1",
       "model": "jev-1.13.0"
     },
+    "provenance": {
+      "need": {"need_id": "need-1", "revision": "rev-4"},
+      "snapshots": [
+        {"lot_id": "lot-1", "revision": "rev-9"},
+        {"lot_id": "lot-2", "revision": "rev-4"}
+      ]
+    },
     "assessments": [
       {
         "candidate_id": "lot-1",

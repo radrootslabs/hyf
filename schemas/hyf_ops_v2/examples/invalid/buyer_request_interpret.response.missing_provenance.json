@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "request_id": "buyer-interpret-req-1",
+  "ok": true,
+  "output": {
+    "versions": {
+      "schema": "hyf_ops_v2",
+      "taxonomy": "hyf_ops_v2.taxonomy.v1",
+      "normalization": "hyf_ops_v2.normalization.v1",
+      "review_policy": "hyf_ops_v2.review_policy.v1",
+      "ranking_policy": "hyf_ops_v2.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v2.question_bundle.v1",
+      "model": "jev-1.13.0"
+    },
+    "demand_lines": [
+      {
+        "line_id": "line-1",
+        "product": {
+          "phrase": "Roma tomatoes",
+          "catalogue_id": "tomato.roma",
+          "resolution": "resolved"
+        },
+        "quantity": {
+          "state": "known",
+          "value": "25",
+          "unit": "lb",
+          "qualifier": "exact"
+        },
+        "conditions": [
+          {
+            "kind": "fulfillment",
+            "strength": "mandatory",
+            "value": "pickup",
+            "evidence": [
+              {
+                "kind": "span",
+                "source_id": "src-buyer-1",
+                "revision": "rev-3",
+                "start": 55,
+                "end": 61,
+                "method": "span"
+              }
+            ]
+          },
+          {
+            "kind": "window",
+            "strength": "preferred",
+            "value": "2026-09-26/2026-09-27",
+            "evidence": [
+              {
+                "kind": "span",
+                "source_id": "src-buyer-1",
+                "revision": "rev-3",
+                "start": 62,
+                "end": 71,
+                "method": "span"
+              }
+            ]
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "span",
+            "source_id": "src-buyer-1",
+            "revision": "rev-3",
+            "start": 12,
+            "end": 39,
+            "method": "span"
+          }
+        ],
+        "review_required": false
+      }
+    ],
+    "review": {
+      "required": false,
+      "clarifications": []
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": null,
+      "degraded_reason": null
+    }
+  }
+}

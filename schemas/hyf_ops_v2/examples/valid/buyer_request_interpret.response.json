@@ -12,6 +12,10 @@
       "question_bundle": "hyf_ops_v2.question_bundle.v1",
       "model": "jev-1.13.0"
     },
+    "provenance": {
+      "source": {"source_id": "src-buyer-1", "revision": "rev-3"},
+      "clarification": {"source_id": "src-clar-2", "revision": "rev-1"}
+    },
     "demand_lines": [
       {
         "line_id": "line-1",

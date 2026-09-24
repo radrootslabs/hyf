@@ -1,0 +1,7 @@
+{
+  "state": "known",
+  "amount": "9223372036854775807",
+  "scale": 9,
+  "currency": "CAD",
+  "basis": "per_order"
+}

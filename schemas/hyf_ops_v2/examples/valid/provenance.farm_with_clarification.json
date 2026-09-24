@@ -1,0 +1,16 @@
+{
+  "source": {
+    "source_id": "src-farm-1",
+    "revision": "rev-7"
+  },
+  "clarification": {
+    "source_id": "src-clar-1",
+    "revision": "rev-1"
+  },
+  "prior_records": [
+    {
+      "record_id": "record-100",
+      "revision": "rev-2"
+    }
+  ]
+}

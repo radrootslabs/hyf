@@ -86,6 +86,18 @@ comptime BOUNDED_CORRELATION_DECLARED_VS_SYNTHETIC = 131
 # H007 RP01: malformed/error raw-observation controls.
 comptime BOUNDED_CORRELATION_RAW_EOF = 132
 comptime BOUNDED_CORRELATION_RAW_MALFORMED = 133
+# H007 OB01-OB03: period-14 observation-integrity controls.
+comptime BOUNDED_CORRELATION_OB_UNKNOWN_LENGTH = 140
+comptime BOUNDED_CORRELATION_OB_JUNK_LENGTH = 141
+comptime BOUNDED_CORRELATION_OB_DUP_LENGTH = 142
+comptime BOUNDED_CORRELATION_OB_OVER_CAP = 143
+comptime BOUNDED_CORRELATION_OB_SURPLUS = 144
+comptime BOUNDED_CORRELATION_OB_NO_LENGTH = 145
+comptime BOUNDED_CORRELATION_OB_SPLIT_TERMINATOR = 146
+comptime BOUNDED_CORRELATION_OB_SPLIT_BODY = 147
+comptime BOUNDED_CORRELATION_OB_NEAR_CAP = 148
+comptime BOUNDED_CORRELATION_OB_MALFORMED_HEAD = 149
+comptime BOUNDED_CORRELATION_OB_SYNTHETIC = 150
 
 from flare.net import SocketAddr
 from flare.tcp import TcpStream
@@ -712,10 +724,10 @@ def test_provider_raw_head_body_accounts_empty_body() raises:
 
 
 def test_provider_raw_head_body_reports_truncated_length_mismatch() raises:
-    # RP01: an explicit truncation control. The peer declares twenty body bytes
-    # but sends five and closes; the observer must report the exact five
-    # observed bytes, the twenty declared and a length mismatch, never the
-    # declared length as if it had arrived.
+    # OB02: an explicit truncation control. The peer declares twenty body bytes
+    # but sends five and closes; the observer must report an explicit
+    # incomplete observation with the exact five observed bytes and the twenty
+    # declared, never an unqualified successful call.
     var scripts = List[ExchangeScript]()
     var script = exchange_script(
         "truncated_body", "POST", "/v1/chat/completions", 200, ""
@@ -737,12 +749,15 @@ def test_provider_raw_head_body_reports_truncated_length_mismatch() raises:
             "/v1/chat/completions",
             "SHORT",
         )
-        assert_true(report.ok())
-        assert_equal(report.status, 200)
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_incomplete")
+        assert_equal(report.status, 0)
         assert_equal(report.body_bytes, 5)
         assert_equal(report.body_match, "yes")
         assert_equal(report.declared_bytes, 20)
         assert_equal(report.length_match, "no")
+        assert_equal(report.surplus_bytes, 0)
         provider_stub.wait()
         assert_true(provider_stub.ok())
     guard.assert_clean()
@@ -1841,6 +1856,550 @@ def test_query_analysis_boundary_characterizes_duplicate_and_null_fields() raise
     except e:
         terms_message = String(e)
     assert_true(terms_message.find("provider_schema_invalid") >= 0)
+
+
+def _raw_bytes(text: String) -> List[UInt8]:
+    var raw = List[UInt8]()
+    for byte in text.as_bytes():
+        raw.append(UInt8(Int(byte)))
+    return raw^
+
+
+def _repeat_text(mark: String, count: Int) -> String:
+    var out = List[UInt8]()
+    var mark_bytes = mark.as_bytes()
+    for _ in range(count):
+        for index in range(len(mark_bytes)):
+            out.append(UInt8(Int(mark_bytes[index])))
+    return String(unsafe_from_utf8=Span(ptr=out.unsafe_ptr(), length=len(out)))
+
+
+# OB01: the exact raw response grammar. A status-looking value inside a header
+# is never the status; a different field name is preserved as unknown; junk,
+# duplicate, conflicting, negative, overflowing or unsupported framing is an
+# explicit bounded problem rather than a silently absent field.
+
+
+def test_raw_accounting_preserves_unknown_length_like_field() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\nX-Content-Length: 3\r\n\r\nabc"),
+        "abc",
+    )
+    assert_equal(accounting.problem, "")
+    assert_equal(accounting.status, 200)
+    assert_equal(accounting.body_bytes, 3)
+    assert_equal(accounting.declared_bytes, -1)
+    assert_equal(accounting.length_match, "unknown")
+    assert_equal(accounting.surplus_bytes, 0)
+
+
+def test_raw_accounting_rejects_junk_content_length() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\nContent-Length: 3junk\r\n\r\nabc"),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_content_length_malformed")
+
+
+def test_raw_accounting_rejects_identical_duplicate_length() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes(
+            "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n"
+            "Content-Length: 3\r\n\r\nabc"
+        ),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_content_length_duplicate")
+
+
+def test_raw_accounting_rejects_conflicting_duplicate_length() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes(
+            "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n"
+            "Content-Length: 9\r\n\r\nabc"
+        ),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_content_length_duplicate")
+
+
+def test_raw_accounting_rejects_garbage_status_with_header_status_value() raises:
+    # A status-looking string in a header after a garbage first line must never
+    # be read as the response status.
+    var accounting = account_raw_bytes(
+        _raw_bytes(
+            "garbage\r\nx-note: HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc"
+        ),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_status_missing")
+    assert_equal(accounting.status, 0)
+
+
+def test_raw_accounting_rejects_unsupported_transfer_encoding() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\nabc"),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_transfer_encoding_unsupported")
+
+
+def test_raw_accounting_rejects_negative_content_length() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\nContent-Length: -3\r\n\r\nabc"),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_content_length_malformed")
+
+
+def test_raw_accounting_rejects_overflow_content_length() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes(
+            "HTTP/1.1 200 OK\r\nContent-Length: 99999999999999999999\r\n\r\nabc"
+        ),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_content_length_overflow")
+
+
+def test_raw_accounting_rejects_malformed_header_line() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\nbad header line\r\n\r\nabc"), "abc"
+    )
+    assert_equal(accounting.problem, "raw_header_malformed")
+
+
+def test_raw_accounting_rejects_out_of_range_status() raises:
+    # OB01: only a valid three-digit HTTP status (100..599) is accepted.
+    var low = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 000 X\r\ncontent-length: 3\r\n\r\nabc"), "abc"
+    )
+    assert_equal(low.problem, "raw_status_malformed")
+    var high = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 999 X\r\ncontent-length: 3\r\n\r\nabc"), "abc"
+    )
+    assert_equal(high.problem, "raw_status_malformed")
+
+
+def test_raw_accounting_accepts_identity_transfer_encoding() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\ntransfer-encoding: identity\r\n\r\nabc"),
+        "abc",
+    )
+    assert_equal(accounting.problem, "")
+    assert_equal(accounting.status, 200)
+    assert_equal(accounting.declared_bytes, -1)
+    assert_equal(accounting.length_match, "unknown")
+
+
+def test_raw_accounting_rejects_transfer_with_length_conflict() raises:
+    var accounting = account_raw_bytes(
+        _raw_bytes(
+            "HTTP/1.1 200 OK\r\ntransfer-encoding: identity\r\n"
+            "content-length: 3\r\n\r\nabc"
+        ),
+        "abc",
+    )
+    assert_equal(accounting.problem, "raw_framing_conflict")
+
+
+def test_raw_accounting_reports_buffered_surplus() raises:
+    # OB02: bytes already buffered beyond the declared body are reported
+    # explicitly instead of being silently folded into the declared length.
+    var accounting = account_raw_bytes(
+        _raw_bytes("HTTP/1.1 200 OK\r\ncontent-length: 3\r\n\r\nabcde"),
+        "abc",
+    )
+    assert_equal(accounting.problem, "")
+    assert_equal(accounting.body_bytes, 5)
+    assert_equal(accounting.declared_bytes, 3)
+    assert_equal(accounting.length_match, "no")
+    assert_equal(accounting.surplus_bytes, 2)
+
+
+# OB02 acquisition controls through the actual incremental read path.
+
+
+def test_provider_raw_head_body_accounts_buffered_surplus() raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "buffered_surplus", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: 3\r\nconnection: close\r\n\r\nabcde"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_SURPLUS,
+            "/v1/chat/completions",
+            "abc",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 5)
+        assert_equal(report.declared_bytes, 3)
+        assert_equal(report.length_match, "no")
+        assert_equal(report.surplus_bytes, 2)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_rejects_declared_over_cap() raises:
+    # OB02: a declared length beyond the body cap is an explicit overflow, never
+    # an accepted observation with a silently truncated prefix.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "declared_over_cap", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: 99999999\r\n"
+        "connection: close\r\n\r\nabc"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_OVER_CAP,
+            "/v1/chat/completions",
+            "abc",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_overflow")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_rejects_duplicate_length() raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "duplicate_length", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: 3\r\ncontent-length: 3\r\n"
+        "connection: close\r\n\r\nabc"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_DUP_LENGTH,
+            "/v1/chat/completions",
+            "abc",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_content_length_duplicate")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_no_length_completes_at_eof() raises:
+    # OB02: a response without a declared length completes at EOF inside the
+    # cap, with an explicitly unknown length rather than an invented one.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "no_length", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\nNOLENGTHBODY"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_NO_LENGTH,
+            "/v1/chat/completions",
+            "NOLENGTHBODY",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, "NOLENGTHBODY".byte_length())
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, -1)
+        assert_equal(report.length_match, "unknown")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_split_header_terminator_is_preserved() raises:
+    # OB02: the real incremental acquisition path is driven with one-byte reads,
+    # so the CRLFCRLF terminator is split across reads. Concatenating loops
+    # before a pure parser call is not fragmentation proof, so the seam caps the
+    # actual read.
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "split_terminator", "POST", "/v1/chat/completions", 200, "BODYMARK"
+        )
+    )
+    var plan = List[Int]()
+    plan.append(1)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_SPLIT_TERMINATOR,
+            "/v1/chat/completions",
+            "BODYMARK",
+            raw_chunk_plan=plan,
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 8)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 8)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_split_multibyte_body_is_preserved() raises:
+    # OB02: a one-byte read seam splits the three-byte UTF-8 character across
+    # reads; the byte accumulation must still preserve it whole.
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "split_multibyte",
+            "POST",
+            "/v1/chat/completions",
+            200,
+            '{"mark":"a☃b"}',
+        )
+    )
+    var plan = List[Int]()
+    plan.append(1)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_SPLIT_BODY,
+            "/v1/chat/completions",
+            "a☃b",
+            raw_chunk_plan=plan,
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, '{"mark":"a☃b"}'.byte_length())
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.length_match, "yes")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_near_cap_coalesced_body_is_not_head_overflow() raises:
+    # OB02: the header cap counts bytes through the terminator only. A valid
+    # near-cap header whose final 1000-byte read also carries coalesced body
+    # bytes must not be reported as a header overflow.
+    var pad = _repeat_text("a", 65459)
+    var body = "ENDMARK" + _repeat_text("y", 593)
+    var raw = (
+        "HTTP/1.1 200 OK\r\nx-pad: "
+        + pad
+        + "\r\ncontent-length: 600\r\nconnection: close\r\n\r\n"
+        + body
+    )
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "near_cap", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = raw
+    scripts.append(script^)
+    var plan = List[Int]()
+    plan.append(1000)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_NEAR_CAP,
+            "/v1/chat/completions",
+            "ENDMARK",
+            raw_chunk_plan=plan,
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 600)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 600)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_reports_malformed_length_grammar() raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "malformed_length", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: 3junk\r\nconnection:"
+        " close\r\n\r\nabc"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_OB_MALFORMED_HEAD,
+            "/v1/chat/completions",
+            "abc",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_content_length_malformed")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+# OB03: a synthetic write-error seam is never a real peer close.
+
+
+def _assert_synthetic_errno_rejected(errno: Int, declared: Bool) raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "synthetic_errno", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 200
+    if declared:
+        script.expect_peer_close = True
+        script.expected_close_cause = "broken_pipe"
+        script.expected_close_phase = "body_stall"
+    script.inject_write_errno = errno
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(provider_stub.reason().find("unexpected_write_") >= 0)
+        assert_true(provider_stub.reason().find("synthdecl") >= 0)
+    guard.assert_clean()
+
+
+def test_provider_scripted_epipe_with_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.EPIPE.value), True)
+
+
+def test_provider_scripted_epipe_without_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.EPIPE.value), False)
+
+
+def test_provider_scripted_econnreset_with_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.ECONNRESET.value), True)
+
+
+def test_provider_scripted_econnreset_without_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.ECONNRESET.value), False)
+
+
+def test_provider_scripted_eagain_with_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.EAGAIN.value), True)
+
+
+def test_provider_scripted_eagain_without_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.EAGAIN.value), False)
+
+
+def test_provider_scripted_ebadf_with_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.EBADF.value), True)
+
+
+def test_provider_scripted_ebadf_without_declaration_is_not_peer_close() raises:
+    _assert_synthetic_errno_rejected(Int(ErrNo.EBADF.value), False)
+
+
+def _assert_synthetic_errno_delayed_write_rejected(errno: Int) raises:
+    # OB03: the same provenance rule is exercised on the non-stall delayed_write
+    # write step, not only the body_stall step.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "synthetic_delayed",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "delayed_write"
+    script.inject_write_errno = errno
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(provider_stub.reason().find("unexpected_write_") >= 0)
+        assert_true(provider_stub.reason().find("_delayed_write_") >= 0)
+        assert_true(provider_stub.reason().find("synthdecl") >= 0)
+    guard.assert_clean()
+
+
+def test_provider_scripted_epipe_delayed_write_is_not_peer_close() raises:
+    _assert_synthetic_errno_delayed_write_rejected(Int(ErrNo.EPIPE.value))
+
+
+def test_provider_scripted_econnreset_delayed_write_is_not_peer_close() raises:
+    _assert_synthetic_errno_delayed_write_rejected(Int(ErrNo.ECONNRESET.value))
+
+
+def test_provider_scripted_eagain_delayed_write_is_not_peer_close() raises:
+    _assert_synthetic_errno_delayed_write_rejected(Int(ErrNo.EAGAIN.value))
+
+
+def test_provider_scripted_ebadf_delayed_write_is_not_peer_close() raises:
+    _assert_synthetic_errno_delayed_write_rejected(Int(ErrNo.EBADF.value))
 
 
 def main() raises:

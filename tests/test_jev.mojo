@@ -522,6 +522,11 @@ comptime JEV_CORRELATION_RAW_TRUNCATED = 204
 # H007 RP03: distinct correlations for the Jev write-error controls.
 comptime JEV_CORRELATION_SYNTHETIC_DESCRIPTOR = 205
 comptime JEV_CORRELATION_REAL_ERRNO = 206
+# H007 OB01-OB03: period-14 observation-integrity controls on the Jev path.
+comptime JEV_CORRELATION_OB_SPLIT_TERMINATOR = 210
+comptime JEV_CORRELATION_OB_SPLIT_BODY = 211
+comptime JEV_CORRELATION_OB_SURPLUS = 212
+comptime JEV_CORRELATION_OB_NO_LENGTH = 213
 
 
 def _raw_jev_request_text(path: String) -> String:
@@ -670,12 +675,15 @@ def test_jev_raw_head_body_reports_truncated_length_mismatch() raises:
             "/v1/systemone",
             "SHORT",
         )
-        assert_true(report.ok())
-        assert_equal(report.status, 200)
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_body_incomplete")
+        assert_equal(report.status, 0)
         assert_equal(report.body_bytes, 5)
         assert_equal(report.body_match, "yes")
         assert_equal(report.declared_bytes, 20)
         assert_equal(report.length_match, "no")
+        assert_equal(report.surplus_bytes, 0)
         started.stub.wait()
         assert_true(started.stub.ok())
     guard.assert_clean()
@@ -1092,3 +1100,240 @@ def test_jev_wire_attempt_counts_for_non_retryable_failure() raises:
         assert_equal(started.stub.request_count(), 1)
         assert_equal(started.stub.connection_count(), 1)
     guard.assert_clean()
+
+
+# OB02: the Jev raw path must execute the same exact framing/cap/surplus and
+# actual incremental fragmentation controls, not only a dormant shared branch.
+
+
+def test_jev_raw_head_body_split_header_terminator_is_preserved() raises:
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "jev_split_terminator", "POST", "/v1/systemone", 200, "JEVBODY"
+        )
+    )
+    var plan = List[Int]()
+    plan.append(1)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_OB_SPLIT_TERMINATOR,
+            "/v1/systemone",
+            "JEVBODY",
+            raw_chunk_plan=plan,
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 7)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 7)
+        assert_equal(report.length_match, "yes")
+        assert_equal(report.surplus_bytes, 0)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_split_multibyte_body_is_preserved() raises:
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "jev_split_multibyte",
+            "POST",
+            "/v1/systemone",
+            200,
+            '{"mark":"x☃y"}',
+        )
+    )
+    var plan = List[Int]()
+    plan.append(1)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_OB_SPLIT_BODY,
+            "/v1/systemone",
+            "x☃y",
+            raw_chunk_plan=plan,
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, '{"mark":"x☃y"}'.byte_length())
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.length_match, "yes")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_accounts_buffered_surplus() raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_buffered_surplus", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-length: 3\r\nconnection: close\r\n\r\nabcde"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_OB_SURPLUS,
+            "/v1/systemone",
+            "abc",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 5)
+        assert_equal(report.declared_bytes, 3)
+        assert_equal(report.length_match, "no")
+        assert_equal(report.surplus_bytes, 2)
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_no_length_completes_at_eof() raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_no_length", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\nconnection: close\r\n\r\nNOLENGTHBODY"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_OB_NO_LENGTH,
+            "/v1/systemone",
+            "NOLENGTHBODY",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, "NOLENGTHBODY".byte_length())
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, -1)
+        assert_equal(report.length_match, "unknown")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+# OB03: the Jev serve path must also reject every synthetic write-error seam,
+# with and without an expected-close declaration.
+
+
+def _assert_jev_synthetic_errno_rejected(errno: Int, declared: Bool) raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_synthetic_errno", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 200
+    if declared:
+        script.expect_peer_close = True
+        script.expected_close_cause = "broken_pipe"
+        script.expected_close_phase = "body_stall"
+    script.inject_write_errno = errno
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _ = _raw_jev_send_and_read(started.port, "/v1/systemone")
+        started.stub.reap()
+        assert_true(not started.stub.ok())
+        assert_equal(started.stub.phase(), "peer_close")
+        assert_true(started.stub.reason().find("unexpected_write_") >= 0)
+        assert_true(started.stub.reason().find("synthdecl") >= 0)
+    guard.assert_clean()
+
+
+def test_jev_scripted_epipe_with_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.EPIPE.value), True)
+
+
+def test_jev_scripted_epipe_without_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.EPIPE.value), False)
+
+
+def test_jev_scripted_econnreset_with_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.ECONNRESET.value), True)
+
+
+def test_jev_scripted_econnreset_without_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.ECONNRESET.value), False)
+
+
+def test_jev_scripted_eagain_with_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.EAGAIN.value), True)
+
+
+def test_jev_scripted_eagain_without_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.EAGAIN.value), False)
+
+
+def test_jev_scripted_ebadf_with_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.EBADF.value), True)
+
+
+def test_jev_scripted_ebadf_without_declaration_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_rejected(Int(ErrNo.EBADF.value), False)
+
+
+def _assert_jev_synthetic_errno_delayed_write_rejected(errno: Int) raises:
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_synthetic_delayed", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "delayed_write"
+    script.inject_write_errno = errno
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _ = _raw_jev_send_and_read(started.port, "/v1/systemone")
+        started.stub.reap()
+        assert_true(not started.stub.ok())
+        assert_equal(started.stub.phase(), "peer_close")
+        assert_true(started.stub.reason().find("unexpected_write_") >= 0)
+        assert_true(started.stub.reason().find("_delayed_write_") >= 0)
+        assert_true(started.stub.reason().find("synthdecl") >= 0)
+    guard.assert_clean()
+
+
+def test_jev_scripted_epipe_delayed_write_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_delayed_write_rejected(Int(ErrNo.EPIPE.value))
+
+
+def test_jev_scripted_econnreset_delayed_write_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_delayed_write_rejected(
+        Int(ErrNo.ECONNRESET.value)
+    )
+
+
+def test_jev_scripted_eagain_delayed_write_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_delayed_write_rejected(Int(ErrNo.EAGAIN.value))
+
+
+def test_jev_scripted_ebadf_delayed_write_is_not_peer_close() raises:
+    _assert_jev_synthetic_errno_delayed_write_rejected(Int(ErrNo.EBADF.value))

@@ -909,8 +909,15 @@ def serve_scripts(
                         ) if synthetic else "realerrno"
                         + String(raw_errno)
                     )
+                    # OB03: provenance is kept separate from the error class. A
+                    # synthetic/injected seam is never a real peer close, so it
+                    # cannot satisfy an expected real close even when it maps to
+                    # the same bounded class (EPIPE -> broken_pipe, ECONNRESET ->
+                    # peer_reset). It is rejected here with its synthetic evidence
+                    # label instead of being accepted.
                     if (
                         script.expect_peer_close
+                        and not synthetic
                         and is_peer_close_cause(script.expected_close_cause)
                         and observed == script.expected_close_cause
                         and phase == script.expected_close_phase

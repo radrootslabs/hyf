@@ -76,6 +76,8 @@ def _field_allowed(key: String) -> Bool:
         return True
     if key == "body_bytes" or key == "body_match":
         return True
+    if key == "surplus_bytes":
+        return True
     return key == "declared_bytes" or key == "length_match"
 
 
@@ -84,7 +86,9 @@ def _field_numeric(key: String) -> Bool:
         return True
     if key == "head_ms" or key == "total_ms":
         return True
-    return key == "body_bytes" or key == "declared_bytes"
+    return (
+        key == "body_bytes" or key == "declared_bytes" or key == "surplus_bytes"
+    )
 
 
 def _all_digits(text: String) -> Bool:
@@ -120,6 +124,7 @@ struct BoundedCallOutcome(Movable):
     var body_match: String
     var declared_bytes: Int
     var length_match: String
+    var surplus_bytes: Int
 
     def domain_failure(self) -> Bool:
         return self.ok and self.outcome == "fail"
@@ -152,6 +157,8 @@ struct BoundedCallOutcome(Movable):
             + String(self.declared_bytes)
             + " length_match="
             + self.length_match
+            + " surplus_bytes="
+            + String(self.surplus_bytes)
         )
 
 
@@ -172,6 +179,7 @@ def _empty_outcome(problem: String) -> BoundedCallOutcome:
         body_match="",
         declared_bytes=-1,
         length_match="",
+        surplus_bytes=-1,
     )
 
 
@@ -216,6 +224,7 @@ def parse_bounded_report(
     var match_text = ""
     var declared_text = ""
     var length_text = ""
+    var surplus_text = ""
     for index in range(len(keys)):
         var key = keys[index]
         var value = values[index]
@@ -245,6 +254,8 @@ def parse_bounded_report(
             declared_text = value
         elif key == "length_match":
             length_text = value
+        elif key == "surplus_bytes":
+            surplus_text = value
         if _field_numeric(key) and not _all_digits(value):
             return _empty_outcome("report_non_numeric_" + key)
     if kind == "" or correlation_text == "" or outcome == "":
@@ -284,6 +295,7 @@ def parse_bounded_report(
         body_match=match_text,
         declared_bytes=Int(declared_text) if declared_text != "" else -1,
         length_match=length_text,
+        surplus_bytes=Int(surplus_text) if surplus_text != "" else -1,
     )
 
 
@@ -337,24 +349,6 @@ def _raw_request_text(path: String) -> String:
     )
 
 
-def _raw_status_code(head: String) raises -> Int:
-    var prefix = "HTTP/1.1 "
-    var start = head.find(prefix)
-    if start < 0:
-        return 0
-    var base = start + prefix.byte_length()
-    var length = 0
-    var bytes = head.as_bytes()
-    while base + length < len(bytes):
-        var b = Int(bytes[base + length])
-        if b < 48 or b > 57:
-            break
-        length += 1
-    if length == 0:
-        return 0
-    return Int(String(head[byte = base : base + length]))
-
-
 comptime RAW_MAX_HEADER_BYTES: Int = 65536
 comptime RAW_MAX_BODY_BYTES: Int = 1048576
 comptime RAW_READ_CHUNK_BYTES: Int = 1024
@@ -377,43 +371,170 @@ def _find_header_terminator(bytes: List[UInt8]) -> Int:
     return -1
 
 
-def _declared_content_length(head_text: String) raises -> Int:
-    """Lexical Content-Length from a decoded head, or -1 when absent.
+def _trim_ows_text(value: String) -> String:
+    """Trim only legal HTTP optional whitespace (SP / HTAB)."""
+    var start = 0
+    var end = value.byte_length()
+    var bytes = value.as_bytes()
+    while start < end and (Int(bytes[start]) == 32 or Int(bytes[start]) == 9):
+        start += 1
+    while end > start and (
+        Int(bytes[end - 1]) == 32 or Int(bytes[end - 1]) == 9
+    ):
+        end -= 1
+    if start == 0 and end == value.byte_length():
+        return String(value)
+    return String(value[byte=start:end])
 
-    Case-insensitive header name, ASCII digits only, with an explicit length
-    guard. A malformed or oversized value is reported as absent rather than
-    silently truncated; the caller treats that as an unknown declared size.
+
+def _token_name(value: String) -> Bool:
+    """RFC 7230 token check for an exact header field name."""
+    if value.byte_length() == 0:
+        return False
+    for byte in value.as_bytes():
+        var b = Int(byte)
+        if b >= 48 and b <= 57:
+            continue
+        if b >= 65 and b <= 90:
+            continue
+        if b >= 97 and b <= 122:
+            continue
+        if (
+            b == 33
+            or b == 35
+            or b == 36
+            or b == 37
+            or b == 38
+            or b == 39
+            or b == 42
+            or b == 43
+            or b == 45
+            or b == 46
+            or b == 94
+            or b == 95
+            or b == 96
+            or b == 124
+            or b == 126
+        ):
+            continue
+        return False
+    return True
+
+
+def _value_legal(value: String) -> Bool:
+    """Reject control bytes in a header value (HTAB is the only legal one)."""
+    for byte in value.as_bytes():
+        var b = Int(byte)
+        if b == 9:
+            continue
+        if b < 32 or b == 127:
+            return False
+    return True
+
+
+def _ascii_digit(value: Int) -> Bool:
+    return value >= 48 and value <= 57
+
+
+@fieldwise_init
+struct HeadFraming(Movable):
+    """Exact framing parsed from one response head.
+
+    ``problem`` is an explicit bounded grammar failure token; otherwise
+    ``status`` is the leading three-digit status and ``declared`` is the exact
+    Content-Length (``-1`` when the header is absent).
     """
-    var marker = "content-length"
-    var m = marker.byte_length()
-    var bytes = head_text.as_bytes()
-    var n = len(bytes)
-    var base = 0
-    while base + m <= n:
-        var matched = True
-        for k in range(m):
-            var hb = Int(bytes[base + k])
-            if hb >= 65 and hb <= 90:
-                hb += 32
-            if hb != Int(marker.as_bytes()[k]):
-                matched = False
-                break
-        if matched:
-            var i = base + m
-            while i < n and (Int(bytes[i]) == 32 or Int(bytes[i]) == 9):
-                i += 1
-            if i < n and Int(bytes[i]) == 58:
-                i += 1
-                while i < n and (Int(bytes[i]) == 32 or Int(bytes[i]) == 9):
-                    i += 1
-                var j = i
-                while j < n and Int(bytes[j]) >= 48 and Int(bytes[j]) <= 57:
-                    j += 1
-                if j == i or j - i > 9:
-                    return -1
-                return Int(String(head_text[byte=i:j]))
-        base += 1
-    return -1
+
+    var problem: String
+    var status: Int
+    var declared: Int
+
+
+def _parse_response_head(head_text: String) raises -> HeadFraming:
+    """Parse the leading HTTP/1.1 status line and exact framing headers.
+
+    OB01: the raw observer accepts only an exact leading
+    ``HTTP/1.1|HTTP/1.0 SP three-digit-status`` line and line-delimited
+    ``name: value`` headers. A malformed, duplicated, conflicting, negative,
+    junk or overflowing framing declaration and an unsupported
+    Transfer-Encoding are explicit bounded problem tokens. A status-looking
+    string inside a header value is never read as the response status, and a
+    different field name (``X-Content-Length``) is preserved as an unknown
+    header rather than interpreted as ``Content-Length``.
+    """
+    var lines = head_text.split("\r\n")
+    if len(lines) < 1:
+        return HeadFraming("raw_status_missing", 0, -1)
+    var status_line = String(lines[0])
+    var version = ""
+    if status_line.startswith("HTTP/1.1 "):
+        version = "HTTP/1.1 "
+    elif status_line.startswith("HTTP/1.0 "):
+        version = "HTTP/1.0 "
+    else:
+        return HeadFraming("raw_status_missing", 0, -1)
+    var rest = String(status_line[byte = version.byte_length() :])
+    if rest.byte_length() < 3:
+        return HeadFraming("raw_status_malformed", 0, -1)
+    var digits = String(rest[byte=0:3])
+    for byte in digits.as_bytes():
+        if not _ascii_digit(Int(byte)):
+            return HeadFraming("raw_status_malformed", 0, -1)
+    if rest.byte_length() > 3:
+        if Int(rest.as_bytes()[3]) != 32:
+            return HeadFraming("raw_status_malformed", 0, -1)
+    var status_value = Int(digits)
+    if status_value < 100 or status_value > 599:
+        # A three-digit but out-of-range status is malformed, never a
+        # successfully observed call.
+        return HeadFraming("raw_status_malformed", 0, -1)
+    var declared = -1
+    var have_length = False
+    var have_transfer = False
+    for index in range(1, len(lines)):
+        var line = String(lines[index])
+        if line.byte_length() == 0:
+            continue
+        var first = Int(line.as_bytes()[0])
+        if first == 32 or first == 9:
+            # obs-fold / a continuation line is not a legal standalone header.
+            return HeadFraming("raw_header_malformed", 0, -1)
+        var colon = line.find(":")
+        if colon <= 0:
+            return HeadFraming("raw_header_malformed", 0, -1)
+        var name = String(line[byte=0:colon])
+        if not _token_name(name):
+            return HeadFraming("raw_header_malformed", 0, -1)
+        var value = _trim_ows_text(String(line[byte = colon + 1 :]))
+        if not _value_legal(value):
+            return HeadFraming("raw_header_malformed", 0, -1)
+        var lower = name.lower()
+        if lower == "content-length":
+            if have_length:
+                # Includes an identical duplicate: a second framing field is
+                # ambiguous even when the value agrees.
+                return HeadFraming("raw_content_length_duplicate", 0, -1)
+            if value.byte_length() == 0:
+                return HeadFraming("raw_content_length_malformed", 0, -1)
+            for byte in value.as_bytes():
+                if not _ascii_digit(Int(byte)):
+                    return HeadFraming("raw_content_length_malformed", 0, -1)
+            if value.byte_length() > 9:
+                return HeadFraming("raw_content_length_overflow", 0, -1)
+            var parsed = Int(value)
+            if parsed > RAW_MAX_BODY_BYTES:
+                return HeadFraming("raw_body_overflow", 0, -1)
+            declared = parsed
+            have_length = True
+        elif lower == "transfer-encoding":
+            if have_transfer:
+                return HeadFraming("raw_transfer_encoding_duplicate", 0, -1)
+            have_transfer = True
+            if value.lower() != "identity":
+                return HeadFraming("raw_transfer_encoding_unsupported", 0, -1)
+    if have_transfer and have_length:
+        return HeadFraming("raw_framing_conflict", 0, -1)
+    return HeadFraming("", status_value, declared)
 
 
 def _bytes_contain_from(bytes: List[UInt8], start: Int, needle: String) -> Bool:
@@ -456,6 +577,7 @@ struct RawAccounting(Movable):
     var body_match: String
     var declared_bytes: Int
     var length_match: String
+    var surplus_bytes: Int
 
 
 def account_raw_bytes(raw: List[UInt8], expect: String) raises -> RawAccounting:
@@ -463,12 +585,16 @@ def account_raw_bytes(raw: List[UInt8], expect: String) raises -> RawAccounting:
 
     The buffer is treated as one byte stream: packet/read boundaries are never
     protocol boundaries, and the body begins exactly after CRLFCRLF. A valid
-    declared Content-Length is compared with the observed body byte count.
+    declared Content-Length is compared with the observed body byte count and
+    any already-buffered bytes beyond it are reported explicitly as surplus.
+    Malformed, duplicated, conflicting, negative, junk or overflowing framing
+    and an unsupported Transfer-Encoding are explicit problem tokens rather
+    than silently absent fields.
     """
     var head_end = _find_header_terminator(raw)
     if head_end < 0:
         return RawAccounting(
-            "raw_head_incomplete", 0, 0, "unknown", -1, "unknown"
+            "raw_head_incomplete", 0, 0, "unknown", -1, "unknown", 0
         )
     var head_bytes = List[UInt8]()
     for index in range(head_end):
@@ -482,41 +608,59 @@ def account_raw_bytes(raw: List[UInt8], expect: String) raises -> RawAccounting:
     except:
         decoded = False
     if not decoded:
-        return RawAccounting("raw_head_decode", 0, 0, "unknown", -1, "unknown")
+        return RawAccounting(
+            "raw_head_decode", 0, 0, "unknown", -1, "unknown", 0
+        )
+    var framing = _parse_response_head(head_text)
+    if framing.problem != "":
+        return RawAccounting(framing.problem, 0, 0, "unknown", -1, "unknown", 0)
     var body_bytes = len(raw) - head_end
-    var declared = _declared_content_length(head_text)
     var match_text = "unknown"
     if expect != "":
         match_text = "yes" if _bytes_contain_from(
             raw, head_end, expect
         ) else "no"
     var length_match = "unknown"
-    if declared >= 0:
-        length_match = "yes" if body_bytes == declared else "no"
-    var status = _raw_status_code(head_text)
-    if status == 0:
-        # A header block with no parseable HTTP/1.1 status line is a malformed
-        # observation, never a successful call with an invented status.
-        return RawAccounting(
-            "raw_status_missing",
-            0,
-            body_bytes,
-            match_text,
-            declared,
-            length_match,
-        )
+    var surplus = 0
+    if framing.declared >= 0:
+        length_match = "yes" if body_bytes == framing.declared else "no"
+        if body_bytes > framing.declared:
+            surplus = body_bytes - framing.declared
     return RawAccounting(
         "",
-        status,
+        framing.status,
         body_bytes,
         match_text,
-        declared,
+        framing.declared,
         length_match,
+        surplus,
     )
 
 
+def _plan_read_size(plan: List[Int], index: Int, default: Int) -> Int:
+    """Deterministic bounded read size from an optional chunk plan (OB02).
+
+    The plan element at ``index`` caps one actual read; once the plan is
+    exhausted the last element stays in force. An absent plan uses ``default``.
+    This is a disclosed synthetic acquisition seam, used only to force a header
+    terminator or a multi-byte body character to split across real incremental
+    reads; it is not a claim about packet boundaries.
+    """
+    if len(plan) == 0:
+        return default
+    var i = index if index < len(plan) else len(plan) - 1
+    var want = plan[i]
+    if want <= 0:
+        want = 1
+    return want if want < default else default
+
+
 def _child_raw_head_body(
-    head: String, port: Int, path: String, expect: String
+    head: String,
+    port: Int,
+    path: String,
+    expect: String,
+    chunk_plan: List[Int],
 ) raises -> String:
     """Owned raw client: record head/body arrival timing for a scripted peer.
 
@@ -524,96 +668,142 @@ def _child_raw_head_body(
     parsed response, so a headers-before-body-stall claim can be proved from the
     wire while still running under the parent's finite deadline.
 
-    RP01: bytes coalesced with the header terminator stay with the body, the
-    accumulation is byte-oriented and bounded, and decode happens once over the
-    complete buffer so a split multi-byte character is never misread as a
-    packet boundary. A valid declared Content-Length bounds the read; the
-    observed body byte count is compared with it and reported truthfully.
+    OB01/OB02: the head grammar is parsed exactly, the header cap counts bytes
+    through the terminator only (a coalesced body is not charged to it), a valid
+    declared Content-Length is read as an exact message body with any surplus
+    reported explicitly, a short read to EOF is an explicit incomplete
+    observation, and a no-length response completes only at EOF inside the
+    body cap. ``chunk_plan`` is a disclosed deterministic read seam that runs
+    the same incremental loop.
     """
     var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
     var start = now_ms()
     client.write_all(Span[UInt8, _](_raw_request_text(path).as_bytes()))
     var raw = List[UInt8]()
     var buffer = InlineArray[Byte, RAW_READ_CHUNK_BYTES](fill=0)
+    var plan_index = 0
     var head_end = -1
     while head_end < 0:
-        var n = client.read(buffer.unsafe_ptr(), RAW_READ_CHUNK_BYTES)
+        var want = _plan_read_size(chunk_plan, plan_index, RAW_READ_CHUNK_BYTES)
+        plan_index += 1
+        var n = client.read(buffer.unsafe_ptr(), want)
         if n <= 0:
             client.close()
             return head + "outcome=fail cause=raw_eof reason=head_eof"
         for index in range(n):
             raw.append(UInt8(Int(buffer[index])))
-        if len(raw) > RAW_MAX_HEADER_BYTES:
+        head_end = _find_header_terminator(raw)
+        if head_end < 0 and len(raw) > RAW_MAX_HEADER_BYTES:
             client.close()
             return (
                 head
                 + "outcome=fail cause=raw_head_overflow reason=head_overflow"
             )
-        head_end = _find_header_terminator(raw)
+    if head_end > RAW_MAX_HEADER_BYTES:
+        client.close()
+        return (
+            head + "outcome=fail cause=raw_head_overflow reason=head_overflow"
+        )
     var head_ms = now_ms() - start
-    var declared = -1
     var head_bytes = List[UInt8]()
     for index in range(head_end):
         head_bytes.append(raw[index])
+    var head_text = ""
     var decoded = True
     try:
-        declared = _declared_content_length(
-            String(
-                from_utf8=Span(
-                    ptr=head_bytes.unsafe_ptr(), length=len(head_bytes)
-                )
-            )
+        head_text = String(
+            from_utf8=Span(ptr=head_bytes.unsafe_ptr(), length=len(head_bytes))
         )
     except:
         decoded = False
     if not decoded:
         client.close()
         return head + "outcome=fail cause=raw_head_decode reason=head_decode"
+    var framing = _parse_response_head(head_text)
+    if framing.problem != "":
+        client.close()
+        return (
+            head
+            + "outcome=fail cause="
+            + framing.problem
+            + " reason="
+            + framing.problem
+        )
+    var declared = framing.declared
+    var status = framing.status
     var body_bytes = len(raw) - head_end
+    var incomplete = False
+    var overflow = False
     while True:
         if declared >= 0 and body_bytes >= declared:
             break
-        if body_bytes >= RAW_MAX_BODY_BYTES:
+        if declared < 0 and body_bytes >= RAW_MAX_BODY_BYTES:
+            overflow = True
             break
-        var want = min(RAW_READ_CHUNK_BYTES, RAW_MAX_BODY_BYTES - body_bytes)
-        var n2 = client.read(buffer.unsafe_ptr(), want)
+        var want2 = _plan_read_size(
+            chunk_plan, plan_index, RAW_READ_CHUNK_BYTES
+        )
+        plan_index += 1
+        var remaining = RAW_MAX_BODY_BYTES - body_bytes
+        if want2 > remaining:
+            want2 = remaining
+        if want2 <= 0:
+            overflow = True
+            break
+        var n2 = client.read(buffer.unsafe_ptr(), want2)
         if n2 <= 0:
+            # A length-delimited response that ends before its declared body is
+            # explicitly incomplete; a no-length response completes at EOF.
+            if declared >= 0 and body_bytes < declared:
+                incomplete = True
             break
         for index in range(n2):
             raw.append(UInt8(Int(buffer[index])))
         body_bytes += n2
     var total_ms = now_ms() - start
     client.close()
-    var accounting = account_raw_bytes(raw^, expect)
-    if accounting.problem != "":
-        return (
-            head
-            + "outcome=fail cause="
-            + accounting.problem
-            + " reason="
-            + accounting.problem
-        )
+    var match_text = "unknown"
+    if expect != "":
+        match_text = "yes" if _bytes_contain_from(
+            raw, head_end, expect
+        ) else "no"
+    var length_match = "unknown"
+    var surplus = 0
+    if declared >= 0:
+        length_match = "yes" if body_bytes == declared else "no"
+        if body_bytes > declared:
+            surplus = body_bytes - declared
     var declared_field = ""
-    if accounting.declared_bytes >= 0:
-        # A negative declared length is omitted rather than emitted, because the
-        # report grammar accepts only non-negative numeric fields.
-        declared_field = " declared_bytes=" + String(accounting.declared_bytes)
-    return (
-        head
-        + "outcome=ok status="
-        + String(accounting.status)
-        + " head_ms="
+    if declared >= 0:
+        declared_field = " declared_bytes=" + String(declared)
+    var tail = (
+        " head_ms="
         + String(head_ms)
         + " total_ms="
         + String(total_ms)
         + " body_bytes="
-        + String(accounting.body_bytes)
+        + String(body_bytes)
         + " body_match="
-        + accounting.body_match
+        + match_text
         + " length_match="
-        + accounting.length_match
+        + length_match
+        + " surplus_bytes="
+        + String(surplus)
         + declared_field
     )
+    if incomplete:
+        return (
+            head
+            + "outcome=fail cause=raw_body_incomplete reason=body_eof"
+            + tail
+        )
+    if overflow:
+        return (
+            head
+            + "outcome=fail cause=raw_body_overflow reason=body_overflow"
+            + tail
+        )
+    return head + "outcome=ok status=" + String(status) + tail
 
 
 def _child_report(
@@ -623,6 +813,7 @@ def _child_report(
     correlation: Int,
     raw_path: String,
     raw_expect: String,
+    raw_chunk_plan: List[Int],
 ) raises -> String:
     """One bounded report line from inside the forked provider-call child."""
     var head = _report_prefix(kind, correlation)
@@ -666,7 +857,9 @@ def _child_report(
         )
         return head + "outcome=ok status=" + String(response.status)
     if kind == "raw_head_body" or kind == "raw_jev_head_body":
-        return _child_raw_head_body(head, port, raw_path, raw_expect)
+        return _child_raw_head_body(
+            head, port, raw_path, raw_expect, raw_chunk_plan
+        )
     return head + "outcome=fail cause=unknown_kind reason=unknown_kind"
 
 
@@ -699,6 +892,7 @@ struct BoundedCallReport(Movable):
     var body_match: String
     var declared_bytes: Int
     var length_match: String
+    var surplus_bytes: Int
     var problem: String
     var report: String
     var elapsed_ms: Int
@@ -739,6 +933,8 @@ struct BoundedCallReport(Movable):
             + String(self.declared_bytes)
             + " length_match="
             + self.length_match
+            + " surplus_bytes="
+            + String(self.surplus_bytes)
             + " problem="
             + (self.problem if self.problem != "" else "-")
             + " elapsed_ms="
@@ -765,6 +961,7 @@ def run_bounded_call(
     fault_wait_errors: Int = 0,
     fault_poll_eintrs: Int = 0,
     fault_poll_errors: Int = 0,
+    raw_chunk_plan: List[Int] = List[Int](),
 ) raises -> BoundedCallReport:
     """Run one risky provider call under a parent-enforced finite deadline.
 
@@ -859,7 +1056,13 @@ def run_bounded_call(
         else:
             try:
                 payload = _child_report(
-                    kind, port, timeout_ms, correlation, raw_path, raw_expect
+                    kind,
+                    port,
+                    timeout_ms,
+                    correlation,
+                    raw_path,
+                    raw_expect,
+                    raw_chunk_plan,
                 )
             except e:
                 payload = (
@@ -983,6 +1186,7 @@ def run_bounded_call(
         body_match=parsed.body_match,
         declared_bytes=parsed.declared_bytes,
         length_match=parsed.length_match,
+        surplus_bytes=parsed.surplus_bytes,
         problem=problem,
         report=String(report_text.strip()),
         elapsed_ms=elapsed_ms,

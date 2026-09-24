@@ -6,7 +6,7 @@ exception, signal or unrelated startup failure.
 """
 
 from std.testing import TestSuite, assert_true, assert_equal
-from std.ffi import ErrNo, c_int, external_call
+from std.ffi import ErrNo, c_int, external_call, get_errno
 
 from flare.net import SocketAddr
 from flare.net.socket import RawSocket
@@ -53,11 +53,15 @@ from strict_fixture import (
     ExchangeScript,
     FramedRequest,
     authorization_reason,
+    classify_write_error_cause,
     exchange_script,
+    is_peer_close_cause,
     json_escape,
     parse_report,
+    render_write_api_error,
     report_status_matches_exit,
     verify_exchange,
+    write_errno_class,
 )
 from max_local_process_helper import (
     SpawnedMaxLocalStub,
@@ -948,6 +952,26 @@ def test_write_deadline_and_closed_pipe_causes() raises:
     close_fd(full.read_fd)
     close_fd(full.write_fd)
     assert_equal(deadline_reason, "write_deadline_expired")
+
+
+def test_real_write_to_closed_descriptor_is_ebadf() raises:
+    # RP03: a real (non-synthetic) descriptor/write failure. An exact-owned pipe
+    # write end is closed and then written to, so the OS returns a real EBADF.
+    # The raw errno is recorded and the actual classification function maps the
+    # rendered write-API cause to invalid_descriptor, which can never be a peer
+    # close. No product or fork source is involved.
+    var pipe = make_pipe()
+    close_fd(pipe.write_fd)
+    var written = write_raw(pipe.write_fd, "x")
+    assert_true(written < 0)
+    var errno_value = Int(get_errno().value)
+    assert_equal(errno_value, Int(ErrNo.EBADF.value))
+    assert_equal(write_errno_class(errno_value), "invalid_descriptor")
+    var rendered = render_write_api_error(errno_value)
+    assert_true(rendered.find("Bad file descriptor") >= 0)
+    assert_equal(classify_write_error_cause(rendered), "invalid_descriptor")
+    assert_true(not is_peer_close_cause("invalid_descriptor"))
+    close_fd(pipe.read_fd)
 
 
 def test_owned_child_reaped_after_early_terminate() raises:

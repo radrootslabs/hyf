@@ -1,4 +1,5 @@
 from std.collections import List
+from std.ffi import ErrNo
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from hyf_assist.questions import (
@@ -502,13 +503,25 @@ from jev_provider_helper import (
     require_bearer_for,
     spawn_jev_scripted_auto,
 )
-from strict_fixture import ExchangeScript, exchange_script
+from strict_fixture import (
+    ExchangeScript,
+    exchange_script,
+    is_peer_close_cause,
+    write_errno_class,
+)
 from bounded_call_helper import run_bounded_call
 from parent_lifecycle import now_ms
 
 # H007 BC02: a distinct correlation value per bounded-call invocation.
 comptime JEV_CORRELATION_BODY_STALL = 201
 comptime JEV_CORRELATION_DELAYED_SUCCESS = 202
+# H007 RP01: distinct correlations for the repaired Jev raw byte-accounting
+# controls, so the Jev raw caller is executed and not just a shared branch.
+comptime JEV_CORRELATION_RAW_COALESCED = 203
+comptime JEV_CORRELATION_RAW_TRUNCATED = 204
+# H007 RP03: distinct correlations for the Jev write-error controls.
+comptime JEV_CORRELATION_SYNTHETIC_DESCRIPTOR = 205
+comptime JEV_CORRELATION_REAL_ERRNO = 206
 
 
 def _raw_jev_request_text(path: String) -> String:
@@ -601,6 +614,73 @@ def test_jev_strict_delayed_success_under_bounded_harness() raises:
     guard.assert_clean()
 
 
+def test_jev_raw_head_body_accounts_coalesced_body() raises:
+    # RP01: the repaired raw observer is executed through the Jev raw caller.
+    # A body coalesced with the header terminator must be counted exactly.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "jev_coalesced_body", "POST", "/v1/systemone", 200, "JEVBODY"
+        )
+    )
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_RAW_COALESCED,
+            "/v1/systemone",
+            "JEVBODY",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 7)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 7)
+        assert_equal(report.length_match, "yes")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
+def test_jev_raw_head_body_reports_truncated_length_mismatch() raises:
+    # RP01: the Jev raw caller reports an explicit truncation truthfully: five
+    # observed bytes against a declared twenty, with a length mismatch.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_truncated_body", "POST", "/v1/systemone", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n"
+        "content-length: 20\r\nconnection: close\r\n\r\nSHORT"
+    )
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        var report = run_bounded_call(
+            "raw_jev_head_body",
+            started.port,
+            5000,
+            5000,
+            guard,
+            JEV_CORRELATION_RAW_TRUNCATED,
+            "/v1/systemone",
+            "SHORT",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 5)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 20)
+        assert_equal(report.length_match, "no")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+    guard.assert_clean()
+
+
 def test_jev_scripted_permitted_peer_close_is_declared() raises:
     # TC01: the Jev serve path verifies an explicitly declared expected peer
     # close (exact bounded cause and phase) and records the observed outcome.
@@ -620,6 +700,77 @@ def test_jev_scripted_permitted_peer_close_is_declared() raises:
         assert_true(started.stub.ok())
         assert_true(started.stub.failure_case().find("_peer_close_") >= 0)
         assert_true(started.stub.failure_case().find("_body_stall") >= 0)
+    guard.assert_clean()
+
+
+def _jev_realerrno_from_reason(reason: String) raises -> Int:
+    """Raw errno recorded in a bounded Jev write-failure reason, or -1."""
+    var marker = "realerrno"
+    var at = reason.find(marker)
+    if at < 0:
+        return -1
+    var digits = String(reason[byte = at + marker.byte_length() :])
+    var end = digits.find("_")
+    if end >= 0:
+        digits = String(digits[byte=0:end])
+    if digits.byte_length() == 0:
+        return -1
+    return Int(digits)
+
+
+def test_jev_scripted_synthetic_invalid_descriptor_is_not_peer_close() raises:
+    # RP03: the Jev serve path exercises the same narrowly scoped syscall-result
+    # seam, mapped to the flare write API's EBADF rendering. The invalid
+    # descriptor is classified, labelled synthetic and rejected even though a
+    # peer close was declared.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_synthetic_descriptor", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 200
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    script.inject_write_errno = Int(ErrNo.EBADF.value)
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _ = _raw_jev_send_and_read(started.port, "/v1/systemone")
+        started.stub.reap()
+        assert_true(not started.stub.ok())
+        assert_true(
+            started.stub.reason().find(
+                "unexpected_write_invalid_descriptor_body_stall_synthdecl"
+            )
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_jev_scripted_real_peer_close_records_raw_errno() raises:
+    # RP03: a real Jev peer close makes the fixture's real send(2) fail; the
+    # recorded raw errno's class must equal the observed classification.
+    var guard = CleanupGuard()
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "jev_real_errno", "POST", "/v1/systemone", 200, '{"ok":true}'
+    )
+    script.stall_after_head_ms = 300
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    scripts.append(script^)
+    with spawn_jev_scripted_auto(scripts^, guard) as started:
+        _raw_jev_send_then_close(started.port, "/v1/systemone")
+        started.stub.wait()
+        assert_true(started.stub.ok())
+        var token = started.stub.failure_case()
+        assert_true(token.find("realerrno") >= 0)
+        var errno = _jev_realerrno_from_reason(token)
+        assert_true(errno > 0)
+        var observed = write_errno_class(errno)
+        assert_true(observed == "broken_pipe" or observed == "peer_reset")
+        assert_true(token.find("_peer_close_" + observed + "_") >= 0)
     guard.assert_clean()
 
 

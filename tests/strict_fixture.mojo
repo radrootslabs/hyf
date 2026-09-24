@@ -24,6 +24,7 @@ distinct and verified.
 """
 
 from std.collections import List
+from std.ffi import ErrNo, get_errno
 
 from flare.net import Timeout
 from flare.tcp import TcpListener
@@ -474,6 +475,8 @@ struct ExchangeScript(Copyable, Movable):
     var expected_close_cause: String
     var expected_close_phase: String
     var inject_write_error: String
+    var inject_write_errno: Int
+    var close_before_response: Bool
 
     def __copyinit__(out self, existing: Self):
         self.case_label = existing.case_label
@@ -495,6 +498,8 @@ struct ExchangeScript(Copyable, Movable):
         self.expected_close_cause = existing.expected_close_cause
         self.expected_close_phase = existing.expected_close_phase
         self.inject_write_error = existing.inject_write_error
+        self.inject_write_errno = existing.inject_write_errno
+        self.close_before_response = existing.close_before_response
 
 
 def exchange_script(
@@ -524,6 +529,8 @@ def exchange_script(
         expected_close_cause="",
         expected_close_phase="",
         inject_write_error="",
+        inject_write_errno=-1,
+        close_before_response=False,
     )
 
 
@@ -635,6 +642,8 @@ def classify_write_error_cause(text: String) -> String:
         # an injected error can never be accepted by declaring a peer-close
         # cause (ADR-0020 TC01).
         return "unrelated_error"
+    if text.find("Bad file descriptor") >= 0 or text.find("(errno 9)") >= 0:
+        return "invalid_descriptor"
     if text.find("ConnectionReset") >= 0:
         return "peer_reset"
     if text.find("BrokenPipe") >= 0:
@@ -642,6 +651,47 @@ def classify_write_error_cause(text: String) -> String:
     if text.find("Timeout") >= 0:
         return "write_timeout"
     return "unrelated_error"
+
+
+def write_errno_class(errno_value: Int) -> String:
+    """Bounded class for a real write(2)/send(2) errno.
+
+    Mirrors the flare ``TcpStream.write`` mapping, so synthetic seams and real
+    failures are classified by the same vocabulary and a timeout or descriptor
+    error can be compared directly against a declared peer-close cause.
+    """
+    if errno_value == Int(ErrNo.EPIPE.value):
+        return "broken_pipe"
+    if errno_value == Int(ErrNo.ECONNRESET.value):
+        return "peer_reset"
+    if errno_value == Int(ErrNo.EAGAIN.value) or errno_value == Int(
+        ErrNo.EWOULDBLOCK.value
+    ):
+        return "write_timeout"
+    if errno_value == Int(ErrNo.EBADF.value):
+        return "invalid_descriptor"
+    return "unrelated_error"
+
+
+def render_write_api_error(errno_value: Int) -> String:
+    """Render an errno exactly as the flare write API would render it.
+
+    Used by the narrowly scoped syscall-result seam so the synthetic failure is
+    classified by the *same* path as a real write failure, and by the real
+    descriptor control to render the observed errno. It is a rendering helper
+    only and changes no product or fork source.
+    """
+    if errno_value == Int(ErrNo.EAGAIN.value) or errno_value == Int(
+        ErrNo.EWOULDBLOCK.value
+    ):
+        return "Timeout: send"
+    if errno_value == Int(ErrNo.EPIPE.value):
+        return "BrokenPipe"
+    if errno_value == Int(ErrNo.ECONNRESET.value):
+        return "ConnectionReset"
+    if errno_value == Int(ErrNo.EBADF.value):
+        return "NetworkError(errno 9): Bad file descriptor (send)"
+    return "NetworkError(errno " + String(errno_value) + "): send error"
 
 
 def is_peer_close_cause(cause: String) -> Bool:
@@ -761,6 +811,13 @@ def serve_scripts(
                             connection_count,
                         )
                 request_count = next_index
+                if script.close_before_response:
+                    # RP01 raw-observation control: a peer that closes the
+                    # connection without sending a response head at all. The
+                    # raw observer must report a bounded raw_eof rather than
+                    # hang or invent a status.
+                    close_connection = True
+                    break
                 if script.delay_ms > 0:
                     usleep(script.delay_ms * 1000)
                 var phase = "delayed_write"
@@ -793,6 +850,13 @@ def serve_scripts(
                                     "injected_error: "
                                     + script.inject_write_error
                                 )
+                            if script.inject_write_errno >= 0:
+                                raise Error(
+                                    "synthetic_errno: "
+                                    + render_write_api_error(
+                                        script.inject_write_errno
+                                    )
+                                )
                             reader.write_all(String(rendered[byte=head_end:]))
                         else:
                             phase = "head_write"
@@ -802,6 +866,13 @@ def serve_scripts(
                         if script.inject_write_error != "":
                             raise Error(
                                 "injected_error: " + script.inject_write_error
+                            )
+                        if script.inject_write_errno >= 0:
+                            raise Error(
+                                "synthetic_errno: "
+                                + render_write_api_error(
+                                    script.inject_write_errno
+                                )
                             )
                         reader.write_all(
                             render_response(
@@ -821,7 +892,23 @@ def serve_scripts(
                     # is itself restricted to a real peer-close class, so a
                     # timeout or unrelated error cannot be waived by declaring
                     # it as the expected cause.
-                    var observed = classify_write_error_cause(String(e))
+                    # Record the raw errno observed here as well as the
+                    # classification. A synthetic seam is labelled explicitly
+                    # so it is never presented as a real OS timeout/EBADF.
+                    var raw_errno = Int(get_errno().value)
+                    var observed_text = String(e)
+                    var synthetic = (
+                        observed_text.find("synthetic_errno") >= 0
+                        or observed_text.find("injected_error") >= 0
+                    )
+                    var observed = classify_write_error_cause(observed_text)
+                    var evidence = (
+                        "synthdecl"
+                        + String(
+                            script.inject_write_errno
+                        ) if synthetic else "realerrno"
+                        + String(raw_errno)
+                    )
                     if (
                         script.expect_peer_close
                         and is_peer_close_cause(script.expected_close_cause)
@@ -838,6 +925,8 @@ def serve_scripts(
                             + observed
                             + "_"
                             + phase
+                            + "_"
+                            + evidence
                         )
                         close_connection = True
                     else:
@@ -845,7 +934,12 @@ def serve_scripts(
                             False,
                             "peer_close",
                             script.case_label,
-                            "unexpected_write_" + observed + "_" + phase,
+                            "unexpected_write_"
+                            + observed
+                            + "_"
+                            + phase
+                            + "_"
+                            + evidence,
                             request_count,
                             connection_count,
                         )

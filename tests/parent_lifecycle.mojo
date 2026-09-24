@@ -69,6 +69,9 @@ comptime IO_FAULT_EINTR_UNBOUNDED: Int = -1
 comptime FIXTURE_DEFAULT_DEADLINE_MS: Int = 20000
 comptime TERMINATION_GRACE_MS: Int = 2000
 comptime LIFECYCLE_POLL_SLICE_MS: Int = 25
+# Upper bound on the EINTR retry loop when no finite deadline is supplied, so a
+# repeated signal can never spin unbounded; a finite deadline always wins.
+comptime POLL_EINTR_RETRY_BOUND: Int = 64
 
 
 def now_ms() -> Int:
@@ -219,26 +222,69 @@ def sleep_ms(ms: Int):
         _ = external_call["usleep", c_int](c_int(ms * 1000))
 
 
-def poll_fd(fd: Int, events: Int, timeout_ms: Int) -> Int:
-    """Poll one descriptor.
+def poll_fd(
+    fd: Int,
+    events: Int,
+    timeout_ms: Int,
+    deadline_ms: Int = -1,
+    fault_eintr_count: Int = 0,
+    fault_error_count: Int = 0,
+) -> Int:
+    """Poll one descriptor with a bounded EINTR retry.
 
-    Returns the ``revents`` mask, ``0`` on timeout and ``-1`` on a real
-    ``poll(2)`` error so callers can distinguish a read-phase error from an
-    ordinary timeout instead of collapsing both to ``0``.
+    Returns the ``revents`` mask, ``0`` on timeout, ``-1`` on a real
+    ``poll(2)`` error, and ``IO_DEADLINE_EXPIRED`` when a retry after ``EINTR``
+    would outlive the caller-supplied absolute remaining budget. ``deadline_ms``
+    is the remaining part of the caller's budget and is never refreshed by the
+    retry loop, so a signal storm can neither spin forever nor be reported as a
+    real read/poll failure.
+
+    ``fault_eintr_count``/``fault_error_count`` are bounded test-only seams that
+    exercise the actual consumer's retry/error branches; they change no host
+    signal state. A negative ``fault_eintr_count`` retries until the deadline so
+    the bounded-retry branch is deterministically executable.
     """
-    var cell = InlineArray[Int32, 2](fill=0)
-    cell[0] = Int32(fd)
-    cell[1] = Int32(events)
-    var n = Int(
-        external_call["poll", c_int](
-            cell.unsafe_ptr(), c_uint(1), c_int(timeout_ms)
+    var start = now_ms()
+    var eintrs = fault_eintr_count
+    var errors = fault_error_count
+    var attempts = 0
+    while True:
+        var slice = timeout_ms
+        if deadline_ms >= 0:
+            var remaining = deadline_ms - (now_ms() - start)
+            if remaining <= 0:
+                return IO_DEADLINE_EXPIRED
+            if remaining < slice:
+                slice = remaining
+        if errors != 0:
+            if errors > 0:
+                errors -= 1
+            return -1
+        if eintrs != 0:
+            if eintrs > 0:
+                eintrs -= 1
+            attempts += 1
+            if deadline_ms < 0 and attempts > POLL_EINTR_RETRY_BOUND:
+                return -1
+            continue
+        var cell = InlineArray[Int32, 2](fill=0)
+        cell[0] = Int32(fd)
+        cell[1] = Int32(events)
+        var n = Int(
+            external_call["poll", c_int](
+                cell.unsafe_ptr(), c_uint(1), c_int(slice)
+            )
         )
-    )
-    if n < 0:
-        return -1
-    if n == 0:
-        return 0
-    return (Int(cell[1]) >> 16) & 0xFFFF
+        if n < 0:
+            if get_errno() != ErrNo.EINTR:
+                return -1
+            attempts += 1
+            if deadline_ms < 0 and attempts > POLL_EINTR_RETRY_BOUND:
+                return -1
+            continue
+        if n == 0:
+            return 0
+        return (Int(cell[1]) >> 16) & 0xFFFF
 
 
 @fieldwise_init
@@ -390,7 +436,14 @@ def write_fd_bounded(fd: Int, data: String, deadline_ms: Int) -> String:
     while sent < total:
         if now_ms() - start >= deadline_ms:
             return "write_deadline_expired"
-        var ev = poll_fd(fd, POLLOUT, LIFECYCLE_POLL_SLICE_MS)
+        var ev = poll_fd(
+            fd,
+            POLLOUT,
+            LIFECYCLE_POLL_SLICE_MS,
+            deadline_ms - (now_ms() - start),
+        )
+        if ev == IO_DEADLINE_EXPIRED:
+            return "write_deadline_expired"
         if ev < 0:
             return "write_poll_error"
         if ev == 0:
@@ -534,7 +587,14 @@ struct BoundedLineReader(Movable):
                 return bytes_to_string(out)
             if now_ms() - start >= deadline_ms:
                 raise Error("read_deadline_expired")
-            var ev = poll_fd(self.fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            var ev = poll_fd(
+                self.fd,
+                POLLIN,
+                LIFECYCLE_POLL_SLICE_MS,
+                deadline_ms - (now_ms() - start),
+            )
+            if ev == IO_DEADLINE_EXPIRED:
+                raise Error("read_deadline_expired")
             if ev < 0:
                 raise Error("read_error")
             if ev == 0:
@@ -576,7 +636,14 @@ def read_all_bounded(
     while True:
         if now_ms() - start >= deadline_ms:
             raise Error("read_deadline_expired")
-        var ev = poll_fd(fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+        var ev = poll_fd(
+            fd,
+            POLLIN,
+            LIFECYCLE_POLL_SLICE_MS,
+            deadline_ms - (now_ms() - start),
+        )
+        if ev == IO_DEADLINE_EXPIRED:
+            raise Error("read_deadline_expired")
         if ev < 0:
             raise Error("read_error")
         if ev == 0:
@@ -967,12 +1034,16 @@ struct LifecycleFaults(Movable):
     var nonterminal: Int
     var cleanup_failures: Int
     var wait_delay_ms: Int
+    var poll_eintrs: Int
+    var poll_errors: Int
 
     def __init__(out self):
         self.wait_errors = 0
         self.nonterminal = 0
         self.cleanup_failures = 0
         self.wait_delay_ms = 0
+        self.poll_eintrs = 0
+        self.poll_errors = 0
 
     def active(self) -> Bool:
         return (
@@ -980,6 +1051,8 @@ struct LifecycleFaults(Movable):
             or self.nonterminal > 0
             or self.cleanup_failures > 0
             or self.wait_delay_ms > 0
+            or self.poll_eintrs != 0
+            or self.poll_errors != 0
         )
 
 
@@ -1102,6 +1175,25 @@ struct PipedChildState(Movable):
             )
         return terminate_owned(pid, grace_ms)
 
+    def _poll_eintr_fault(mut self) -> Int:
+        """Consume one bounded test-only EINTR fault, if one is armed.
+
+        A positive count is consumed once so a following poll is real; a
+        negative count stays armed so the bounded-retry deadline branch is
+        reached deterministically. This changes no host signal state.
+        """
+        var value = self.faults.poll_eintrs
+        if value > 0:
+            self.faults.poll_eintrs -= 1
+        return value
+
+    def _poll_error_fault(mut self) -> Int:
+        """Consume one bounded test-only real poll-error fault, if armed."""
+        var value = self.faults.poll_errors
+        if value > 0:
+            self.faults.poll_errors -= 1
+        return value
+
     def read_line(mut self, max_bytes: Int, deadline_ms: Int) raises -> String:
         """Bounded line read that retains surplus as undecoded bytes.
 
@@ -1142,7 +1234,16 @@ struct PipedChildState(Movable):
                 return _utf8_line(line^)
             if now_ms() - start >= deadline_ms:
                 raise Error("read_deadline_expired")
-            var ev = poll_fd(self.report_fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            var ev = poll_fd(
+                self.report_fd,
+                POLLIN,
+                LIFECYCLE_POLL_SLICE_MS,
+                deadline_ms - (now_ms() - start),
+                self._poll_eintr_fault(),
+                self._poll_error_fault(),
+            )
+            if ev == IO_DEADLINE_EXPIRED:
+                raise Error("read_deadline_expired")
             if ev < 0:
                 raise Error("read_error")
             if ev == 0:
@@ -1180,7 +1281,16 @@ struct PipedChildState(Movable):
         while not self.eof:
             if now_ms() - start >= deadline_ms:
                 raise Error("read_deadline_expired")
-            var ev = poll_fd(self.report_fd, POLLIN, LIFECYCLE_POLL_SLICE_MS)
+            var ev = poll_fd(
+                self.report_fd,
+                POLLIN,
+                LIFECYCLE_POLL_SLICE_MS,
+                deadline_ms - (now_ms() - start),
+                self._poll_eintr_fault(),
+                self._poll_error_fault(),
+            )
+            if ev == IO_DEADLINE_EXPIRED:
+                raise Error("read_deadline_expired")
             if ev < 0:
                 raise Error("read_error")
             if ev == 0:

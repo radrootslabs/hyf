@@ -1,4 +1,5 @@
 from std.collections import List
+from std.ffi import ErrNo
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from json import Value, loads
@@ -35,10 +36,17 @@ from max_local_process_helper import (
 )
 from bounded_call_helper import (
     BoundedCallReport,
+    account_raw_bytes,
     parse_bounded_report,
     run_bounded_call,
 )
-from strict_fixture import ExchangeScript, exchange_script, json_escape
+from strict_fixture import (
+    ExchangeScript,
+    exchange_script,
+    is_peer_close_cause,
+    json_escape,
+    write_errno_class,
+)
 
 # H007 BC02: each bounded-call invocation carries its own correlation value, so
 # a report produced for one call can never be accepted for another.
@@ -57,6 +65,27 @@ comptime BOUNDED_CORRELATION_MUTANT_DUPLICATE = 113
 comptime BOUNDED_CORRELATION_MUTANT_DELAYED = 114
 comptime BOUNDED_CORRELATION_MUTANT_HUGE = 115
 comptime BOUNDED_CORRELATION_WAIT_ERROR = 116
+# H007 RP01: distinct correlations for the repaired raw byte-accounting controls.
+comptime BOUNDED_CORRELATION_RAW_COALESCED = 117
+comptime BOUNDED_CORRELATION_RAW_EMPTY = 118
+comptime BOUNDED_CORRELATION_RAW_TRUNCATED = 119
+comptime BOUNDED_CORRELATION_RAW_SPLIT_UTF8 = 120
+# H007 RP02: distinct correlations for the real-consumer error/retry controls.
+comptime BOUNDED_CORRELATION_EARLY_EOF = 121
+comptime BOUNDED_CORRELATION_SIGNALED = 122
+comptime BOUNDED_CORRELATION_INVALID_UTF8 = 123
+comptime BOUNDED_CORRELATION_LATE_EXIT = 124
+comptime BOUNDED_CORRELATION_EINTR_RETRY = 125
+comptime BOUNDED_CORRELATION_EINTR_DEADLINE = 126
+comptime BOUNDED_CORRELATION_POLL_ERROR = 127
+# H007 RP03: distinct correlations for the real/synthetic write-error controls.
+comptime BOUNDED_CORRELATION_SYNTHETIC_TIMEOUT = 128
+comptime BOUNDED_CORRELATION_SYNTHETIC_DESCRIPTOR = 129
+comptime BOUNDED_CORRELATION_REAL_ERRNO = 130
+comptime BOUNDED_CORRELATION_DECLARED_VS_SYNTHETIC = 131
+# H007 RP01: malformed/error raw-observation controls.
+comptime BOUNDED_CORRELATION_RAW_EOF = 132
+comptime BOUNDED_CORRELATION_RAW_MALFORMED = 133
 
 from flare.net import SocketAddr
 from flare.tcp import TcpStream
@@ -618,6 +647,250 @@ def test_provider_stall_sends_headers_before_body() raises:
     guard.assert_clean()
 
 
+def test_provider_raw_head_body_accounts_coalesced_body() raises:
+    # RP01: a body that arrives coalesced with the header terminator must be
+    # accounted as body bytes, never discarded. The scripted exchange writes
+    # head and body together, so the unchanged raw observer must report the
+    # exact eight-byte BODYMARK body with a matching declared length.
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script(
+            "coalesced_body", "POST", "/v1/chat/completions", 200, "BODYMARK"
+        )
+    )
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_COALESCED,
+            "/v1/chat/completions",
+            "BODYMARK",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 8)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 8)
+        assert_equal(report.length_match, "yes")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_accounts_empty_body() raises:
+    # RP01: a declared zero-length body is an exact observation, not a missing
+    # one: body_bytes is 0 while the declared length still matches.
+    var scripts = List[ExchangeScript]()
+    scripts.append(
+        exchange_script("empty_body", "POST", "/v1/chat/completions", 200, "")
+    )
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_EMPTY,
+            "/v1/chat/completions",
+            "",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 0)
+        assert_equal(report.body_match, "unknown")
+        assert_equal(report.declared_bytes, 0)
+        assert_equal(report.length_match, "yes")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_reports_truncated_length_mismatch() raises:
+    # RP01: an explicit truncation control. The peer declares twenty body bytes
+    # but sends five and closes; the observer must report the exact five
+    # observed bytes, the twenty declared and a length mismatch, never the
+    # declared length as if it had arrived.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "truncated_body", "POST", "/v1/chat/completions", 200, ""
+    )
+    script.raw_response = (
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n"
+        "content-length: 20\r\nconnection: close\r\n\r\nSHORT"
+    )
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_TRUNCATED,
+            "/v1/chat/completions",
+            "SHORT",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, 5)
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.declared_bytes, 20)
+        assert_equal(report.length_match, "no")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_split_utf8_body_is_preserved() raises:
+    # RP01: a multi-byte body is preserved whole. The observer accumulates
+    # bytes and searches them directly, so a split character can never be
+    # misread as a read/packet boundary.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "split_utf8_body",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"mark":"a☃b"}',
+    )
+    script.stall_after_head_ms = 250
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_SPLIT_UTF8,
+            "/v1/chat/completions",
+            "a☃b",
+        )
+        assert_true(report.ok())
+        assert_equal(report.status, 200)
+        assert_equal(report.body_bytes, '{"mark":"a☃b"}'.byte_length())
+        assert_equal(report.body_match, "yes")
+        assert_equal(report.length_match, "yes")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_raw_accounting_preserves_split_utf8_bytes() raises:
+    # RP01: the byte accounting itself is chunk-independent. The same bytes are
+    # supplied as two pieces whose boundary falls inside the three-byte
+    # character, and the observation is still exact.
+    var head = "HTTP/1.1 200 OK\r\ncontent-length: 5\r\n\r\n"
+    var body = "a☃b"
+    var raw = List[UInt8]()
+    for byte in head.as_bytes():
+        raw.append(UInt8(Int(byte)))
+    for byte in body.as_bytes():
+        raw.append(UInt8(Int(byte)))
+    assert_equal(len(raw), head.byte_length() + body.byte_length())
+    var boundary = head.byte_length() + 3
+    var split = List[UInt8]()
+    for index in range(boundary):
+        split.append(raw[index])
+    for index in range(boundary, len(raw)):
+        split.append(raw[index])
+    var accounting = account_raw_bytes(split^, "☃")
+    assert_equal(accounting.problem, "")
+    assert_equal(accounting.status, 200)
+    assert_equal(accounting.body_bytes, 5)
+    assert_equal(accounting.body_match, "yes")
+    assert_equal(accounting.declared_bytes, 5)
+    assert_equal(accounting.length_match, "yes")
+
+
+def test_raw_accounting_reports_incomplete_head() raises:
+    # RP01: a buffer with no header terminator is an explicit incomplete-head
+    # observation, never a completed call with invented fields.
+    var raw = List[UInt8]()
+    for byte in "HTTP/1.1 200 OK\r\ncontent-length: 3".as_bytes():
+        raw.append(UInt8(Int(byte)))
+    var accounting = account_raw_bytes(raw^, "abc")
+    assert_equal(accounting.problem, "raw_head_incomplete")
+    assert_equal(accounting.body_bytes, 0)
+    assert_equal(accounting.status, 0)
+
+
+def test_raw_accounting_reports_undecodable_head() raises:
+    # RP01: an undecodable header block is a bounded decode failure, not a
+    # silently accepted status/body observation.
+    var raw = List[UInt8]()
+    for byte in "HTTP/1.1 200 OK\r\nx: ".as_bytes():
+        raw.append(UInt8(Int(byte)))
+    raw.append(UInt8(0xFF))
+    for byte in "\r\n\r\n".as_bytes():
+        raw.append(UInt8(Int(byte)))
+    var accounting = account_raw_bytes(raw^, "")
+    assert_equal(accounting.problem, "raw_head_decode")
+    assert_equal(accounting.status, 0)
+
+
+def test_provider_raw_head_body_reports_peer_close_without_head() raises:
+    # RP01: a peer that closes before sending any response head is a bounded
+    # raw_eof domain failure, not a hang and not an invented status.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "close_without_head", "POST", "/v1/chat/completions", 200, "{}"
+    )
+    script.close_before_response = True
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_EOF,
+            "/v1/chat/completions",
+            "x",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_eof")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+    guard.assert_clean()
+
+
+def test_provider_raw_head_body_reports_malformed_status() raises:
+    # RP01: a malformed response with a terminator but no HTTP status line must
+    # be reported as a bounded malformed observation (status_missing), never
+    # read as a successful response with an invented status.
+    var guard = CleanupGuard()
+    with spawn_max_local_stub(
+        0, "query_rewrite_malformed_http", 1, guard
+    ) as provider_stub:
+        var report = run_bounded_call(
+            "raw_head_body",
+            provider_stub.port,
+            5000,
+            5000,
+            guard,
+            BOUNDED_CORRELATION_RAW_MALFORMED,
+            "/v1/chat/completions",
+            "x",
+        )
+        assert_true(report.completed)
+        assert_true(report.domain_failure())
+        assert_equal(report.cause, "raw_status_missing")
+        provider_stub.wait()
+    guard.assert_clean()
+
+
 def test_provider_scripted_permitted_peer_close_is_declared() raises:
     # TC01: a script may declare an expected peer close with an exact bounded
     # cause and phase. The fixture verifies that declaration and records the
@@ -744,6 +1017,141 @@ def test_provider_scripted_injected_invalid_descriptor_fails() raises:
             )
             >= 0
         )
+    guard.assert_clean()
+
+
+def _realerrno_from_reason(reason: String) raises -> Int:
+    """Raw errno recorded in a bounded write-failure reason, or -1."""
+    var marker = "realerrno"
+    var at = reason.find(marker)
+    if at < 0:
+        return -1
+    var digits = String(reason[byte = at + marker.byte_length() :])
+    var end = digits.find("_")
+    if end >= 0:
+        digits = String(digits[byte=0:end])
+    if digits.byte_length() == 0:
+        return -1
+    return Int(digits)
+
+
+def test_provider_scripted_synthetic_write_timeout_is_not_peer_close() raises:
+    # RP03: a narrowly scoped syscall-result seam mapped exactly to the flare
+    # write API's EAGAIN/EWOULDBLOCK rendering. The synthetic failure exercises
+    # the actual classification and serve rejection path, is labelled synthdecl
+    # and can never be accepted as a peer close.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "synthetic_timeout",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 200
+    script.inject_write_errno = Int(ErrNo.EAGAIN.value)
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(not is_peer_close_cause("write_timeout"))
+        assert_true(
+            provider_stub.reason().find(
+                "unexpected_write_write_timeout_body_stall_synthdecl"
+            )
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_scripted_synthetic_invalid_descriptor_is_not_peer_close() raises:
+    # RP03: the same seam mapped to the flare write API's EBADF rendering. The
+    # invalid descriptor is classified as invalid_descriptor, labelled synthetic
+    # and rejected even when a peer close was declared.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "synthetic_descriptor",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 200
+    script.inject_write_errno = Int(ErrNo.EBADF.value)
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_equal(provider_stub.phase(), "peer_close")
+        assert_true(
+            provider_stub.reason().find(
+                "unexpected_write_invalid_descriptor_body_stall_synthdecl"
+            )
+            >= 0
+        )
+    guard.assert_clean()
+
+
+def test_provider_scripted_declared_peer_close_rejects_synthetic_timeout() raises:
+    # RP03: declaring a real peer close does not waive a synthetic timeout. The
+    # declared cause is compared against the observed class, so a non-peer-close
+    # failure stays a failure.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "declared_vs_synthetic",
+        "POST",
+        "/v1/chat/completions",
+        200,
+        '{"choices":[]}',
+    )
+    script.stall_after_head_ms = 200
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    script.inject_write_errno = Int(ErrNo.EAGAIN.value)
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _ = _raw_send_and_read(provider_stub.port, "/v1/chat/completions")
+        provider_stub.reap()
+        assert_true(not provider_stub.ok())
+        assert_true(provider_stub.reason().find("write_timeout") >= 0)
+    guard.assert_clean()
+
+
+def test_provider_scripted_real_peer_close_records_raw_errno() raises:
+    # RP03: the real (non-synthetic) write failure. A real peer close makes the
+    # fixture's real send(2) fail; the fixture records the raw errno alongside
+    # the classification, and the errno's class must equal the observed class.
+    var scripts = List[ExchangeScript]()
+    var script = exchange_script(
+        "real_errno", "POST", "/v1/chat/completions", 200, '{"choices":[]}'
+    )
+    script.stall_after_head_ms = 300
+    script.expect_peer_close = True
+    script.expected_close_cause = "broken_pipe"
+    script.expected_close_phase = "body_stall"
+    scripts.append(script^)
+    var guard = CleanupGuard()
+    with spawn_max_local_scripted(0, scripts^, guard) as provider_stub:
+        _raw_send_then_close(provider_stub.port, "/v1/chat/completions")
+        provider_stub.wait()
+        assert_true(provider_stub.ok())
+        var token = provider_stub.failure_case()
+        assert_true(token.find("realerrno") >= 0)
+        var errno = _realerrno_from_reason(token)
+        assert_true(errno > 0)
+        var observed = write_errno_class(errno)
+        assert_true(observed == "broken_pipe" or observed == "peer_reset")
+        assert_true(token.find("_peer_close_" + observed + "_") >= 0)
     guard.assert_clean()
 
 
@@ -1147,6 +1555,175 @@ def test_bounded_call_transient_wait_error_is_not_success() raises:
     assert_true(report.cleanup_proved)
     assert_true(report.child_status.find("exited=0") >= 0)
     guard.assert_clean()
+
+
+def test_bounded_call_rejects_early_eof_report() raises:
+    # RP02: an early EOF with no report byte is a harness failure, never an
+    # empty completed call, through the actual bounded consumer.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var report = run_bounded_call(
+        "mutate_silent",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_EARLY_EOF,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "report_early_eof")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked(), fd_before)
+
+
+def test_bounded_call_rejects_signaled_child_after_valid_report() raises:
+    # RP02: a valid report followed by a signaled child is a harness failure.
+    # The parent must observe the signal, not accept the report or kill the
+    # child and call it complete.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var report = run_bounded_call(
+        "mutate_signaled",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_SIGNALED,
+    )
+    assert_true(not report.completed)
+    assert_true(not report.stopped)
+    assert_equal(report.problem, "child_signal_9")
+    assert_true(report.child_status.find("signal=9") >= 0)
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked(), fd_before)
+
+
+def test_bounded_call_rejects_invalid_utf8_report() raises:
+    # RP02: an invalid UTF-8 byte in the report line is rejected by the bounded
+    # decode, so a corrupted report can never be accepted as a completed call.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var report = run_bounded_call(
+        "mutate_invalid_utf8",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_INVALID_UTF8,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "invalid_utf8")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked(), fd_before)
+
+
+def test_bounded_call_rejects_phase_isolated_late_exit() raises:
+    # RP02: after the report pipe is closed with one complete report, a child
+    # that outlives the budget must be isolated in the wait phase and stopped
+    # and reaped, never reported as completed.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var report = run_bounded_call(
+        "mutate_late_exit",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_LATE_EXIT,
+    )
+    assert_true(not report.completed)
+    assert_true(report.stopped)
+    assert_true(report.cleanup_proved)
+    assert_true(report.elapsed_ms >= 400)
+    assert_true(report.elapsed_ms < 3000)
+    guard.assert_clean()
+    assert_equal(open_fd_count_checked(), fd_before)
+
+
+def test_bounded_call_retries_synthetic_eintr_without_error() raises:
+    # RP02: a bounded test-only EINTR seam exercises the actual poll consumer's
+    # retry branch. One interrupted poll must be retried, not reported as a read
+    # error, and the complete report must still be accepted. The seam is
+    # synthetic and disclosed as such; it changes no host signal state.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_valid",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_EINTR_RETRY,
+        "/v1/chat/completions",
+        "",
+        0,
+        0,
+        1,
+        0,
+    )
+    assert_true(report.completed)
+    assert_equal(report.outcome, "ok")
+    assert_equal(report.status, 200)
+    assert_equal(report.problem, "")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+
+
+def test_bounded_call_eintr_retry_is_bounded_by_deadline() raises:
+    # RP02: an unbounded synthetic EINTR storm must terminate at the caller's
+    # absolute deadline, never refresh the budget and never spin. The actual
+    # consumer reports the expiry, so the parent stops and reaps the child.
+    var guard = CleanupGuard()
+    var report = run_bounded_call(
+        "mutate_valid",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_EINTR_DEADLINE,
+        "/v1/chat/completions",
+        "",
+        0,
+        0,
+        -1,
+        0,
+    )
+    assert_true(not report.completed)
+    assert_true(report.stopped)
+    assert_true(report.cleanup_proved)
+    assert_true(report.elapsed_ms >= 400)
+    assert_true(report.elapsed_ms < 3000)
+    guard.assert_clean()
+
+
+def test_bounded_call_poll_error_is_bounded_failure() raises:
+    # RP02: a real poll error (bounded test-only seam) is surfaced as
+    # read_error by the actual consumer, and the exception path still proves
+    # owned cleanup with no child or descriptor growth.
+    var guard = CleanupGuard()
+    var fd_before = open_fd_count_checked()
+    var report = run_bounded_call(
+        "mutate_valid",
+        0,
+        300,
+        500,
+        guard,
+        BOUNDED_CORRELATION_POLL_ERROR,
+        "/v1/chat/completions",
+        "",
+        0,
+        0,
+        0,
+        1,
+    )
+    assert_true(not report.completed)
+    assert_equal(report.problem, "read_error")
+    assert_true(report.cleanup_proved)
+    guard.assert_clean()
+    assert_equal(guard.pending(), 0)
+    assert_equal(open_fd_count_checked(), fd_before)
 
 
 def test_maxlocal_wire_attempt_counts_are_exact() raises:

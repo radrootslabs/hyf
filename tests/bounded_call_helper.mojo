@@ -37,19 +37,23 @@ from flare.net import SocketAddr
 from flare.tcp import TcpStream
 
 from parent_lifecycle import (
+    SIGKILL,
     TERMINATION_GRACE_MS,
     CleanupGuard,
     ProcessStatus,
     child_exit,
     close_fd,
     fork_owned_or_close,
+    kill_pid,
     make_pipe,
     now_ms,
+    owned_pid,
     piped_child_state,
     read_fd,
     set_alarm,
     sleep_ms,
     write_raw,
+    write_raw_bytes,
 )
 
 from hyf_core.request_context import default_request_context
@@ -70,7 +74,9 @@ def _field_allowed(key: String) -> Bool:
         return True
     if key == "latency_ms" or key == "head_ms" or key == "total_ms":
         return True
-    return key == "body_bytes" or key == "body_match"
+    if key == "body_bytes" or key == "body_match":
+        return True
+    return key == "declared_bytes" or key == "length_match"
 
 
 def _field_numeric(key: String) -> Bool:
@@ -78,7 +84,7 @@ def _field_numeric(key: String) -> Bool:
         return True
     if key == "head_ms" or key == "total_ms":
         return True
-    return key == "body_bytes"
+    return key == "body_bytes" or key == "declared_bytes"
 
 
 def _all_digits(text: String) -> Bool:
@@ -112,6 +118,8 @@ struct BoundedCallOutcome(Movable):
     var total_ms: Int
     var body_bytes: Int
     var body_match: String
+    var declared_bytes: Int
+    var length_match: String
 
     def domain_failure(self) -> Bool:
         return self.ok and self.outcome == "fail"
@@ -140,6 +148,10 @@ struct BoundedCallOutcome(Movable):
             + String(self.body_bytes)
             + " body_match="
             + self.body_match
+            + " declared_bytes="
+            + String(self.declared_bytes)
+            + " length_match="
+            + self.length_match
         )
 
 
@@ -158,6 +170,8 @@ def _empty_outcome(problem: String) -> BoundedCallOutcome:
         total_ms=-1,
         body_bytes=-1,
         body_match="",
+        declared_bytes=-1,
+        length_match="",
     )
 
 
@@ -200,6 +214,8 @@ def parse_bounded_report(
     var total_text = ""
     var bytes_text = ""
     var match_text = ""
+    var declared_text = ""
+    var length_text = ""
     for index in range(len(keys)):
         var key = keys[index]
         var value = values[index]
@@ -225,6 +241,10 @@ def parse_bounded_report(
             bytes_text = value
         elif key == "body_match":
             match_text = value
+        elif key == "declared_bytes":
+            declared_text = value
+        elif key == "length_match":
+            length_text = value
         if _field_numeric(key) and not _all_digits(value):
             return _empty_outcome("report_non_numeric_" + key)
     if kind == "" or correlation_text == "" or outcome == "":
@@ -262,6 +282,8 @@ def parse_bounded_report(
         total_ms=Int(total_text) if total_text != "" else -1,
         body_bytes=Int(bytes_text) if bytes_text != "" else -1,
         body_match=match_text,
+        declared_bytes=Int(declared_text) if declared_text != "" else -1,
+        length_match=length_text,
     )
 
 
@@ -333,6 +355,166 @@ def _raw_status_code(head: String) raises -> Int:
     return Int(String(head[byte = base : base + length]))
 
 
+comptime RAW_MAX_HEADER_BYTES: Int = 65536
+comptime RAW_MAX_BODY_BYTES: Int = 1048576
+comptime RAW_READ_CHUNK_BYTES: Int = 1024
+
+
+def _find_header_terminator(bytes: List[UInt8]) -> Int:
+    """Index just past the first CRLFCRLF, or -1 while the head is incomplete.
+    """
+    var n = len(bytes)
+    if n < 4:
+        return -1
+    for index in range(0, n - 3):
+        if (
+            Int(bytes[index]) == 13
+            and Int(bytes[index + 1]) == 10
+            and Int(bytes[index + 2]) == 13
+            and Int(bytes[index + 3]) == 10
+        ):
+            return index + 4
+    return -1
+
+
+def _declared_content_length(head_text: String) raises -> Int:
+    """Lexical Content-Length from a decoded head, or -1 when absent.
+
+    Case-insensitive header name, ASCII digits only, with an explicit length
+    guard. A malformed or oversized value is reported as absent rather than
+    silently truncated; the caller treats that as an unknown declared size.
+    """
+    var marker = "content-length"
+    var m = marker.byte_length()
+    var bytes = head_text.as_bytes()
+    var n = len(bytes)
+    var base = 0
+    while base + m <= n:
+        var matched = True
+        for k in range(m):
+            var hb = Int(bytes[base + k])
+            if hb >= 65 and hb <= 90:
+                hb += 32
+            if hb != Int(marker.as_bytes()[k]):
+                matched = False
+                break
+        if matched:
+            var i = base + m
+            while i < n and (Int(bytes[i]) == 32 or Int(bytes[i]) == 9):
+                i += 1
+            if i < n and Int(bytes[i]) == 58:
+                i += 1
+                while i < n and (Int(bytes[i]) == 32 or Int(bytes[i]) == 9):
+                    i += 1
+                var j = i
+                while j < n and Int(bytes[j]) >= 48 and Int(bytes[j]) <= 57:
+                    j += 1
+                if j == i or j - i > 9:
+                    return -1
+                return Int(String(head_text[byte=i:j]))
+        base += 1
+    return -1
+
+
+def _bytes_contain_from(bytes: List[UInt8], start: Int, needle: String) -> Bool:
+    """Byte-level substring search over an undecoded body buffer.
+
+    Searching raw bytes (not a decoded String) keeps an invalid UTF-8 body or
+    a multi-byte character split across reader chunks from corrupting the
+    observation.
+    """
+    var nlen = needle.byte_length()
+    if nlen == 0:
+        return True
+    var limit = len(bytes) - nlen
+    if limit < start:
+        return False
+    var nb = needle.as_bytes()
+    for base in range(start, limit + 1):
+        var matched = True
+        for k in range(nlen):
+            if Int(bytes[base + k]) != Int(nb[k]):
+                matched = False
+                break
+        if matched:
+            return True
+    return False
+
+
+@fieldwise_init
+struct RawAccounting(Movable):
+    """Exact raw-response accounting from one bounded byte buffer.
+
+    A non-empty ``problem`` is a bounded raw-observation failure (incomplete
+    head or undecodable ASCII head); otherwise ``status``/``body_bytes``/
+    ``body_match``/``declared_bytes``/``length_match`` describe the observation.
+    """
+
+    var problem: String
+    var status: Int
+    var body_bytes: Int
+    var body_match: String
+    var declared_bytes: Int
+    var length_match: String
+
+
+def account_raw_bytes(raw: List[UInt8], expect: String) raises -> RawAccounting:
+    """Account header end, body byte count and length/match from raw bytes.
+
+    The buffer is treated as one byte stream: packet/read boundaries are never
+    protocol boundaries, and the body begins exactly after CRLFCRLF. A valid
+    declared Content-Length is compared with the observed body byte count.
+    """
+    var head_end = _find_header_terminator(raw)
+    if head_end < 0:
+        return RawAccounting(
+            "raw_head_incomplete", 0, 0, "unknown", -1, "unknown"
+        )
+    var head_bytes = List[UInt8]()
+    for index in range(head_end):
+        head_bytes.append(raw[index])
+    var head_text = ""
+    var decoded = True
+    try:
+        head_text = String(
+            from_utf8=Span(ptr=head_bytes.unsafe_ptr(), length=len(head_bytes))
+        )
+    except:
+        decoded = False
+    if not decoded:
+        return RawAccounting("raw_head_decode", 0, 0, "unknown", -1, "unknown")
+    var body_bytes = len(raw) - head_end
+    var declared = _declared_content_length(head_text)
+    var match_text = "unknown"
+    if expect != "":
+        match_text = "yes" if _bytes_contain_from(
+            raw, head_end, expect
+        ) else "no"
+    var length_match = "unknown"
+    if declared >= 0:
+        length_match = "yes" if body_bytes == declared else "no"
+    var status = _raw_status_code(head_text)
+    if status == 0:
+        # A header block with no parseable HTTP/1.1 status line is a malformed
+        # observation, never a successful call with an invented status.
+        return RawAccounting(
+            "raw_status_missing",
+            0,
+            body_bytes,
+            match_text,
+            declared,
+            length_match,
+        )
+    return RawAccounting(
+        "",
+        status,
+        body_bytes,
+        match_text,
+        declared,
+        length_match,
+    )
+
+
 def _child_raw_head_body(
     head: String, port: Int, path: String, expect: String
 ) raises -> String:
@@ -341,46 +523,96 @@ def _child_raw_head_body(
     The observation is independent of the product caller, which exposes only a
     parsed response, so a headers-before-body-stall claim can be proved from the
     wire while still running under the parent's finite deadline.
+
+    RP01: bytes coalesced with the header terminator stay with the body, the
+    accumulation is byte-oriented and bounded, and decode happens once over the
+    complete buffer so a split multi-byte character is never misread as a
+    packet boundary. A valid declared Content-Length bounds the read; the
+    observed body byte count is compared with it and reported truthfully.
     """
     var client = TcpStream.connect(SocketAddr.localhost(UInt16(port)))
     var start = now_ms()
     client.write_all(Span[UInt8, _](_raw_request_text(path).as_bytes()))
-    var head_text = String("")
-    var buffer = InlineArray[Byte, 1024](fill=0)
-    while head_text.find("\r\n\r\n") < 0:
-        var n = client.read(buffer.unsafe_ptr(), 1024)
+    var raw = List[UInt8]()
+    var buffer = InlineArray[Byte, RAW_READ_CHUNK_BYTES](fill=0)
+    var head_end = -1
+    while head_end < 0:
+        var n = client.read(buffer.unsafe_ptr(), RAW_READ_CHUNK_BYTES)
         if n <= 0:
             client.close()
             return head + "outcome=fail cause=raw_eof reason=head_eof"
-        head_text += String(
-            unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n))
-        )
+        for index in range(n):
+            raw.append(UInt8(Int(buffer[index])))
+        if len(raw) > RAW_MAX_HEADER_BYTES:
+            client.close()
+            return (
+                head
+                + "outcome=fail cause=raw_head_overflow reason=head_overflow"
+            )
+        head_end = _find_header_terminator(raw)
     var head_ms = now_ms() - start
-    var body = String("")
+    var declared = -1
+    var head_bytes = List[UInt8]()
+    for index in range(head_end):
+        head_bytes.append(raw[index])
+    var decoded = True
+    try:
+        declared = _declared_content_length(
+            String(
+                from_utf8=Span(
+                    ptr=head_bytes.unsafe_ptr(), length=len(head_bytes)
+                )
+            )
+        )
+    except:
+        decoded = False
+    if not decoded:
+        client.close()
+        return head + "outcome=fail cause=raw_head_decode reason=head_decode"
+    var body_bytes = len(raw) - head_end
     while True:
-        var n2 = client.read(buffer.unsafe_ptr(), 1024)
+        if declared >= 0 and body_bytes >= declared:
+            break
+        if body_bytes >= RAW_MAX_BODY_BYTES:
+            break
+        var want = min(RAW_READ_CHUNK_BYTES, RAW_MAX_BODY_BYTES - body_bytes)
+        var n2 = client.read(buffer.unsafe_ptr(), want)
         if n2 <= 0:
             break
-        body += String(
-            unsafe_from_utf8=Span(ptr=buffer.unsafe_ptr(), length=Int(n2))
-        )
+        for index in range(n2):
+            raw.append(UInt8(Int(buffer[index])))
+        body_bytes += n2
     var total_ms = now_ms() - start
     client.close()
-    var body_match = "unknown"
-    if expect != "":
-        body_match = "yes" if body.find(expect) >= 0 else "no"
+    var accounting = account_raw_bytes(raw^, expect)
+    if accounting.problem != "":
+        return (
+            head
+            + "outcome=fail cause="
+            + accounting.problem
+            + " reason="
+            + accounting.problem
+        )
+    var declared_field = ""
+    if accounting.declared_bytes >= 0:
+        # A negative declared length is omitted rather than emitted, because the
+        # report grammar accepts only non-negative numeric fields.
+        declared_field = " declared_bytes=" + String(accounting.declared_bytes)
     return (
         head
         + "outcome=ok status="
-        + String(_raw_status_code(head_text))
+        + String(accounting.status)
         + " head_ms="
         + String(head_ms)
         + " total_ms="
         + String(total_ms)
         + " body_bytes="
-        + String(body.byte_length())
+        + String(accounting.body_bytes)
         + " body_match="
-        + body_match
+        + accounting.body_match
+        + " length_match="
+        + accounting.length_match
+        + declared_field
     )
 
 
@@ -465,6 +697,8 @@ struct BoundedCallReport(Movable):
     var total_ms: Int
     var body_bytes: Int
     var body_match: String
+    var declared_bytes: Int
+    var length_match: String
     var problem: String
     var report: String
     var elapsed_ms: Int
@@ -501,6 +735,10 @@ struct BoundedCallReport(Movable):
             + String(self.body_bytes)
             + " body_match="
             + self.body_match
+            + " declared_bytes="
+            + String(self.declared_bytes)
+            + " length_match="
+            + self.length_match
             + " problem="
             + (self.problem if self.problem != "" else "-")
             + " elapsed_ms="
@@ -525,6 +763,8 @@ def run_bounded_call(
     raw_expect: String = "",
     fault_cleanup_failures: Int = 0,
     fault_wait_errors: Int = 0,
+    fault_poll_eintrs: Int = 0,
+    fault_poll_errors: Int = 0,
 ) raises -> BoundedCallReport:
     """Run one risky provider call under a parent-enforced finite deadline.
 
@@ -546,6 +786,7 @@ def run_bounded_call(
         var payload = ""
         var terminator = "\n"
         var exit_code = 0
+        var self_signal = 0
         # Child-producer-only controls for the parent consumer: each produces a
         # deliberately incomplete, duplicated, non-zero-exit or over-running
         # child result, and the unchanged parent consumer must reject it.
@@ -570,6 +811,46 @@ def run_bounded_call(
             payload = (
                 _report_prefix(kind, correlation) + "outcome=ok status=200"
             )
+        elif kind == "mutate_silent":
+            # RP02 child-producer-only control: the child closes its report pipe
+            # without writing a byte, so the parent must report an early EOF
+            # rather than an empty completed call.
+            payload = ""
+        elif kind == "mutate_signaled":
+            # RP02 child-producer-only control: a valid report followed by a
+            # signaled termination of the exact owned child; the parent must
+            # report the signal, never a completed call.
+            payload = (
+                _report_prefix(kind, correlation) + "outcome=ok status=200"
+            )
+            self_signal = SIGKILL
+        elif kind == "mutate_invalid_utf8":
+            # RP02 child-producer-only control: a terminated report line whose
+            # body contains an invalid UTF-8 byte, so the parent's bounded
+            # decode rejects it instead of accepting a corrupted line.
+            var bytes = List[UInt8]()
+            var prefix = (
+                _report_prefix(kind, correlation)
+                + "outcome=ok status=200 mark="
+            )
+            for byte in prefix.as_bytes():
+                bytes.append(UInt8(Int(byte)))
+            bytes.append(UInt8(0xFF))
+            bytes.append(UInt8(10))
+            _ = write_raw_bytes(pipe.write_fd, bytes^)
+            close_fd(pipe.write_fd)
+            child_exit(0)
+        elif kind == "mutate_late_exit":
+            # RP02 child-producer-only control: the report pipe is closed after
+            # one complete report while the child stays alive past the budget,
+            # isolating the late-exit wait phase from any report drain.
+            _ = write_raw(
+                pipe.write_fd,
+                _report_prefix(kind, correlation) + "outcome=ok status=200\n",
+            )
+            close_fd(pipe.write_fd)
+            sleep_ms(2000)
+            child_exit(0)
         elif kind == "mutate_delayed":
             _ = write_raw(pipe.write_fd, _mutant_payload(1) + "\n")
             sleep_ms(2000)
@@ -589,6 +870,8 @@ def run_bounded_call(
         if payload != "":
             _ = write_raw(pipe.write_fd, payload + terminator)
         close_fd(pipe.write_fd)
+        if self_signal != 0:
+            _ = kill_pid(owned_pid(), self_signal)
         child_exit(exit_code)
 
     close_fd(pipe.write_fd)
@@ -600,6 +883,8 @@ def run_bounded_call(
     # and recovery path is exercised rather than a synthetic identity.
     state.faults.cleanup_failures = fault_cleanup_failures
     state.faults.wait_errors = fault_wait_errors
+    state.faults.poll_eintrs = fault_poll_eintrs
+    state.faults.poll_errors = fault_poll_errors
     var deadline_hit = False
     var problem = ""
     var report_text = ""
@@ -696,6 +981,8 @@ def run_bounded_call(
         total_ms=parsed.total_ms,
         body_bytes=parsed.body_bytes,
         body_match=parsed.body_match,
+        declared_bytes=parsed.declared_bytes,
+        length_match=parsed.length_match,
         problem=problem,
         report=String(report_text.strip()),
         elapsed_ms=elapsed_ms,

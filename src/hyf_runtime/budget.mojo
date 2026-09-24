@@ -78,8 +78,9 @@ def derived_stage_cap_ms(stage_cap_ms: Int, remaining_budget_ms: Int) -> Int:
 
     D21 connect/read and output caps are derived from the positive remaining
     absolute budget; this helper never replaces or extends the total deadline.
+    A non-positive stage cap has no admissible budget and collapses to zero.
     """
-    if remaining_budget_ms <= 0:
+    if stage_cap_ms <= 0 or remaining_budget_ms <= 0:
         return 0
     if remaining_budget_ms < stage_cap_ms:
         return remaining_budget_ms

@@ -3,9 +3,11 @@ from std.pathlib import Path
 
 from morph.toml import from_toml
 
-# ADR-0010 D21 freeze: the request budget is min(positive request deadline, the
-# configured provider request_timeout_ms). This named default is consumed by
-# H092's derivation and must not be enlarged or weakened here.
+# ADR-0010 D21 fixes the request-budget derivation, not this value: the absolute
+# budget is min(positive request deadline, the configured provider
+# request_timeout_ms). This named constant preserves the pre-existing 15000 ms
+# default for H092's derivation; it is not a D21-selected bound, and it is not
+# enlarged or weakened here.
 comptime DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS: Int = 15000
 
 

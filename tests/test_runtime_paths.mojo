@@ -622,6 +622,7 @@ from hyf_runtime.budget import (
     RETRY_BACKOFF_MS,
 )
 from hyf_stdio.server import MAX_FRAME_BYTES, frame_too_large
+from hyf_runtime.config import DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS
 
 
 def _frame_of(count: Int) -> String:
@@ -643,6 +644,7 @@ def test_policy_constants_match_frozen_d21_values() raises:
     assert_equal(CIRCUIT_OPEN_THRESHOLD, 3)
     assert_equal(CIRCUIT_COOLDOWN_MS, 30000)
     assert_equal(CIRCUIT_HALF_OPEN_PROBES, 1)
+    assert_equal(DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS, 15000)
     assert_true(MAX_RETRIES_PER_CALL < MAX_WIRE_ATTEMPTS)
 
 

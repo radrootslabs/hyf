@@ -2403,3 +2403,100 @@ def test_c004_cr04_duplicate_version_input_and_trace_fields() raises:
     assert_true(
         _decode_error_message(duplicate_request_id).find("duplicate") >= 0
     )
+
+
+def test_c004_cr04_escaped_duplicate_matrix() raises:
+    # ADR-0028 D48 EQ03 / ADR-0026 D46 CR04: decoded-key identity must catch an
+    # escaped equivalent of every v2-targeting duplicate field, with equal and
+    # conflicting values and both orders, through the real admission path.
+    var v2_ctx = (
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+
+    # Escaped `context`, both orders (conflicting).
+    var ctx_legacy_first = (
+        '{"version":1,"request_id":"esc-ctx-a",'
+        '"capability":"farm_update.interpret",'
+        '"context":{"consumer":"cli"},'
+        '"\\u0063ontext":{' + v2_ctx + '},"input":{}}'
+    )
+    assert_true(
+        _decode_error_message(ctx_legacy_first).find("duplicate") >= 0
+    )
+    var ctx_v2_first = (
+        '{"version":1,"request_id":"esc-ctx-b",'
+        '"capability":"buyer_request.interpret",'
+        '"context":{' + v2_ctx + '},'
+        '"\\u0063ontext":{"consumer":"cli"},"input":{}}'
+    )
+    assert_true(_decode_error_message(ctx_v2_first).find("duplicate") >= 0)
+
+    # Escaped `request_id`, equal and conflicting, both orders.
+    var rid_equal = (
+        '{"version":1,"request_id":"esc-rid-eq",'
+        '"\\u0072equest_id":"esc-rid-eq",'
+        '"capability":"farm_update.interpret","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    assert_true(_decode_error_message(rid_equal).find("duplicate") >= 0)
+    var rid_conflict = (
+        '{"version":1,"request_id":"esc-rid-a",'
+        '"\\u0072equest_id":"esc-rid-b",'
+        '"capability":"buyer_request.match","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    assert_true(_decode_error_message(rid_conflict).find("duplicate") >= 0)
+    var rid_conflict_reversed = (
+        '{"version":1,"\\u0072equest_id":"esc-rid-d",'
+        '"request_id":"esc-rid-c",'
+        '"capability":"buyer_request.interpret","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    assert_true(
+        _decode_error_message(rid_conflict_reversed).find("duplicate") >= 0
+    )
+
+    # Escaped `trace_id`, equal and conflicting, both orders.
+    var tid_equal = (
+        '{"version":1,"request_id":"esc-tid-eq","trace_id":"esc-trace",'
+        '"\\u0074race_id":"esc-trace",'
+        '"capability":"farm_update.interpret","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    assert_true(_decode_error_message(tid_equal).find("duplicate") >= 0)
+    var tid_conflict_reversed = (
+        '{"version":1,"request_id":"esc-tid-b","\\u0074race_id":"esc-trace-b",'
+        '"trace_id":"esc-trace-a",'
+        '"capability":"buyer_request.match","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    assert_true(
+        _decode_error_message(tid_conflict_reversed).find("duplicate") >= 0
+    )
+
+    # Escaped `version` and `input`, both orders.
+    var version_dup = (
+        '{"version":1,"\\u0076ersion":1,"request_id":"esc-ver",'
+        '"capability":"farm_update.interpret","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    assert_true(_decode_error_message(version_dup).find("duplicate") >= 0)
+    var input_dup = (
+        '{"version":1,"request_id":"esc-input",'
+        '"capability":"buyer_request.match","context":{' + v2_ctx + '},'
+        '"input":{},"\\u0069nput":{}}'
+    )
+    assert_true(_decode_error_message(input_dup).find("duplicate") >= 0)
+
+    # Negative control: a single correctly escaped key is not a false duplicate
+    # and still decodes through the same admission path.
+    var escaped_single = (
+        '{"version":1,"\\u0072equest_id":"esc-single-ok",'
+        '"capability":"farm_update.interpret","context":{' + v2_ctx + '},'
+        '"input":{}}'
+    )
+    var decoded = decode_request(escaped_single)
+    assert_equal(decoded.request_id, "esc-single-ok")
+    assert_true(decoded.operation_context)

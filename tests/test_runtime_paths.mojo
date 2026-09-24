@@ -782,3 +782,66 @@ def test_new_operation_configuration_matrix() raises:
     assert_true(not operation_enabled(config, "farm_update.interpret"))
     assert_true(not operation_enabled(config, "buyer_request.interpret"))
     assert_true(not operation_enabled(config, "buyer_request.match"))
+
+
+# H092 / ADR-0010 D21: internal timeout derivation, positivity and total-phase bounds.
+from hyf_runtime.budget import (
+    budget_stage_cap_ms,
+    derived_connect_read_cap_ms,
+    derived_output_block_cap_ms,
+    derived_stage_cap_ms,
+    request_budget_cap_ms,
+    request_budget_from_config,
+)
+
+
+def test_h092_request_budget_derivation_table() raises:
+    # min(positive deadline, configured timeout); the configured cap governs
+    # when the caller supplies no (or a non-positive) deadline.
+    assert_equal(request_budget_cap_ms(2500, 15000), 2500)
+    assert_equal(request_budget_cap_ms(20000, 15000), 15000)
+    assert_equal(request_budget_cap_ms(15000, 15000), 15000)
+    assert_equal(request_budget_cap_ms(1, 15000), 1)
+    assert_equal(request_budget_cap_ms(0, 15000), 15000)
+    assert_equal(request_budget_cap_ms(-5, 15000), 15000)
+    # A non-positive configured timeout is invalid configuration, not a
+    # silently zero/unbounded budget.
+    with assert_raises():
+        _ = request_budget_cap_ms(2500, 0)
+    with assert_raises():
+        _ = request_budget_cap_ms(2500, -1)
+    assert_true(request_budget_cap_ms(2500, 15000) > 0)
+
+
+def test_h092_stage_cap_derivations_are_bounded_and_inclusive() raises:
+    # connect/read and output caps are min(1000, remaining), inclusive at cap.
+    assert_equal(derived_connect_read_cap_ms(999), 999)
+    assert_equal(derived_connect_read_cap_ms(1000), 1000)
+    assert_equal(derived_connect_read_cap_ms(1001), 1000)
+    assert_equal(derived_output_block_cap_ms(999), 999)
+    assert_equal(derived_output_block_cap_ms(1000), 1000)
+    assert_equal(derived_output_block_cap_ms(1001), 1000)
+    # Zero/negative remaining budget collapses to zero, never negative and
+    # never an extension of the deadline.
+    assert_equal(derived_connect_read_cap_ms(0), 0)
+    assert_equal(derived_output_block_cap_ms(0), 0)
+    assert_equal(derived_connect_read_cap_ms(-10), 0)
+    assert_equal(derived_output_block_cap_ms(-10), 0)
+    assert_equal(derived_stage_cap_ms(1000, -1), 0)
+
+
+def test_h092_budget_stage_cap_respects_absolute_deadline() raises:
+    var value = request_budget_from_config(500, 15000, 0)
+    assert_equal(value.cap_ms, 500)
+    assert_equal(budget_remaining_ms(value, 0), 500)
+    assert_equal(budget_stage_cap_ms(value, 0, 1000), 500)
+    assert_equal(budget_stage_cap_ms(value, 200_000_000, 1000), 300)
+    assert_equal(budget_stage_cap_ms(value, 499_000_000, 1000), 1)
+    assert_equal(budget_stage_cap_ms(value, 500_000_000, 1000), 0)
+    assert_equal(budget_stage_cap_ms(value, 900_000_000, 1000), 0)
+    # The configured timeout governs when it is smaller than the deadline, and
+    # the same object never resets across staged clock advancement.
+    var configured = request_budget_from_config(20000, 1500, 0)
+    assert_equal(configured.cap_ms, 1500)
+    assert_equal(budget_stage_cap_ms(configured, 1_000_000_000, 1000), 500)
+    assert_equal(budget_stage_cap_ms(configured, 1_500_000_000, 1000), 0)

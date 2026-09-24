@@ -25,6 +25,9 @@
     {"id": "present_null_optional_scalar", "path": "context.timezone=null", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "schema type string; parser rejects present null"},
     {"id": "missing_selector", "path": "context.versions absent", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "operation-context parse requires versions"},
     {"id": "unknown_selector", "path": "context.versions.schema is not hyf_ops_v2", "expect": "reject", "wire": "invalid_request", "owner": "C004", "enforced_by": "selector detection falls back to the legacy parser, which rejects versions"},
+    {"id": "taxonomy_catalogue_id_duplicate", "path": "input.references.taxonomy.products[].catalogue_id unique", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "normalization_unit_duplicate", "path": "input.references.normalization.units[].unit unique", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "C004 labelled semantic script; C023 typed consistency"},
+    {"id": "coverage_count_disagreement", "path": "input.coverage evaluated/excluded counts disagree with actual inputs/results", "expect": "reject", "wire": "invalid_request", "owner": "C023", "enforced_by": "supplied_only coverage accounting; C023 typed consistency"},
     {"id": "deterministic_path_reports_model_non_use", "path": "context.versions.model present with deterministic execution", "expect": "accepted_no_call", "wire": "capability_unavailable (pre-activation)", "owner": "C042-C046", "enforced_by": "C004 unavailability guard issues zero provider calls"}
   ]
 }

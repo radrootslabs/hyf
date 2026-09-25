@@ -2509,3 +2509,163 @@ def test_c004_cr04_escaped_duplicate_matrix() raises:
     var decoded = decode_request(escaped_single)
     assert_equal(decoded.request_id, "esc-single-ok")
     assert_true(decoded.operation_context)
+
+
+def _c004_corr_envelope(fields: String) -> String:
+    return (
+        '{"version":1,'
+        + fields
+        + ',"capability":"farm_update.interpret","input":{}}'
+    )
+
+
+def test_c004_cr04_correlation_duplicate_matrix() raises:
+    # ADR-0029 D49 EV03 / ADR-0026 D46 CR04: the complete bounded
+    # context/request_id/trace_id equal/conflicting x both-member-order matrix,
+    # plain and escaped, through the real admission path, plus valid single-key
+    # controls that must still decode. The envelope is v2-targeting through the
+    # corrected capability, so the duplicate gate applies to every case.
+    var v2_ctx = (
+        '"evaluation_time":"2026-09-24T09:00:00-07:00",'
+        + _v2_versions_json()
+        + ',"actor_id":"farm-1","farm_id":"farm-1"'
+    )
+    var legacy_ctx = '{"consumer":"cli"}'
+    var v2_obj = "{" + v2_ctx + "}"
+
+    var duplicates = List[String]()
+    # request_id: equal/conflicting, plain and escaped, both orders.
+    duplicates.append(
+        _c004_corr_envelope('"request_id":"rid-a","request_id":"rid-a"')
+    )
+    duplicates.append(
+        _c004_corr_envelope('"request_id":"rid-a","request_id":"rid-b"')
+    )
+    duplicates.append(
+        _c004_corr_envelope('"request_id":"rid-c","\\u0072equest_id":"rid-c"')
+    )
+    duplicates.append(
+        _c004_corr_envelope('"\\u0072equest_id":"rid-d","request_id":"rid-d"')
+    )
+    duplicates.append(
+        _c004_corr_envelope('"request_id":"rid-e","\\u0072equest_id":"rid-f"')
+    )
+    duplicates.append(
+        _c004_corr_envelope('"\\u0072equest_id":"rid-g","request_id":"rid-h"')
+    )
+    # trace_id: equal/conflicting, plain and escaped, both orders.
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"tid-1","trace_id":"t-a","trace_id":"t-a"'
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"tid-2","trace_id":"t-a","trace_id":"t-b"'
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"tid-3","trace_id":"t-c","\\u0074race_id":"t-c"'
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"tid-4","\\u0074race_id":"t-d","trace_id":"t-d"'
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"tid-5","trace_id":"t-e","\\u0074race_id":"t-f"'
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"tid-6","\\u0074race_id":"t-g","trace_id":"t-h"'
+        )
+    )
+    # context: equal/conflicting, plain and escaped, both orders.
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-1","context":'
+            + legacy_ctx
+            + ',"context":'
+            + v2_obj
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-2","context":'
+            + v2_obj
+            + ',"context":'
+            + legacy_ctx
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-3","context":' + v2_obj + ',"context":' + v2_obj
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-4","context":'
+            + legacy_ctx
+            + ',"\\u0063ontext":'
+            + v2_obj
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-5","context":'
+            + v2_obj
+            + ',"\\u0063ontext":'
+            + legacy_ctx
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-6","context":'
+            + v2_obj
+            + ',"\\u0063ontext":'
+            + v2_obj
+        )
+    )
+
+    for line in duplicates:
+        var message = _decode_error_message(line)
+        assert_true(message.find("duplicate") >= 0, message)
+
+    # Valid single-key controls must decode through the same admission path.
+    var single_plain = decode_request(
+        _c004_corr_envelope('"request_id":"single-plain"')
+    )
+    assert_equal(single_plain.request_id, "single-plain")
+
+    var single_escaped_rid = decode_request(
+        _c004_corr_envelope('"\\u0072equest_id":"single-esc-rid"')
+    )
+    assert_equal(single_escaped_rid.request_id, "single-esc-rid")
+
+    var single_trace = decode_request(
+        _c004_corr_envelope('"request_id":"single-trace","trace_id":"t-single"')
+    )
+    assert_equal(single_trace.trace_id.value(), "t-single")
+
+    var single_escaped_trace = decode_request(
+        _c004_corr_envelope(
+            '"request_id":"single-esc-trace","\\u0074race_id":"t-esc"'
+        )
+    )
+    assert_equal(single_escaped_trace.trace_id.value(), "t-esc")
+
+    var single_context = decode_request(
+        _c004_corr_envelope('"request_id":"single-ctx","context":' + v2_obj)
+    )
+    assert_true(single_context.operation_context)
+
+    var single_escaped_context = decode_request(
+        _c004_corr_envelope(
+            '"request_id":"single-esc-ctx","\\u0063ontext":' + v2_obj
+        )
+    )
+    assert_true(single_escaped_context.operation_context)

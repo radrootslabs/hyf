@@ -2630,6 +2630,32 @@ def test_c004_cr04_correlation_duplicate_matrix() raises:
             + v2_obj
         )
     )
+    # context: escaped-first equal/conflicting (ADR-0030 D50 EC02 completes the
+    # missing escaped-context-first cells; the escaped key leads both orders).
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-7","\\u0063ontext":'
+            + v2_obj
+            + ',"context":'
+            + v2_obj
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-8","\\u0063ontext":'
+            + v2_obj
+            + ',"context":'
+            + legacy_ctx
+        )
+    )
+    duplicates.append(
+        _c004_corr_envelope(
+            '"request_id":"ctx-9","\\u0063ontext":'
+            + legacy_ctx
+            + ',"context":'
+            + v2_obj
+        )
+    )
 
     for line in duplicates:
         var message = _decode_error_message(line)

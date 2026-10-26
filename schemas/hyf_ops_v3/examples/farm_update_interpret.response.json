@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "request_id": "v3-farm_update_interpret",
+  "ok": true,
+  "output": {
+    "versions": {
+      "schema": "hyf_ops_v3",
+      "taxonomy": "hyf_ops_v3.taxonomy.v1",
+      "normalization": "hyf_ops_v3.normalization.v1",
+      "review_policy": "hyf_ops_v3.review_policy.v1",
+      "ranking_policy": "hyf_ops_v3.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v3.question_bundle.v1",
+      "model": "jev-1.14.0"
+    },
+    "provenance": {
+      "source": {
+        "source_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "revision": "1"
+      },
+      "clarification": null,
+      "prior_records": []
+    },
+    "review": {
+      "required": true,
+      "clarifications": [
+        {
+          "field": "proposal",
+          "reason": "Host review and shared SDK revalidation are required before use."
+        }
+      ]
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": null,
+      "degraded_reason": null
+    },
+    "claims": [
+      {
+        "claim_id": "claim-1",
+        "product": {
+          "phrase": "cabbage",
+          "catalogue_id": "cabbage",
+          "resolution": "resolved"
+        },
+        "status": "offered",
+        "quantity": {
+          "state": "known",
+          "quantity": {
+            "amount": "8",
+            "unit": "kg"
+          },
+          "qualifier": "exact"
+        },
+        "evidence": [
+          {
+            "kind": "span",
+            "source_id": "0000000000000000000000000000000000000000000000000000000000000003",
+            "revision": "1",
+            "start": 7,
+            "end": 19,
+            "method": "source_span"
+          }
+        ],
+        "review_required": true
+      }
+    ],
+    "proposed_changes": [
+      {
+        "target": {
+          "kind": "product",
+          "id": null
+        },
+        "operation": "addition",
+        "direction": "none",
+        "quantity": {
+          "state": "known",
+          "quantity": {
+            "amount": "8",
+            "unit": "kg"
+          },
+          "qualifier": "exact"
+        },
+        "expected_revision": null,
+        "evidence": [
+          {
+            "kind": "span",
+            "source_id": "0000000000000000000000000000000000000000000000000000000000000003",
+            "revision": "1",
+            "start": 7,
+            "end": 19,
+            "method": "source_span"
+          }
+        ]
+      }
+    ]
+  }
+}

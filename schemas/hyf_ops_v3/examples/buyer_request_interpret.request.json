@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "request_id": "v3-buyer_request_interpret",
+  "capability": "buyer_request.interpret",
+  "context": {
+    "evaluation_time": "1793016000",
+    "versions": {
+      "schema": "hyf_ops_v3",
+      "taxonomy": "hyf_ops_v3.taxonomy.v1",
+      "normalization": "hyf_ops_v3.normalization.v1",
+      "review_policy": "hyf_ops_v3.review_policy.v1",
+      "ranking_policy": "hyf_ops_v3.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v3.question_bundle.v1",
+      "model": "jev-1.14.0"
+    },
+    "actor": {
+      "participant": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "role": "buyer",
+      "organization": null,
+      "grant_id": null
+    },
+    "workspace_id": "0000000000000000000000000000000000000000000000000000000000000002"
+  },
+  "input": {
+    "source": {
+      "source_id": "0000000000000000000000000000000000000000000000000000000000000003",
+      "revision": "1",
+      "text": "I need 2 kg cabbage.",
+      "source_time": "1793012400",
+      "participant_id": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+    },
+    "references": {
+      "taxonomy": {
+        "version": "hyf_ops_v3.taxonomy.v1",
+        "provenance": "authored_public_synthetic",
+        "products": [
+          {
+            "catalogue_id": "cabbage",
+            "terms": [
+              "cabbage"
+            ]
+          }
+        ]
+      },
+      "normalization": {
+        "version": "hyf_ops_v3.normalization.v1",
+        "provenance": "public_shared_sdk",
+        "currency_registry": "radroots.currency_registry.v1"
+      }
+    }
+  }
+}

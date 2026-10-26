@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "revision": "hyf_ops_v3",
+  "selector": {
+    "field": "context.versions.schema",
+    "value": "hyf_ops_v3"
+  },
+  "envelope_version": 1,
+  "activation": {
+    "state": "pre_activation",
+    "guard_error_code": "capability_unavailable",
+    "owner": "C042-C046"
+  },
+  "operations": {
+    "farm_update.interpret": {
+      "request": "farm_update_interpret.request.schema.json",
+      "response": "farm_update_interpret.response.schema.json"
+    },
+    "buyer_request.interpret": {
+      "request": "buyer_request_interpret.request.schema.json",
+      "response": "buyer_request_interpret.response.schema.json"
+    },
+    "buyer_request.match": {
+      "request": "buyer_request_match.request.schema.json",
+      "response": "buyer_request_match.response.schema.json"
+    }
+  },
+  "retired_contracts": [
+    "hyf_ops_v2"
+  ],
+  "compatibility": "v2 remains a pre-activation historical parser/rejection characterization, never an active competing model/business engine.",
+  "retained_limits": {
+    "stdio_frame_utf8_bytes": 1048576,
+    "json_depth": 64,
+    "candidates": 64,
+    "suggestions": 8,
+    "provider_state_utf8_bytes": 4096,
+    "questions": 32,
+    "logical_provider_calls": 4,
+    "wire_attempts": 4,
+    "authority": "D21; remaining transport/deadline/retry/cleanup limits unchanged"
+  },
+  "shared_values": {
+    "owner": "radroots_domain",
+    "quantity": "Quantity { amount: canonical Decimal string, unit: g|kg|mL|L|each }; unknown distinct; each integral.",
+    "money": "Money { currency, minor: canonical unsigned integer string, exponent }; exact registry pair, no fees/FX/price-basis inference.",
+    "time": "radroots_domain::UnixSeconds canonical unsigned ASCII string 0..253402300799; no floating, RFC3339 wire alias or inferred timezone. Relative language interpretation remains C023/SDK-owned.",
+    "currency_data_sha256": "60d8282b2d7ddc27929b097d4de9e76a900a64f1de4a5aa7a4cb3308b55b82d0"
+  },
+  "semantic_owners": {
+    "source_scope_revision_evidence": "C009/C023/C063",
+    "shared_feasibility_economics_conservation": "oss/lib; projected by C063; no HYF allocator",
+    "source_input_claims_and_clarification": "C030/C038",
+    "suggestion_composition": "C041",
+    "real_native_authenticated_host": "C064"
+  },
+  "evaluation_projection": "C062 natural-language item/item-count oracle maps to SDK unit each, never a second unit identifier."
+}

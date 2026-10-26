@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "request_id": "v3-buyer_request_match",
+  "ok": true,
+  "output": {
+    "versions": {
+      "schema": "hyf_ops_v3",
+      "taxonomy": "hyf_ops_v3.taxonomy.v1",
+      "normalization": "hyf_ops_v3.normalization.v1",
+      "review_policy": "hyf_ops_v3.review_policy.v1",
+      "ranking_policy": "hyf_ops_v3.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v3.question_bundle.v1",
+      "model": "jev-1.14.0"
+    },
+    "provenance": {
+      "need": {
+        "need_id": "0000000000000000000000000000000000000000000000000000000000000007",
+        "revision": "1"
+      },
+      "candidates": [
+        {
+          "candidate_id": "0000000000000000000000000000000000000000000000000000000000000004",
+          "revision": "1"
+        }
+      ]
+    },
+    "suggestions": [
+      {
+        "candidate_id": "0000000000000000000000000000000000000000000000000000000000000004",
+        "preference": 0.625,
+        "checks": [
+          {
+            "kind": "feasibility",
+            "result": "unknown",
+            "reason": "Host projection remains conditional.",
+            "evidence": []
+          }
+        ],
+        "unresolved": [
+          "SDK revalidation required"
+        ],
+        "evidence": [],
+        "commitment": "none"
+      }
+    ],
+    "limitations": {
+      "scope": "supplied_only",
+      "truncated": false,
+      "unsupported": [
+        "market completeness",
+        "stock allocation"
+      ],
+      "commitment": "none"
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": null,
+      "degraded_reason": null
+    }
+  }
+}

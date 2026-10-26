@@ -1,0 +1,23 @@
+Currency registry v1 data attribution
+
+Copyright 2023-2026 rust_iso4217 contributors
+Apache License 2.0; see currency_registry_v1.license.
+
+Source: https://github.com/rust-iso/rust_iso4217
+Revision: ce6b74546b3645ce11866acc93117128d2f7b1e0
+Original material: src/lib.rs (SHA256 7401727ea4da05fcbf0d1d679705c0245989e83dbc697e831066f992875e183d).
+
+Radroots changes: extract only current currency/fund alphabetic code and
+minor-unit exponent facts in range 0-4; sort them; omit historic entries,
+no-minor-unit entries, names, countries, numeric identifiers and all upstream
+Rust/generator implementation. The Rust API is independently implemented.
+This derived data retains the upstream Apache-2.0 license and attribution.
+
+The publisher identifies SIX ISO 4217 lists as its currency source and Datahub
+as its country-relationship source. No country relationships are included here.
+All 165 selected pairs match the separately acquired official SIX List One
+snapshot published 2026-09-17. The XML and ISO standard text are not distributed.
+No cash/display rounding, exchange rate, payment rule or currency conversion
+is implied. The registry is fixed; replacement requires explicit versioned
+contract and provenance review. Derived artifacts must include this material
+and its license/notice before adopting it.

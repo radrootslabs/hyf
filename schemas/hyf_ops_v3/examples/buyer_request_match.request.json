@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "request_id": "v3-buyer_request_match",
+  "capability": "buyer_request.match",
+  "context": {
+    "evaluation_time": "1793016000",
+    "versions": {
+      "schema": "hyf_ops_v3",
+      "taxonomy": "hyf_ops_v3.taxonomy.v1",
+      "normalization": "hyf_ops_v3.normalization.v1",
+      "review_policy": "hyf_ops_v3.review_policy.v1",
+      "ranking_policy": "hyf_ops_v3.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v3.question_bundle.v1",
+      "model": "jev-1.14.0"
+    },
+    "actor": {
+      "participant": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "role": "buyer",
+      "organization": null,
+      "grant_id": null
+    },
+    "workspace_id": "0000000000000000000000000000000000000000000000000000000000000002"
+  },
+  "input": {
+    "need": {
+      "need_id": "0000000000000000000000000000000000000000000000000000000000000007",
+      "revision": "1",
+      "participant_id": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "demand_lines": [
+        {
+          "line_id": "line-1",
+          "product": {
+            "phrase": "cabbage",
+            "catalogue_id": "cabbage",
+            "resolution": "resolved"
+          },
+          "quantity": {
+            "state": "known",
+            "quantity": {
+              "amount": "2",
+              "unit": "kg"
+            },
+            "qualifier": "exact"
+          },
+          "conditions": [],
+          "evidence": [
+            {
+              "kind": "record_field",
+              "source_id": "0000000000000000000000000000000000000000000000000000000000000007",
+              "revision": "1",
+              "record_id": "0000000000000000000000000000000000000000000000000000000000000007",
+              "field": "demand_lines",
+              "method": "trusted_record"
+            }
+          ],
+          "review_required": true
+        }
+      ],
+      "partial_fulfillment": false
+    },
+    "candidates": [
+      {
+        "candidate_id": "0000000000000000000000000000000000000000000000000000000000000004",
+        "listing_id": "0000000000000000000000000000000000000000000000000000000000000005",
+        "revision": "1",
+        "participant_id": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "product": {
+          "phrase": "cabbage",
+          "catalogue_id": "cabbage",
+          "resolution": "resolved"
+        },
+        "declared_quantity": {
+          "state": "known",
+          "quantity": {
+            "amount": "8",
+            "unit": "kg"
+          },
+          "qualifier": "exact"
+        },
+        "price": {
+          "currency": "CAD",
+          "minor": "1250",
+          "exponent": 2
+        },
+        "sdk_projection": {
+          "projection_id": "0000000000000000000000000000000000000000000000000000000000000006",
+          "source_revision": "1",
+          "feasibility": "unknown",
+          "checks": [],
+          "revalidate_before_use": true
+        }
+      }
+    ],
+    "coverage": {
+      "scope": "supplied_only",
+      "truncated": false,
+      "evaluated": [
+        "0000000000000000000000000000000000000000000000000000000000000004"
+      ],
+      "excluded": []
+    },
+    "references": {
+      "taxonomy": {
+        "version": "hyf_ops_v3.taxonomy.v1",
+        "provenance": "authored_public_synthetic",
+        "products": [
+          {
+            "catalogue_id": "cabbage",
+            "terms": [
+              "cabbage"
+            ]
+          }
+        ]
+      },
+      "normalization": {
+        "version": "hyf_ops_v3.normalization.v1",
+        "provenance": "public_shared_sdk",
+        "currency_registry": "radroots.currency_registry.v1"
+      }
+    }
+  }
+}

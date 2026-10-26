@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "request_id": "v3-farm_update_interpret",
+  "ok": false,
+  "error": {
+    "code": "capability_unavailable",
+    "message": "Operation not activated."
+  }
+}

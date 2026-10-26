@@ -1,0 +1,250 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "$ref": "common.schema.json#/$defs/versions"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "common.schema.json#/$defs/identity"
+            },
+            "clarification": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/identity"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "source",
+            "clarification"
+          ],
+          "additionalProperties": false
+        },
+        "review": {
+          "$ref": "common.schema.json#/$defs/review"
+        },
+        "execution": {
+          "$ref": "common.schema.json#/$defs/execution"
+        },
+        "demand_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "line_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "product": {
+                "$ref": "common.schema.json#/$defs/product_ref"
+              },
+              "quantity": {
+                "$ref": "common.schema.json#/$defs/reported_quantity"
+              },
+              "conditions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "fulfillment",
+                        "window",
+                        "grade",
+                        "price",
+                        "attribute",
+                        "substitution"
+                      ]
+                    },
+                    "strength": {
+                      "type": "string",
+                      "enum": [
+                        "mandatory",
+                        "preferred",
+                        "excluded",
+                        "permitted"
+                      ]
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "\\S"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "common.schema.json#/$defs/evidence_ref"
+                      },
+                      "maxItems": 128
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "strength",
+                    "value",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 128
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/evidence_ref"
+                },
+                "maxItems": 128
+              },
+              "review_required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "line_id",
+              "product",
+              "quantity",
+              "conditions",
+              "evidence",
+              "review_required"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 128
+        }
+      },
+      "required": [
+        "versions",
+        "provenance",
+        "review",
+        "execution",
+        "demand_lines"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unsupported_capability",
+            "capability_disabled",
+            "capability_unavailable",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "ok"
+  ],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "not": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "ok": {
+          "const": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "output"
+            ]
+          },
+          {
+            "required": [
+              "meta"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v3/buyer_request_interpret.response.schema.json",
+  "$comment": "D57 hyf_ops_v3 pre-activation contract. No business write or trusted context can be minted by source/model text. Full semantic input-use and SDK revalidation remain required."
+}

@@ -1,0 +1,386 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "$ref": "common.schema.json#/$defs/versions"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "common.schema.json#/$defs/identity"
+            },
+            "clarification": {
+              "anyOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/identity"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "prior_records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "record_id": {
+                    "type": "string",
+                    "minLength": 64,
+                    "maxLength": 64,
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                },
+                "required": [
+                  "record_id",
+                  "revision"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 128
+            }
+          },
+          "required": [
+            "source",
+            "clarification",
+            "prior_records"
+          ],
+          "additionalProperties": false
+        },
+        "review": {
+          "$ref": "common.schema.json#/$defs/review"
+        },
+        "execution": {
+          "$ref": "common.schema.json#/$defs/execution"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "claim_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "product": {
+                "$ref": "common.schema.json#/$defs/product_ref"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "offered",
+                  "forecast",
+                  "unavailable",
+                  "correction",
+                  "unclear"
+                ]
+              },
+              "quantity": {
+                "$ref": "common.schema.json#/$defs/reported_quantity"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/evidence_ref"
+                },
+                "maxItems": 128
+              },
+              "review_required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "claim_id",
+              "product",
+              "status",
+              "evidence",
+              "review_required"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 128
+        },
+        "proposed_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "listing",
+                      "product"
+                    ]
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 64,
+                        "maxLength": 64,
+                        "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "addition",
+                  "remaining",
+                  "replacement",
+                  "withdrawal",
+                  "correction",
+                  "unresolved"
+                ]
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease",
+                  "none"
+                ]
+              },
+              "quantity": {
+                "$ref": "common.schema.json#/$defs/reported_quantity"
+              },
+              "expected_revision": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/evidence_ref"
+                },
+                "maxItems": 128
+              }
+            },
+            "required": [
+              "target",
+              "operation",
+              "direction",
+              "quantity",
+              "expected_revision",
+              "evidence"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "target": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "target"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "expected_revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "expected_revision": {
+                      "type": "null"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "operation": {
+                      "const": "correction"
+                    }
+                  },
+                  "required": [
+                    "operation"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "increase",
+                        "decrease"
+                      ]
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "direction": {
+                      "const": "none"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maxItems": 128
+        }
+      },
+      "required": [
+        "versions",
+        "provenance",
+        "review",
+        "execution",
+        "claims",
+        "proposed_changes"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unsupported_capability",
+            "capability_disabled",
+            "capability_unavailable",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "ok"
+  ],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "not": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "ok": {
+          "const": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "output"
+            ]
+          },
+          {
+            "required": [
+              "meta"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v3/farm_update_interpret.response.schema.json",
+  "$comment": "D57 hyf_ops_v3 pre-activation contract. No business write or trusted context can be minted by source/model text. Full semantic input-use and SDK revalidation remain required."
+}

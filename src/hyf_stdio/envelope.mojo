@@ -6,9 +6,10 @@ from json.deserialize import Deserializable, get_string
 from hyf_core.metadata import hyf_protocol_version
 from hyf_core.operation_context import (
     OperationContext,
-    context_selects_v2_any,
+    context_selects_versioned_any,
     is_corrected_operation,
     operation_context_selects_v2,
+    operation_context_selects_v3,
     parse_operation_context,
 )
 from hyf_core.request_context import (
@@ -79,7 +80,7 @@ def envelope_targets_corrected_v2(json: Value) raises -> Bool:
             if is_corrected_operation(String(item[1].string_value())):
                 return True
         elif item[0] == "context":
-            if context_selects_v2_any(item[1]):
+            if context_selects_versioned_any(item[1]):
                 return True
     return False
 
@@ -167,8 +168,9 @@ struct WireRequest(Copyable, Deserializable, Movable):
 
         var context = default_request_context()
         var operation_context: Optional[OperationContext] = None
-        if is_corrected_operation(capability) and operation_context_selects_v2(
-            context_json
+        if is_corrected_operation(capability) and (
+            operation_context_selects_v2(context_json)
+            or operation_context_selects_v3(context_json)
         ):
             operation_context = parse_operation_context(
                 context_json.clone(), capability

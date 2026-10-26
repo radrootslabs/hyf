@@ -1,0 +1,3981 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v3/common.schema.json",
+  "$comment": "D57: advisory boundary only. ActorRef/identifiers are descriptors, not authentication. Quantity/Money are exact public SDK wire mirrors; SDK owns authoritative feasibility/arithmetic/conservation. Span offsets are UTF-8 bytes; semantic use/revision validation is mandatory.",
+  "$defs": {
+    "versions": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "hyf_ops_v3"
+        },
+        "taxonomy": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "normalization": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "review_policy": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "ranking_policy": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "question_bundle": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "model": {
+          "const": "jev-1.14.0"
+        }
+      },
+      "required": [
+        "schema",
+        "taxonomy",
+        "normalization",
+        "review_policy",
+        "ranking_policy",
+        "question_bundle",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "actor": {
+      "type": "object",
+      "properties": {
+        "participant": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "seller",
+            "buyer",
+            "coordinator"
+          ]
+        },
+        "organization": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grant_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "participant",
+        "role",
+        "organization",
+        "grant_id"
+      ],
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "consumer": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "execution_mode_preference": {
+          "type": "string",
+          "enum": [
+            "deterministic",
+            "assisted"
+          ]
+        },
+        "deadline_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "evaluation_time": {
+          "$ref": "#/$defs/unix_seconds"
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "versions": {
+          "$ref": "#/$defs/versions"
+        },
+        "return_provenance": {
+          "type": "boolean"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "evaluation_time",
+        "versions",
+        "actor",
+        "workspace_id"
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "maxLength": 1048576
+        },
+        "source_time": {
+          "$ref": "#/$defs/unix_seconds"
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "participant_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "ingestion_time": {
+          "$ref": "#/$defs/unix_seconds"
+        }
+      },
+      "required": [
+        "source_id",
+        "revision",
+        "text",
+        "source_time",
+        "participant_id"
+      ],
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "source_id",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "decimal": {
+      "type": "string",
+      "maxLength": 19,
+      "pattern": "^(?:0|[1-9][0-9]{0,11}|0\\.[0-9]{0,5}[1-9]|(?=[0-9.]{1,13}(?![\\s\\S]))[1-9][0-9]{0,10}\\.[0-9]{0,5}[1-9])(?![\\s\\S])"
+    },
+    "quantity": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/decimal"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "g",
+            "kg",
+            "mL",
+            "L",
+            "each"
+          ]
+        }
+      },
+      "required": [
+        "amount",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "unit": {
+                "const": "each"
+              }
+            },
+            "required": [
+              "unit"
+            ]
+          },
+          "then": {
+            "properties": {
+              "amount": {
+                "pattern": "^(?:0|[1-9][0-9]{0,11})(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "reported_quantity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "quantity": {
+              "$ref": "#/$defs/quantity"
+            },
+            "qualifier": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "approximate"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "quantity",
+            "qualifier"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "unknown"
+            },
+            "quantity": {
+              "type": "null"
+            },
+            "qualifier": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "approximate"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "quantity",
+            "qualifier"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "money": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "type": "string",
+          "enum": [
+            "AED",
+            "AFN",
+            "ALL",
+            "AMD",
+            "AOA",
+            "ARS",
+            "AUD",
+            "AWG",
+            "AZN",
+            "BAM",
+            "BBD",
+            "BDT",
+            "BHD",
+            "BIF",
+            "BMD",
+            "BND",
+            "BOB",
+            "BOV",
+            "BRL",
+            "BSD",
+            "BTN",
+            "BWP",
+            "BYN",
+            "BZD",
+            "CAD",
+            "CDF",
+            "CHE",
+            "CHF",
+            "CHW",
+            "CLF",
+            "CLP",
+            "CNY",
+            "COP",
+            "COU",
+            "CRC",
+            "CUP",
+            "CVE",
+            "CZK",
+            "DJF",
+            "DKK",
+            "DOP",
+            "DZD",
+            "EGP",
+            "ERN",
+            "ETB",
+            "EUR",
+            "FJD",
+            "FKP",
+            "GBP",
+            "GEL",
+            "GHS",
+            "GIP",
+            "GMD",
+            "GNF",
+            "GTQ",
+            "GYD",
+            "HKD",
+            "HNL",
+            "HTG",
+            "HUF",
+            "IDR",
+            "ILS",
+            "INR",
+            "IQD",
+            "IRR",
+            "ISK",
+            "JMD",
+            "JOD",
+            "JPY",
+            "KES",
+            "KGS",
+            "KHR",
+            "KMF",
+            "KPW",
+            "KRW",
+            "KWD",
+            "KYD",
+            "KZT",
+            "LAK",
+            "LBP",
+            "LKR",
+            "LRD",
+            "LSL",
+            "LYD",
+            "MAD",
+            "MDL",
+            "MGA",
+            "MKD",
+            "MMK",
+            "MNT",
+            "MOP",
+            "MRU",
+            "MUR",
+            "MVR",
+            "MWK",
+            "MXN",
+            "MXV",
+            "MYR",
+            "MZN",
+            "NAD",
+            "NGN",
+            "NIO",
+            "NOK",
+            "NPR",
+            "NZD",
+            "OMR",
+            "PAB",
+            "PEN",
+            "PGK",
+            "PHP",
+            "PKR",
+            "PLN",
+            "PYG",
+            "QAR",
+            "RON",
+            "RSD",
+            "RUB",
+            "RWF",
+            "SAR",
+            "SBD",
+            "SCR",
+            "SDG",
+            "SEK",
+            "SGD",
+            "SHP",
+            "SLE",
+            "SOS",
+            "SRD",
+            "SSP",
+            "STN",
+            "SVC",
+            "SYP",
+            "SZL",
+            "THB",
+            "TJS",
+            "TMT",
+            "TND",
+            "TOP",
+            "TRY",
+            "TTD",
+            "TWD",
+            "TZS",
+            "UAH",
+            "UGX",
+            "USD",
+            "USN",
+            "UYI",
+            "UYU",
+            "UYW",
+            "UZS",
+            "VED",
+            "VES",
+            "VND",
+            "VUV",
+            "WST",
+            "XAD",
+            "XAF",
+            "XCD",
+            "XCG",
+            "XOF",
+            "XPF",
+            "YER",
+            "ZAR",
+            "ZMW",
+            "ZWG"
+          ]
+        },
+        "minor": {
+          "type": "string",
+          "maxLength": 15,
+          "pattern": "^(?:0|[1-9][0-9]{0,14})(?![\\s\\S])"
+        },
+        "exponent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "currency",
+        "minor",
+        "exponent"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AED"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AFN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ALL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AMD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AOA"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ARS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AUD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AWG"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "AZN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BAM"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BBD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BDT"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BHD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BIF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BMD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BND"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BOB"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BOV"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BRL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BSD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BTN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BWP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BYN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "BZD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CAD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CDF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CHE"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CHF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CHW"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CLF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 4
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CLP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CNY"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "COP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "COU"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CRC"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CUP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CVE"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "CZK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "DJF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "DKK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "DOP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "DZD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "EGP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ERN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ETB"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "EUR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "FJD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "FKP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GBP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GEL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GHS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GIP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GMD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GNF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GTQ"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "GYD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "HKD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "HNL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "HTG"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "HUF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "IDR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ILS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "INR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "IQD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "IRR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ISK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "JMD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "JOD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "JPY"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KES"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KGS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KHR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KMF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KPW"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KRW"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KWD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KYD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "KZT"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "LAK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "LBP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "LKR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "LRD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "LSL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "LYD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MAD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MDL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MGA"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MKD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MMK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MNT"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MOP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MRU"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MUR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MVR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MWK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MXN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MXV"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MYR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "MZN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "NAD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "NGN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "NIO"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "NOK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "NPR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "NZD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "OMR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PAB"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PEN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PGK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PHP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PKR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PLN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "PYG"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "QAR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "RON"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "RSD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "RUB"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "RWF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SAR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SBD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SCR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SDG"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SEK"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SGD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SHP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SLE"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SOS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SRD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SSP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "STN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SVC"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SYP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "SZL"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "THB"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TJS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TMT"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TND"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TOP"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TRY"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TTD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TWD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "TZS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "UAH"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "UGX"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "USD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "USN"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "UYI"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "UYU"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "UYW"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 4
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "UZS"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "VED"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "VES"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "VND"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "VUV"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "WST"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "XAD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "XAF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "XCD"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "XCG"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "XOF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "XPF"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "YER"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ZAR"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ZMW"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "currency": {
+                "const": "ZWG"
+              }
+            },
+            "required": [
+              "currency"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exponent": {
+                "const": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "unix_seconds": {
+      "type": "string",
+      "maxLength": 12,
+      "pattern": "^(?:0|[1-9][0-9]{0,10}|1[0-9]{11}|2[0-4][0-9]{10}|25[0-2][0-9]{9}|253[0-3][0-9]{8}|25340[0-1][0-9]{6}|253402[0-2][0-9]{5}|253402300[0-6][0-9]{2}|2534023007[0-8][0-9]{1}|25340230079[0-8][0-9]{0}|253402300799)(?![\\s\\S])"
+    },
+    "evidence_span": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "span"
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "revision",
+        "start",
+        "end",
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "record_field_evidence": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "record_field"
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "method": {
+          "const": "trusted_record"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "revision",
+        "record_id",
+        "field",
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/evidence_span"
+        },
+        {
+          "$ref": "#/$defs/record_field_evidence"
+        }
+      ]
+    },
+    "product_ref": {
+      "type": "object",
+      "properties": {
+        "phrase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "catalogue_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "resolved",
+            "unresolved"
+          ]
+        }
+      },
+      "required": [
+        "phrase",
+        "catalogue_id",
+        "resolution"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "resolution": {
+                "const": "resolved"
+              }
+            },
+            "required": [
+              "resolution"
+            ]
+          },
+          "then": {
+            "properties": {
+              "catalogue_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "catalogue_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "degraded",
+            "failed"
+          ]
+        },
+        "provider_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "model": {
+          "anyOf": [
+            {
+              "const": "jev-1.14.0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question_bundle": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "degraded_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "provider_calls",
+        "model",
+        "question_bundle",
+        "degraded_reason"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "provider_calls": {
+                "const": 0
+              }
+            },
+            "required": [
+              "provider_calls"
+            ]
+          },
+          "then": {
+            "properties": {
+              "model": {
+                "type": "null"
+              },
+              "question_bundle": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "model": {
+                "const": "jev-1.14.0"
+              },
+              "question_bundle": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "degraded"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "degraded_reason": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "degraded_reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "field",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "required",
+        "clarifications"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "revision": "hyf_ops_v3",
+  "meaning": "Schema/owner bindings only; no schema row is promoted to executed runtime enforcement. Except the strict context/guard, runtime implementation remains with the named dependent owners.",
+  "bindings": [
+    {
+      "path": "context",
+      "owners": [
+        "C004",
+        "C009"
+      ],
+      "domain": "hyf_core.operation_context.OperationContext; pre-activation parse only"
+    },
+    {
+      "path": "context.actor",
+      "owners": [
+        "C004",
+        "C063"
+      ],
+      "domain": "radroots_domain::ActorRef descriptor; never authenticated CommandContext"
+    },
+    {
+      "path": "context.workspace_id",
+      "owners": [
+        "C004",
+        "C063"
+      ],
+      "domain": "radroots_domain::WorkspaceId descriptor"
+    },
+    {
+      "path": "context.evaluation_time",
+      "owners": [
+        "C004",
+        "C023",
+        "C063"
+      ],
+      "domain": "radroots_domain::UnixSeconds"
+    },
+    {
+      "path": "input.source",
+      "owners": [
+        "C009",
+        "C023",
+        "C063"
+      ],
+      "domain": "Immutable source/revision/participant projection; shared UnixSeconds"
+    },
+    {
+      "path": "input.references",
+      "owners": [
+        "C009",
+        "C023",
+        "C063"
+      ],
+      "domain": "Versioned taxonomy and shared normalization references"
+    },
+    {
+      "path": "input.clarification",
+      "owners": [
+        "C009",
+        "C023"
+      ],
+      "domain": "Clarification source identity distinct from expected target revision"
+    },
+    {
+      "path": "input.prior_records",
+      "owners": [
+        "C009",
+        "C023",
+        "C063"
+      ],
+      "domain": "Authorized record descriptors with participant/workspace scope"
+    },
+    {
+      "path": "input.need",
+      "owners": [
+        "C009",
+        "C023",
+        "C063"
+      ],
+      "domain": "Read-only authorized need projection; canonical shared quantity"
+    },
+    {
+      "path": "input.candidates",
+      "owners": [
+        "C009",
+        "C023",
+        "C063"
+      ],
+      "domain": "Authorized candidate/SDK projection; no private pool or HYF allocator"
+    },
+    {
+      "path": "input.coverage",
+      "owners": [
+        "C009",
+        "C023",
+        "C041"
+      ],
+      "domain": "Actual supplied/evaluated coverage, not market completeness"
+    },
+    {
+      "path": "output.versions",
+      "owners": [
+        "C004",
+        "C009"
+      ],
+      "domain": "Exact requested axes; no fabricated model-use claim"
+    },
+    {
+      "path": "output.provenance",
+      "owners": [
+        "C009",
+        "C023",
+        "C030",
+        "C038",
+        "C041"
+      ],
+      "domain": "Independent actual-use source/revision witness"
+    },
+    {
+      "path": "output.claims",
+      "owners": [
+        "C009",
+        "C030"
+      ],
+      "domain": "Source-backed reviewable seller claims"
+    },
+    {
+      "path": "output.proposed_changes",
+      "owners": [
+        "C009",
+        "C023",
+        "C030"
+      ],
+      "domain": "Reviewable proposals with explicit correction direction; no write"
+    },
+    {
+      "path": "output.demand_lines",
+      "owners": [
+        "C009",
+        "C038"
+      ],
+      "domain": "Source-backed reviewable buyer need lines"
+    },
+    {
+      "path": "output.review",
+      "owners": [
+        "C009",
+        "C030",
+        "C038"
+      ],
+      "domain": "Immutable clarification and explicit uncertainty"
+    },
+    {
+      "path": "output.suggestions",
+      "owners": [
+        "C009",
+        "C041"
+      ],
+      "domain": "Advisory candidate preferences; shared SDK owns firm checks"
+    },
+    {
+      "path": "output.limitations",
+      "owners": [
+        "C009",
+        "C041"
+      ],
+      "domain": "Supplied-record coverage and no commitment"
+    },
+    {
+      "path": "output.execution",
+      "owners": [
+        "C009",
+        "C043"
+      ],
+      "domain": "Actual model/call/bundle use, degradation and no invented provider result"
+    },
+    {
+      "path": "meta",
+      "owners": [
+        "C004",
+        "C009"
+      ],
+      "domain": "Closed optional diagnostic metadata"
+    },
+    {
+      "path": "error",
+      "owners": [
+        "C004"
+      ],
+      "domain": "Closed sanitized wire error"
+    }
+  ],
+  "definitions": {
+    "versions": {
+      "owners": [
+        "C004",
+        "C009"
+      ],
+      "domain": "Version axes"
+    },
+    "actor": {
+      "owners": [
+        "C004",
+        "C063"
+      ],
+      "domain": "radroots_domain::ActorRef descriptor"
+    },
+    "context": {
+      "owners": [
+        "C004",
+        "C009"
+      ],
+      "domain": "hyf_core.operation_context.OperationContext"
+    },
+    "source": {
+      "owners": [
+        "C009",
+        "C023",
+        "C063"
+      ],
+      "domain": "Immutable source projection"
+    },
+    "identity": {
+      "owners": [
+        "C009",
+        "C023"
+      ],
+      "domain": "Immutable source/revision pair"
+    },
+    "decimal": {
+      "owners": [
+        "C018",
+        "C063"
+      ],
+      "domain": "radroots_domain::Decimal"
+    },
+    "quantity": {
+      "owners": [
+        "C018",
+        "C019",
+        "C063"
+      ],
+      "domain": "radroots_domain::Quantity"
+    },
+    "reported_quantity": {
+      "owners": [
+        "C009",
+        "C018"
+      ],
+      "domain": "Known canonical quantity or explicit unknown, plus source qualifier"
+    },
+    "money": {
+      "owners": [
+        "C018",
+        "C019",
+        "C063"
+      ],
+      "domain": "radroots_domain::Money/MinorAmount/Currency"
+    },
+    "unix_seconds": {
+      "owners": [
+        "C004",
+        "C023",
+        "C063"
+      ],
+      "domain": "radroots_domain::UnixSeconds"
+    },
+    "evidence_span": {
+      "owners": [
+        "C009",
+        "C023"
+      ],
+      "domain": "Exact UTF-8 source/revision span"
+    },
+    "record_field_evidence": {
+      "owners": [
+        "C009",
+        "C023"
+      ],
+      "domain": "Actually consulted authorized record field"
+    },
+    "evidence_ref": {
+      "owners": [
+        "C009",
+        "C023"
+      ],
+      "domain": "Closed span/record-field union"
+    },
+    "product_ref": {
+      "owners": [
+        "C009",
+        "C023"
+      ],
+      "domain": "Resolved public product reference or explicit unresolved source phrase"
+    },
+    "execution": {
+      "owners": [
+        "C009",
+        "C043"
+      ],
+      "domain": "Actual provider execution metadata"
+    },
+    "review": {
+      "owners": [
+        "C009",
+        "C030",
+        "C038"
+      ],
+      "domain": "Explicit review and clarification output"
+    }
+  },
+  "envelope_only": [
+    "version",
+    "request_id",
+    "trace_id",
+    "capability",
+    "ok",
+    "input",
+    "output"
+  ]
+}

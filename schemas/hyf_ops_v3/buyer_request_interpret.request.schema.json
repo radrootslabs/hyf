@@ -1,0 +1,172 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "capability": {
+      "const": "buyer_request.interpret"
+    },
+    "context": {
+      "$ref": "common.schema.json#/$defs/context"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "common.schema.json#/$defs/source"
+        },
+        "references": {
+          "type": "object",
+          "properties": {
+            "taxonomy": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "catalogue_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "\\S"
+                      },
+                      "terms": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "\\S"
+                        },
+                        "maxItems": 128
+                      }
+                    },
+                    "required": [
+                      "catalogue_id",
+                      "terms"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 128
+                }
+              },
+              "required": [
+                "version",
+                "provenance",
+                "products"
+              ],
+              "additionalProperties": false
+            },
+            "normalization": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "currency_registry": {
+                  "const": "radroots.currency_registry.v1"
+                }
+              },
+              "required": [
+                "version",
+                "provenance",
+                "currency_registry"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "taxonomy",
+            "normalization"
+          ],
+          "additionalProperties": false
+        },
+        "clarification": {
+          "type": "object",
+          "properties": {
+            "source_id": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "target_field": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "maxLength": 1048576
+            },
+            "expected_revision": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "source_id",
+            "revision",
+            "target_field",
+            "text",
+            "expected_revision"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "source",
+        "references"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "capability",
+    "context",
+    "input"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v3/buyer_request_interpret.request.schema.json",
+  "$comment": "D57 hyf_ops_v3 pre-activation contract. No business write or trusted context can be minted by source/model text. Full semantic input-use and SDK revalidation remain required."
+}

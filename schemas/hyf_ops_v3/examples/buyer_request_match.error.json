@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "request_id": "v3-buyer_request_match",
+  "ok": false,
+  "error": {
+    "code": "capability_unavailable",
+    "message": "Operation not activated."
+  }
+}

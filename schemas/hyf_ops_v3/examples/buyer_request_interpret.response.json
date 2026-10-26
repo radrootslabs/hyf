@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "request_id": "v3-buyer_request_interpret",
+  "ok": true,
+  "output": {
+    "versions": {
+      "schema": "hyf_ops_v3",
+      "taxonomy": "hyf_ops_v3.taxonomy.v1",
+      "normalization": "hyf_ops_v3.normalization.v1",
+      "review_policy": "hyf_ops_v3.review_policy.v1",
+      "ranking_policy": "hyf_ops_v3.ranking_policy.v1",
+      "question_bundle": "hyf_ops_v3.question_bundle.v1",
+      "model": "jev-1.14.0"
+    },
+    "provenance": {
+      "source": {
+        "source_id": "0000000000000000000000000000000000000000000000000000000000000003",
+        "revision": "1"
+      },
+      "clarification": null
+    },
+    "review": {
+      "required": true,
+      "clarifications": [
+        {
+          "field": "proposal",
+          "reason": "Host review and shared SDK revalidation are required before use."
+        }
+      ]
+    },
+    "execution": {
+      "status": "complete",
+      "provider_calls": 0,
+      "model": null,
+      "question_bundle": null,
+      "degraded_reason": null
+    },
+    "demand_lines": [
+      {
+        "line_id": "line-1",
+        "product": {
+          "phrase": "cabbage",
+          "catalogue_id": "cabbage",
+          "resolution": "resolved"
+        },
+        "quantity": {
+          "state": "known",
+          "quantity": {
+            "amount": "2",
+            "unit": "kg"
+          },
+          "qualifier": "exact"
+        },
+        "conditions": [],
+        "evidence": [
+          {
+            "kind": "span",
+            "source_id": "0000000000000000000000000000000000000000000000000000000000000003",
+            "revision": "1",
+            "start": 7,
+            "end": 19,
+            "method": "source_span"
+          }
+        ],
+        "review_required": true
+      }
+    ]
+  }
+}

@@ -2695,3 +2695,174 @@ def test_c004_cr04_correlation_duplicate_matrix() raises:
         )
     )
     assert_true(single_escaped_context.operation_context)
+
+
+# D57: current participant/workspace context, without a mandatory farm or pool.
+def _v3_request(capability: String = "farm_update.interpret") -> String:
+    return (
+        '{"version":1,"request_id":"v3-test","trace_id":"v3-trace",'
+        '"capability":"'
+        + capability
+        + '","context":{'
+        '"evaluation_time":"1793016000",'
+        '"versions":{"schema":"hyf_ops_v3","taxonomy":"t",'
+        '"normalization":"n","review_policy":"r","ranking_policy":"k",'
+        '"question_bundle":"q","model":"jev-1.14.0"},'
+        '"actor":{"participant":"'
+        + "1" * 64
+        + '","role":"seller","organization":null,"grant_id":null},'
+        '"workspace_id":"'
+        + "2" * 64
+        + '"},"input":{}}'
+    )
+
+
+def test_c004_v3_current_context_without_farm_or_pool() raises:
+    for capability in [
+        "farm_update.interpret",
+        "buyer_request.interpret",
+        "buyer_request.match",
+    ]:
+        var request = decode_request(_v3_request(String(capability)))
+        assert_true(request.operation_context)
+        var context = request.operation_context.value().copy()
+        assert_equal(context.versions.schema, "hyf_ops_v3")
+        assert_equal(context.versions.model, "jev-1.14.0")
+        assert_equal(context.actor.value().copy().participant, "1" * 64)
+        assert_equal(context.actor.value().copy().role, "seller")
+        assert_equal(context.workspace_id.value(), "2" * 64)
+        assert_true(not context.farm_id)
+        assert_true(not context.actor.value().copy().organization)
+        assert_true(not context.actor.value().copy().grant_id)
+        # A parsed descriptor does not populate legacy actor authority.
+        assert_equal(context.actor_id, "")
+
+
+def test_c004_v3_rejects_old_authority_and_model_fields() raises:
+    var base = _v3_request()
+    var mutations = List[String]()
+    mutations.append(
+        base.replace('"workspace_id":', '"farm_id":"old", "workspace_id":')
+    )
+    mutations.append(
+        base.replace('"workspace_id":', '"actor_id":"old", "workspace_id":')
+    )
+    mutations.append(
+        base.replace('"workspace_id":', '"pool_id":"private", "workspace_id":')
+    )
+    mutations.append(base.replace('"jev-1.14.0"', '"jev-1.13.0"'))
+    mutations.append(base.replace('"jev-1.14.0"', '"jev-latest"'))
+    mutations.append(base.replace('"jev-1.14.0"', '"clef"'))
+    mutations.append(base.replace('"role":"seller"', '"role":"admin"'))
+    mutations.append(base.replace('"role":"seller"', '"role":true'))
+    mutations.append(base.replace('"organization":null,', ""))
+    mutations.append(base.replace('"grant_id":null', '"grant_id":0'))
+    mutations.append(base.replace('"grant_id":null', '"grant_id":"invalid"'))
+    mutations.append(
+        base.replace('"role":"seller"', '"role":"seller","authenticated":true')
+    )
+    mutations.append(
+        base.replace('"participant":', '"participant":null,"participant":')
+    )
+    mutations.append(
+        base.replace('"workspace_id":', '"deadline_ms":true,"workspace_id":')
+    )
+    mutations.append(
+        base.replace(
+            '"workspace_id":', '"deadline_ms":2147483648,"workspace_id":'
+        )
+    )
+    mutations.append(
+        base.replace('"workspace_id":', '"deadline_ms":0,"workspace_id":')
+    )
+    mutations.append(
+        base.replace(
+            '"schema":"hyf_ops_v3"',
+            '"schema":"hyf_ops_v3","schema":"hyf_ops_v2"',
+        )
+    )
+    mutations.append(
+        base.replace(
+            '"request_id":"v3-test"', '"request_id":"a","request_id":"b"'
+        )
+    )
+    for line in mutations:
+        assert_true(_decode_error_message(line) != "", line)
+
+
+def test_c004_v3_identity_is_full_lowercase_ascii_hex() raises:
+    var base = _v3_request()
+    var invalid = List[String]()
+    invalid.append("1" * 63)
+    invalid.append("1" * 65)
+    invalid.append("A" * 64)
+    invalid.append("z" * 64)
+    invalid.append(" " * 64)
+    invalid.append("1" * 63 + "é")
+    for identity in invalid:
+        assert_true(
+            _decode_error_message(base.replace("1" * 64, identity)) != ""
+        )
+        assert_true(
+            _decode_error_message(base.replace("2" * 64, identity)) != ""
+        )
+
+
+def test_c004_v3_time_matches_shared_unix_seconds_without_wire_aliases() raises:
+    var base = _v3_request()
+    for value in ["0", "1", "253402300799"]:
+        var request = decode_request(base.replace("1793016000", String(value)))
+        assert_equal(
+            request.operation_context.value().copy().evaluation_time, value
+        )
+    for value in [
+        "253402300800",
+        "999999999999",
+        "1000000000000",
+        "-0",
+        "-1",
+        "+1",
+        "01",
+        "1.0",
+        "1e3",
+        "1 ",
+        "2026-10-26T12:00:00+00:00",
+    ]:
+        assert_true(
+            _decode_error_message(base.replace("1793016000", String(value)))
+            != ""
+        )
+
+
+def test_c004_v3_real_route_keeps_all_operations_closed_before_activation() raises:
+    with SafeTempDir() as temp_dir:
+        var runtime_context = _temp_runtime_context(temp_dir)
+        runtime_context.config.effective.runtime.enable_farm_update_interpret = (
+            True
+        )
+        runtime_context.config.effective.runtime.enable_buyer_request_interpret = (
+            True
+        )
+        runtime_context.config.effective.runtime.enable_buyer_request_match = (
+            True
+        )
+        var observer = RecordingDispatchAttemptObserver(attempts=List[String]())
+        for capability in [
+            "farm_update.interpret",
+            "buyer_request.interpret",
+            "buyer_request.match",
+        ]:
+            var response = loads(
+                handle_request_line_with_runtime_context_and_observer(
+                    _v3_request(String(capability)), runtime_context, observer
+                )
+            )
+            assert_equal(response["ok"].bool_value(), False)
+            assert_equal(response["request_id"].string_value(), "v3-test")
+            assert_equal(response["trace_id"].string_value(), "v3-trace")
+            assert_equal(
+                response["error"]["code"].string_value(),
+                "capability_unavailable",
+            )
+            assert_true(not _has_key(response, "output"))
+        assert_equal(len(observer.attempts), 0)

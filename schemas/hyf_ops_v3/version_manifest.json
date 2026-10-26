@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "revision": "hyf_ops_v3",
+  "versions": {
+    "schema": "hyf_ops_v3",
+    "taxonomy": "hyf_ops_v3.taxonomy.v1",
+    "normalization": "hyf_ops_v3.normalization.v1",
+    "review_policy": "hyf_ops_v3.review_policy.v1",
+    "ranking_policy": "hyf_ops_v3.ranking_policy.v1",
+    "question_bundle": "hyf_ops_v3.question_bundle.v1",
+    "model": "jev-1.14.0"
+  },
+  "note": "Contract revision identifiers; actual source/model use must be bound by later owners, not inferred from these strings."
+}

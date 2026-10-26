@@ -1,0 +1,305 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "$ref": "common.schema.json#/$defs/versions"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "need": {
+              "type": "object",
+              "properties": {
+                "need_id": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                },
+                "revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              },
+              "required": [
+                "need_id",
+                "revision"
+              ],
+              "additionalProperties": false
+            },
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "candidate_id": {
+                    "type": "string",
+                    "minLength": 64,
+                    "maxLength": 64,
+                    "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                },
+                "required": [
+                  "candidate_id",
+                  "revision"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 128
+            }
+          },
+          "required": [
+            "need",
+            "candidates"
+          ],
+          "additionalProperties": false
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "candidate_id": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+              },
+              "preference": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "unknown"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "common.schema.json#/$defs/evidence_ref"
+                      },
+                      "maxItems": 128
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "result",
+                    "reason",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 128
+              },
+              "unresolved": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "maxItems": 128
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/evidence_ref"
+                },
+                "maxItems": 128
+              },
+              "commitment": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "candidate_id",
+              "preference",
+              "checks",
+              "unresolved",
+              "evidence",
+              "commitment"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 8
+        },
+        "limitations": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "const": "supplied_only"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "unsupported": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "maxItems": 128
+            },
+            "commitment": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "scope",
+            "truncated",
+            "unsupported",
+            "commitment"
+          ],
+          "additionalProperties": false
+        },
+        "execution": {
+          "$ref": "common.schema.json#/$defs/execution"
+        }
+      },
+      "required": [
+        "versions",
+        "provenance",
+        "suggestions",
+        "limitations",
+        "execution"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unsupported_capability",
+            "capability_disabled",
+            "capability_unavailable",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "request_id",
+    "ok"
+  ],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "not": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "ok": {
+          "const": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "output"
+            ]
+          },
+          {
+            "required": [
+              "meta"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hyf_ops_v3/buyer_request_match.response.schema.json",
+  "$comment": "D57 hyf_ops_v3 pre-activation contract. No business write or trusted context can be minted by source/model text. Full semantic input-use and SDK revalidation remain required."
+}

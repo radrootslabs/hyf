@@ -41,6 +41,7 @@ test-spec = "mojo -I src -I tests tests/test_traceability.mojo"
 check-build = "mkdir -p .pixi/build && mojo build -I src src/main.mojo -o .pixi/build/hyfd"
 check-format = "sh tools/check_format.sh"
 check-format-self-test = "sh tools/check_format.sh --self-test"
+check-dependency-lock = "uv run --locked --script tools/check_dependency_lock.py --mode baseline"
 check-release = { depends-on = [
   "test",
   "check-build",

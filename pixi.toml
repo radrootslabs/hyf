@@ -42,6 +42,7 @@ check-build = "mkdir -p .pixi/build && mojo build -I src src/main.mojo -o .pixi/
 check-format = "sh tools/check_format.sh"
 check-format-self-test = "sh tools/check_format.sh --self-test"
 check-dependency-lock = "uv run --locked --script tools/check_dependency_lock.py --mode baseline"
+check-dependency-lock-self-test = "uv run --locked --script tools/check_dependency_lock.py --mode baseline --self-test"
 check-release = { depends-on = [
   "test",
   "check-build",
@@ -56,6 +57,8 @@ test-runtime-contract = { depends-on = [
   "test-stdio",
 ] }
 test = { depends-on = [
+  "check-dependency-lock",
+  "check-dependency-lock-self-test",
   "test-unit",
   "test-harness",
   "test-harness-runner-exit",

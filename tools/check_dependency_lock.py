@@ -353,7 +353,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("baseline",), required=True, help="explicitly select the existing graph policy")
     parser.add_argument("--manifest", type=Path, default=Path("pixi.toml"), help="manifest input (default: pixi.toml)")
     parser.add_argument("--lock", type=Path, default=Path("pixi.lock"), help="lock input (default: pixi.lock)")
+    parser.add_argument("--self-test", action="store_true", help="run isolated synthetic baseline acceptance and rejection cases")
     args = parser.parse_args(argv)
+    if args.self_test:
+        from check_dependency_lock_self_test import run
+
+        return run(sys.modules[__name__])
     try:
         try:
             manifest = tomllib.loads(read_text(args.manifest, "manifest input"))
